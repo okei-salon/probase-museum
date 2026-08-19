@@ -23,6 +23,25 @@ export const metadata: Metadata = {
   title: "ProBase Museum | プロ野球データ博物館",
   description:
     "数字が語る、感動の軌跡。あなただけのプロ野球データ博物館。",
+  applicationName: "ProBase Museum",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon-512.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: [
+      {
+        url: "/apple-touch-icon.png",
+        sizes: "180x180",
+        type: "image/png",
+      },
+    ],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "ProBase Museum",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export default function RootLayout({
