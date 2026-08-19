@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Container } from "@/components/ui/Container";
 import { MuseumLogo } from "@/components/ui/MuseumLogo";
 import { BackLink } from "@/components/category/BackLink";
+import { AuthUserMenu } from "@/components/auth/AuthUserMenu";
 
 type CategoryHeaderProps = {
   back?: { href: string; label: string };
@@ -28,6 +29,7 @@ export function CategoryHeader({ back }: CategoryHeaderProps) {
           <Link href="/settings" className="hover:text-museum-gold">
             設定
           </Link>
+          <AuthUserMenu compact />
         </nav>
       </Container>
     </header>
