@@ -1,0 +1,1 @@
+export { PlayerIdentityConfirm } from "./PlayerIdentityConfirm";
