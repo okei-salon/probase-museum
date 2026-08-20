@@ -378,19 +378,19 @@ export function candidatesFromPlayerMasterSample(
   return out;
 }
 
-/** 登録データ優先。無ければサンプルで画面を埋める。 */
+/** 登録データ優先。正式 WORLD はサンプルを混ぜない。DEMO／レガシーのみ不足時にサンプル。 */
 export function loadTitleCandidates(
   year: number,
   role: "batter" | "pitcher",
   identity?: SeasonIdentity | null,
 ): { candidates: TitleCandidate[]; usingSample: boolean } {
   const fromLines = candidatesFromSeasonLines(year, role, identity);
-  if (fromLines.length >= 8) {
+  // 正式 WORLD: 登録行のみ（件数不足でもサンプルを混ぜない）
+  if (identity?.world != null) {
     return { candidates: fromLines, usingSample: false };
   }
-  // 正式 WORLD で行が無いときはサンプルを混ぜない（BLUE/RED が同一サンプルに見えないように）
-  if (identity?.world != null && fromLines.length === 0) {
-    return { candidates: [], usingSample: false };
+  if (fromLines.length >= 8) {
+    return { candidates: fromLines, usingSample: false };
   }
   // 登録が少ない場合はサンプルとマージ（同一IDは登録優先）
   const sample = candidatesFromPlayerMasterSample(year, role);

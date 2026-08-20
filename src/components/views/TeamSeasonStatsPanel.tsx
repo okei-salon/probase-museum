@@ -11,7 +11,11 @@ import {
   getOfficialTeamPitchingRows,
   type TeamCompetition,
 } from "@/data/teamSeasonStats";
-import { formatSeasonLineLabel, parseSeasonKey } from "@/data/seasons";
+import {
+  allowsLayoutSampleFallback,
+  formatSeasonLineLabel,
+  parseSeasonKey,
+} from "@/data/seasons";
 
 type TeamSeasonStatsPanelProps = {
   year: string;
@@ -26,7 +30,8 @@ type TeamSeasonStatsPanelProps = {
 
 /**
  * セ／パ／12球団／交流戦で共通利用。
- * 列定義は常に正式 28 / 19 項目。未登録時はレイアウト用サンプル（保存しない）。
+ * 列定義は常に正式 28 / 19 項目。
+ * 正式 WORLD の未登録時は空表示。DEMO／レガシーのみレイアウト用サンプル。
  */
 export function TeamSeasonStatsPanel({
   year,
@@ -41,6 +46,7 @@ export function TeamSeasonStatsPanel({
     () => (seasonKey ? parseSeasonKey(seasonKey) : null),
     [seasonKey],
   );
+  const allowSample = allowsLayoutSampleFallback(identity);
 
   useEffect(() => {
     setTick((t) => t + 1);
@@ -59,7 +65,9 @@ export function TeamSeasonStatsPanel({
         rows:
           officialRows.length > 0
             ? officialRows
-            : buildLayoutSampleBattingRows(),
+            : allowSample
+              ? buildLayoutSampleBattingRows()
+              : [],
         columns,
         official: officialRows.length > 0,
       };
@@ -70,11 +78,13 @@ export function TeamSeasonStatsPanel({
       rows:
         officialRows.length > 0
           ? officialRows
-          : buildLayoutSamplePitchingRows(),
+          : allowSample
+            ? buildLayoutSamplePitchingRows()
+            : [],
       columns,
       official: officialRows.length > 0,
     };
-  }, [kind, y, competition, tick, identity]);
+  }, [kind, y, competition, tick, identity, allowSample]);
 
   const competitionLabel =
     competition === "interleague" ? "交流戦" : "通常シーズン";
@@ -85,7 +95,11 @@ export function TeamSeasonStatsPanel({
 
   return (
     <div className="min-w-0 w-full space-y-2">
-      {!official ? (
+      {official ? (
+        <p className="text-[11px] text-[color:var(--museum-accent,#d4af37)]/80">
+          {seasonLabel}・{competitionLabel}・正式チーム成績（{fieldLabel}）
+        </p>
+      ) : allowSample ? (
         <p className="rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100/90">
           【レイアウト確認用サンプル】正式な{competitionLabel}
           チーム成績は未登録です。下表の「---」は保存データではなく、
@@ -93,21 +107,23 @@ export function TeamSeasonStatsPanel({
           の列構成確認用です。マスターには保存されません。
         </p>
       ) : (
-        <p className="text-[11px] text-[color:var(--museum-accent,#d4af37)]/80">
-          {seasonLabel}・{competitionLabel}・正式チーム成績（{fieldLabel}）
+        <p className="rounded-md border border-white/10 bg-black/40 px-3 py-2 text-[11px] text-museum-ivory-soft">
+          正式な{competitionLabel}チーム成績はまだ登録されていません。
         </p>
       )}
-      <SortableTeamStatsTable
-        rows={rows}
-        columns={columns}
-        defaultSortKey={kind === "batting" ? "avg" : "era"}
-        defaultLeague={defaultLeague}
-        footerNote={
-          official
-            ? `列名クリックでソート。横スクロールで${fieldLabel}の最後まで確認できます。球団列は左に固定されます。`
-            : `サンプル表示中。横スクロールで${fieldLabel}の最後まで到達できます。球団列は左に固定されます。`
-        }
-      />
+      {rows.length > 0 ? (
+        <SortableTeamStatsTable
+          rows={rows}
+          columns={columns}
+          defaultSortKey={kind === "batting" ? "avg" : "era"}
+          defaultLeague={defaultLeague}
+          footerNote={
+            official
+              ? `列名クリックでソート。横スクロールで${fieldLabel}の最後まで確認できます。球団列は左に固定されます。`
+              : `サンプル表示中。横スクロールで${fieldLabel}の最後まで到達できます。球団列は左に固定されます。`
+          }
+        />
+      ) : null}
     </div>
   );
 }

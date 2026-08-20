@@ -14,7 +14,12 @@ import type { SavedMonthlyMvpRecord } from "@/data/import/types";
 import { MonthlyWinnerCell } from "@/components/awards/AwardCards";
 import { LeagueTabs } from "@/components/awards/LeagueTabs";
 import { formatMonthlyAwardHistory } from "@/lib/awardHistory";
-import { parseSeasonKey } from "@/data/seasons";
+import {
+  allowsLayoutSampleFallback,
+  parseSeasonKey,
+} from "@/data/seasons";
+
+const MONTHS = [4, 5, 6, 7, 8, 9] as const;
 
 type MonthlyMvpBoardProps = {
   year: string;
@@ -23,6 +28,23 @@ type MonthlyMvpBoardProps = {
   central: MonthlyMvpLeagueBoard;
   pacific: MonthlyMvpLeagueBoard;
 };
+
+function emptyMonthlyCard(
+  month: number,
+  role: "pitcher" | "batter",
+  league: LeagueSide,
+): ResolvedAwardCard {
+  return {
+    playerId: "",
+    playerName: "未登録",
+    teamName: "—",
+    historyLabel: "—",
+    month,
+    role,
+    league,
+    stats: null,
+  };
+}
 
 export function MonthlyMvpBoard({
   year,
@@ -37,6 +59,7 @@ export function MonthlyMvpBoard({
     () => (seasonKey ? parseSeasonKey(seasonKey) : null),
     [seasonKey],
   );
+  const allowSample = allowsLayoutSampleFallback(identity);
 
   useEffect(() => {
     if (identity) {
@@ -55,16 +78,40 @@ export function MonthlyMvpBoard({
   const board = useMemo(() => {
     const base = league === "central" ? central : pacific;
     const y = Number(year);
+    const months = allowSample ? base.months : [...MONTHS];
     return {
-      months: base.months,
-      pitchers: base.months.map((month, i) =>
-        mergePitcher(base.pitchers[i]!, saved, y, month, league),
+      months,
+      pitchers: months.map((month, i) =>
+        mergePitcher(
+          allowSample
+            ? base.pitchers[i]!
+            : emptyMonthlyCard(month, "pitcher", league),
+          saved,
+          y,
+          month,
+          league,
+        ),
       ),
-      batters: base.months.map((month, i) =>
-        mergeBatter(base.batters[i]!, saved, y, month, league),
+      batters: months.map((month, i) =>
+        mergeBatter(
+          allowSample
+            ? base.batters[i]!
+            : emptyMonthlyCard(month, "batter", league),
+          saved,
+          y,
+          month,
+          league,
+        ),
       ),
     };
-  }, [central, pacific, saved, year, league]);
+  }, [central, pacific, saved, year, league, allowSample]);
+
+  const hasAnySaved = saved.some((r) => r.league === league);
+  const allEmpty =
+    !allowSample &&
+    !hasAnySaved &&
+    board.pitchers.every((c) => c.playerName === "未登録") &&
+    board.batters.every((c) => c.playerName === "未登録");
 
   return (
     <div className="space-y-3">
@@ -77,6 +124,12 @@ export function MonthlyMvpBoard({
           画像から取り込む
         </a>
       </div>
+
+      {allEmpty ? (
+        <p className="rounded-md border border-white/10 bg-black/40 px-3 py-2 text-[11px] text-museum-ivory-soft">
+          月間MVPはまだ登録されていません。
+        </p>
+      ) : null}
 
       <div className="rounded-xl border border-[color:var(--museum-accent-border,#d4af3773)] bg-black/50">
         <table className="w-full border-collapse text-left text-[12px] leading-snug md:text-[13px]">
@@ -99,10 +152,10 @@ export function MonthlyMvpBoard({
                   {month}月
                 </td>
                 <td className="px-2.5 py-2.5 align-middle md:px-3 md:py-3">
-                  <MonthlyWinnerCell card={board.pitchers[i]} />
+                  <MonthlyWinnerCell card={board.pitchers[i]!} />
                 </td>
                 <td className="px-2.5 py-2.5 align-middle md:px-3 md:py-3">
-                  <MonthlyWinnerCell card={board.batters[i]} />
+                  <MonthlyWinnerCell card={board.batters[i]!} />
                 </td>
               </tr>
             ))}

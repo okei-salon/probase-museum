@@ -12,7 +12,7 @@ import {
   getYearStandings,
 } from "@/data/teamStandings";
 import type { SeasonIdentity } from "@/data/seasons";
-import { parseSeasonKey } from "@/data/seasons";
+import { allowsLayoutSampleFallback, parseSeasonKey } from "@/data/seasons";
 import type { StandingRow } from "@/components/views/StandingsTable";
 
 /**
@@ -335,6 +335,11 @@ export function getSeasonSummary(
       gb: e.gb,
     }));
 
+  const allowSample = allowsLayoutSampleFallback(identity);
+  const hasCentral = Boolean(stored?.central?.length);
+  const hasPacific = Boolean(stored?.pacific?.length);
+  const useFullSample = allowSample && !hasCentral && !hasPacific;
+
   return {
     year,
     tagline: registered.tagline ?? `${year}年の記録と栄光を振り返る`,
@@ -342,13 +347,18 @@ export function getSeasonSummary(
     awards,
     highlights: registered.highlights ?? [],
     standings: {
-      // 取込済み順位があれば優先。なければ既存ダミー（削除しない）
-      central: stored?.central?.length
-        ? toRows(stored.central)
-        : centralStandings,
-      pacific: stored?.pacific?.length
-        ? toRows(stored.pacific)
-        : pacificStandings,
+      // 取込済み順位があれば優先。正式 WORLD では未登録リーグを空にする。
+      // DEMO／レガシーで両リーグ未登録のときのみ既存ダミー。
+      central: hasCentral
+        ? toRows(stored!.central)
+        : useFullSample
+          ? centralStandings
+          : [],
+      pacific: hasPacific
+        ? toRows(stored!.pacific)
+        : useFullSample
+          ? pacificStandings
+          : [],
     },
   };
 }

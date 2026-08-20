@@ -11,6 +11,17 @@ import {
   type MuseumBackupFile,
   type MuseumBackupPreview,
 } from "@/lib/backup/museumBackup";
+import {
+  describeSanitize2026Plan,
+  sanitize2026SampleInLocalStorage,
+  verifySanitize2026LocalStorage,
+  type Sanitize2026Check,
+} from "@/data/sanitize2026Sample";
+import {
+  describeRestoreBlue2026PacificPlan,
+  restoreBlue2026PacificStandingsOnly,
+  type RestoreBlue2026PacificResult,
+} from "@/data/restoreBlue2026PacificStandings";
 import { cn } from "@/lib/cn";
 
 type PendingRestore = {
@@ -23,10 +34,19 @@ export function MuseumBackupPanel() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingRestore | null>(null);
+  const [sanitizeConfirm, setSanitizeConfirm] = useState(false);
+  const [restorePacificConfirm, setRestorePacificConfirm] = useState(false);
+  const [restorePacificResult, setRestorePacificResult] =
+    useState<RestoreBlue2026PacificResult | null>(null);
+  const [verifyChecks, setVerifyChecks] = useState<Sanitize2026Check[] | null>(
+    null,
+  );
   const [busy, setBusy] = useState(false);
   const [safetyBackupBeforeRestore, setSafetyBackupBeforeRestore] =
     useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
+  const plan = describeSanitize2026Plan();
+  const pacificRestorePlan = describeRestoreBlue2026PacificPlan();
 
   const refreshPreview = useCallback(() => {
     try {
@@ -42,7 +62,6 @@ export function MuseumBackupPanel() {
   }, []);
 
   useEffect(() => {
-    // マウント後にプレビュー読込（SSR/ハイドレーション差と lint を避ける）
     const id = window.setTimeout(() => {
       refreshPreview();
     }, 0);
@@ -112,6 +131,62 @@ export function MuseumBackupPanel() {
       refreshPreview();
     } catch (e) {
       setError(e instanceof Error ? e.message : "復元に失敗しました。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onConfirmSanitize = () => {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    setVerifyChecks(null);
+    try {
+      downloadMuseumBackup(buildMuseumBackup());
+      sanitize2026SampleInLocalStorage();
+      const verify = verifySanitize2026LocalStorage();
+      setSanitizeConfirm(false);
+      setVerifyChecks(verify.checks);
+      if (!verify.ok) {
+        setError(`整理後検証で問題: ${verify.issues.join(" / ")}`);
+      } else {
+        setMessage(
+          "2026サンプル整理が完了しました。以下のチェックを確認し、再読み込みしてください。",
+        );
+      }
+      refreshPreview();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "整理に失敗しました。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onConfirmRestorePacific = () => {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    setRestorePacificResult(null);
+    try {
+      // 安全用: 実行直前に現状を書き出し（復元そのものは team-standings の BLUE:2026 のみ）
+      downloadMuseumBackup(buildMuseumBackup());
+      const result = restoreBlue2026PacificStandingsOnly();
+      setRestorePacificConfirm(false);
+      setRestorePacificResult(result);
+      if (!result.ok) {
+        setError(
+          `パ順位復元で問題: ${result.issues.join(" / ") || "不明なエラー"}`,
+        );
+      } else {
+        setMessage(
+          "2026 BLUE パ・リーグ正式順位のみ復元しました。ページを再読み込みすると反映されます。",
+        );
+      }
+      refreshPreview();
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "パ順位の復元に失敗しました。",
+      );
     } finally {
       setBusy(false);
     }
@@ -190,6 +265,45 @@ export function MuseumBackupPanel() {
         >
           バックアップを復元…
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            setSanitizeConfirm(true);
+            setRestorePacificConfirm(false);
+            setPending(null);
+            setError(null);
+            setMessage(null);
+          }}
+          disabled={busy || sanitizeConfirm || restorePacificConfirm}
+          className={cn(
+            "rounded-[var(--radius-control)] border border-white/25",
+            "bg-black/55 px-4 py-2 text-[12px] tracking-[0.08em]",
+            "text-museum-ivory transition-colors hover:border-museum-gold/50",
+            "disabled:opacity-50",
+          )}
+        >
+          2026サンプルを整理…
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setRestorePacificConfirm(true);
+            setSanitizeConfirm(false);
+            setPending(null);
+            setError(null);
+            setMessage(null);
+            setRestorePacificResult(null);
+          }}
+          disabled={busy || sanitizeConfirm || restorePacificConfirm}
+          className={cn(
+            "rounded-[var(--radius-control)] border border-museum-gold/40",
+            "bg-museum-gold/10 px-4 py-2 text-[12px] tracking-[0.08em]",
+            "text-museum-gold-soft transition-colors hover:bg-museum-gold/20",
+            "disabled:opacity-50",
+          )}
+        >
+          2026 BLUEパ順位だけ復元…
+        </button>
         <input
           ref={fileRef}
           type="file"
@@ -198,6 +312,147 @@ export function MuseumBackupPanel() {
           onChange={(e) => void onPickFile(e.target.files?.[0] ?? null)}
         />
       </div>
+
+      {restorePacificConfirm ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="space-y-4 rounded-xl border border-museum-gold/45 bg-black/80 p-4"
+        >
+          <h3 className="text-[14px] text-museum-gold">
+            2026 BLUE パ順位のみ復元の確認
+          </h3>
+          <p className="text-[13px] leading-relaxed text-museum-ivory-muted">
+            バックアップ正本（probase-museum-backup-2026-blue-pacific-only.json）の
+            <span className="text-museum-ivory"> BLUE:2026 </span>
+            レコードだけを
+            <span className="font-mono text-[12px] text-museum-ivory">
+              {" "}
+              {pacificRestorePlan.storageKey}{" "}
+            </span>
+            に upsert します。他キー・他年度・選手マスタは変更しません。セは空のままです。
+          </p>
+          <div className="rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-[12px]">
+            <p className="mb-1 text-museum-gold">復元するパ・リーグ</p>
+            <ul className="list-disc space-y-0.5 pl-4 text-museum-ivory-soft">
+              {pacificRestorePlan.pacificSummary.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+            <p className="mt-2 text-museum-ivory-soft">セ・リーグ: 空（未登録）</p>
+          </div>
+          <p className="text-[11px] text-museum-ivory-soft">
+            実行直前に現状の安全用バックアップも書き出します。全体復元はしません。
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onConfirmRestorePacific}
+              disabled={busy}
+              className={cn(
+                "rounded-[var(--radius-control)] border border-museum-gold/55",
+                "bg-museum-gold/20 px-4 py-2 text-[12px] tracking-[0.08em]",
+                "text-museum-gold-soft transition-colors hover:bg-museum-gold/30",
+                "disabled:opacity-50",
+              )}
+            >
+              確認したのでパ順位だけ復元する
+            </button>
+            <button
+              type="button"
+              onClick={() => setRestorePacificConfirm(false)}
+              disabled={busy}
+              className="rounded-[var(--radius-control)] border border-white/20 bg-black/50 px-4 py-2 text-[12px] text-museum-ivory-soft hover:border-white/40"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {restorePacificResult ? (
+        <div className="space-y-2 rounded-xl border border-white/15 bg-black/60 p-4">
+          <h3 className="text-[13px] text-museum-gold">パ順位復元の結果</h3>
+          <p className="text-[12px] text-museum-ivory-soft">
+            action={restorePacificResult.action} / pacific=
+            {restorePacificResult.nextPacificCount} / 他レコード保持=
+            {restorePacificResult.otherRecordsPreserved}
+          </p>
+          <ul className="space-y-1 text-[12px] text-museum-ivory-muted">
+            {restorePacificResult.notes.map((n) => (
+              <li key={n}>・ {n}</li>
+            ))}
+          </ul>
+          {restorePacificResult.issues.length > 0 ? (
+            <ul className="space-y-1 text-[12px] text-red-200/90">
+              {restorePacificResult.issues.map((n) => (
+                <li key={n}>・ {n}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
+      {sanitizeConfirm ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="space-y-4 rounded-xl border border-museum-gold/45 bg-black/80 p-4"
+        >
+          <h3 className="text-[14px] text-museum-gold">2026サンプル整理の確認</h3>
+          <p className="text-[13px] leading-relaxed text-museum-ivory-muted">
+            正式データとして残すのは{" "}
+            <span className="text-museum-ivory">
+              2026 BLUE・パ・リーグ最終順位
+            </span>
+            のみです。それ以外の2026サンプルは削除します（2000年等は触りません）。
+          </p>
+          <div className="grid gap-3 text-[12px] sm:grid-cols-2">
+            <div>
+              <p className="mb-1 text-museum-gold">保持</p>
+              <ul className="list-disc space-y-1 pl-4 text-museum-ivory-soft">
+                {plan.keep.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="mb-1 text-red-200/90">削除</p>
+              <ul className="list-disc space-y-1 pl-4 text-museum-ivory-soft">
+                {plan.remove.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <p className="text-[11px] text-museum-ivory-soft">
+            実行直前に、いまの端末データの安全用バックアップも書き出します。
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onConfirmSanitize}
+              disabled={busy}
+              className={cn(
+                "rounded-[var(--radius-control)] border border-red-400/50",
+                "bg-red-950/50 px-4 py-2 text-[12px] tracking-[0.08em]",
+                "text-red-100 transition-colors hover:bg-red-900/50",
+                "disabled:opacity-50",
+              )}
+            >
+              確認したので整理する
+            </button>
+            <button
+              type="button"
+              onClick={() => setSanitizeConfirm(false)}
+              disabled={busy}
+              className="rounded-[var(--radius-control)] border border-white/20 bg-black/50 px-4 py-2 text-[12px] text-museum-ivory-soft hover:border-white/40"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {pending ? (
         <div
@@ -221,9 +476,7 @@ export function MuseumBackupPanel() {
             <li>
               同じキーの現在データは上書きされます。取り消せません。
             </li>
-            <li>
-              エクスポート日時: {pending.backup.exportedAt}
-            </li>
+            <li>エクスポート日時: {pending.backup.exportedAt}</li>
           </ul>
           <label className="flex items-start gap-2 text-[12px] text-museum-ivory-muted">
             <input
@@ -273,6 +526,25 @@ export function MuseumBackupPanel() {
       {message ? (
         <div className="space-y-2 rounded-md border border-museum-gold/30 bg-museum-gold/10 px-3 py-2">
           <p className="text-[12px] text-museum-gold-soft">{message}</p>
+          {verifyChecks && verifyChecks.length > 0 ? (
+            <ul className="mt-2 space-y-1 text-[12px]">
+              {verifyChecks.map((c) => (
+                <li
+                  key={c.id}
+                  className={
+                    c.ok ? "text-emerald-300/90" : "text-red-200/90"
+                  }
+                >
+                  {c.ok ? "✓" : "✗"} {c.label}
+                  {c.detail ? (
+                    <span className="ml-1 text-museum-ivory-soft">
+                      ({c.detail})
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
           {message.includes("再読み込み") ? (
             <button
               type="button"

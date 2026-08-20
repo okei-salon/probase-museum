@@ -155,8 +155,9 @@ export function getInterleague(
 }
 
 /**
- * 表示用。保存があれば正式、なければレイアウト用静的ダミー（保存しない）。
- * 正式 WORLD の未登録時も静的ダミーを表示するが、upsert は WORLD 別 ID。
+ * 表示用。保存があれば正式。
+ * 正式 WORLD の未登録時は空（静的ダミーへフォールバックしない）。
+ * DEMO／レガシーのみレイアウト用静的ダミーを返す。
  */
 export function getInterleagueView(
   yearOrIdentity: string | number | SeasonIdentity,
@@ -176,6 +177,19 @@ export function getInterleagueView(
       matrix: stored.matrix,
       champion: champ.name,
       championTeamId: champ.teamId,
+      mvp,
+    };
+  }
+
+  if (identity.world != null) {
+    return {
+      year: yearStr,
+      world: identity.world,
+      official: false,
+      standings: [],
+      matrix: { rowTeams: [], colTeams: [], cells: [] },
+      champion: "登録待ち",
+      championTeamId: null,
       mvp,
     };
   }

@@ -92,6 +92,16 @@ export function isFormalSeasonYear(year: number): boolean {
   );
 }
 
+/**
+ * レイアウト確認用のハードコード sample / demo を画面に出してよいか。
+ * 正式 WORLD（BLUE/RED）では禁止。DEMO・レガシー（world 無し）のみ許可。
+ */
+export function allowsLayoutSampleFallback(
+  identity: SeasonIdentity | null | undefined,
+): boolean {
+  return identity == null || identity.world == null;
+}
+
 export function isSeasonWorld(value: unknown): value is SeasonWorld {
   return value === "BLUE" || value === "RED";
 }

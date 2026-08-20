@@ -15,6 +15,10 @@ import { InterleagueSopSeasonBoard } from "@/components/sop/InterleagueSopSeason
 import type { CategoryThemeId } from "@/config/categoryThemes";
 import type { MuseumIconName } from "@/components/ui/MuseumIcon";
 import {
+  allowsLayoutSampleFallback,
+  parseSeasonKey,
+} from "@/data/seasons";
+import {
   centralMatrix,
   pacificMatrix,
   pennantReview,
@@ -87,7 +91,7 @@ function renderBody(
 function renderPennant(item: string, year: string, seasonKey: string) {
   switch (item) {
     case "review":
-      return <PennantReviewBody year={year} />;
+      return <PennantReviewBody year={year} seasonKey={seasonKey} />;
     case "standings":
       return <PennantStandingsBoard year={year} seasonKey={seasonKey} />;
     case "team-batting":
@@ -129,7 +133,24 @@ function renderPennant(item: string, year: string, seasonKey: string) {
   }
 }
 
-function PennantReviewBody({ year }: { year: string }) {
+function PennantReviewBody({
+  year,
+  seasonKey,
+}: {
+  year: string;
+  seasonKey: string;
+}) {
+  const identity = parseSeasonKey(seasonKey);
+  if (!allowsLayoutSampleFallback(identity)) {
+    return (
+      <DataPanel>
+        <p className="text-[13px] text-museum-ivory-soft">
+          ペナントレビューはまだ登録されていません。
+        </p>
+      </DataPanel>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <p className="text-[12px] text-museum-ivory-soft">
@@ -202,6 +223,9 @@ function PennantStandingsBoard({
   year: string;
   seasonKey: string;
 }) {
+  const identity = parseSeasonKey(seasonKey);
+  const showSampleMatrix = allowsLayoutSampleFallback(identity);
+
   return (
     <div className="space-y-6">
       <section>
@@ -222,22 +246,30 @@ function PennantStandingsBoard({
         <h3 className="mb-2 text-[12px] tracking-[0.14em] text-[color:var(--museum-accent,#38bdf8)]">
           3. 対戦成績
         </h3>
-        <div className="grid gap-3 lg:grid-cols-2">
+        {showSampleMatrix ? (
+          <div className="grid gap-3 lg:grid-cols-2">
+            <DataPanel>
+              <MatchMatrix
+                title="セ・リーグ対戦表"
+                teams={centralMatrix.teams}
+                cells={centralMatrix.cells}
+              />
+            </DataPanel>
+            <DataPanel>
+              <MatchMatrix
+                title="パ・リーグ対戦表"
+                teams={pacificMatrix.teams}
+                cells={pacificMatrix.cells}
+              />
+            </DataPanel>
+          </div>
+        ) : (
           <DataPanel>
-            <MatchMatrix
-              title="セ・リーグ対戦表"
-              teams={centralMatrix.teams}
-              cells={centralMatrix.cells}
-            />
+            <p className="text-[13px] text-museum-ivory-soft">
+              リーグ内対戦成績はまだ登録されていません。
+            </p>
           </DataPanel>
-          <DataPanel>
-            <MatchMatrix
-              title="パ・リーグ対戦表"
-              teams={pacificMatrix.teams}
-              cells={pacificMatrix.cells}
-            />
-          </DataPanel>
-        </div>
+        )}
       </section>
     </div>
   );

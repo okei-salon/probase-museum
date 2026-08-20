@@ -20,7 +20,10 @@ import {
   listSeasonLinesForSeason,
   type PlayerSeasonLine,
 } from "@/data/playerSeasonLines";
-import { parseSeasonKey } from "@/data/seasons";
+import {
+  allowsLayoutSampleFallback,
+  parseSeasonKey,
+} from "@/data/seasons";
 import { getTeam } from "@/data/teams";
 import type { TeamStatColumn } from "@/data/seasonViews";
 
@@ -82,8 +85,9 @@ export function PlayerStatsExplorer({
     setRegistered(listSeasonLines());
   }, [scope, role, year, seasonIdentity]);
 
+  const allowSample = allowsLayoutSampleFallback(seasonIdentity);
+
   const rows = useMemo(() => {
-    const base = getPlayerStats(scope, role);
     const extras = registered
       .filter((l) => {
         if (l.role !== role || l.scope !== scope) return false;
@@ -92,6 +96,11 @@ export function PlayerStatsExplorer({
         return l.year === year && l.world == null;
       })
       .map(seasonLineToStatRow);
+    // 正式 WORLD: 登録行のみ（サンプル野手／投手へフォールバックしない）
+    if (!allowSample) {
+      return extras;
+    }
+    const base = getPlayerStats(scope, role);
     // 登録済みを先頭に（同一 id は登録側を優先）
     const byId = new Map<string, PlayerStatRow>();
     for (const r of extras) byId.set(r.id, r);
@@ -99,7 +108,7 @@ export function PlayerStatsExplorer({
       if (!byId.has(r.id)) byId.set(r.id, r);
     }
     return [...byId.values()];
-  }, [registered, role, scope, year, seasonIdentity]);
+  }, [registered, role, scope, year, seasonIdentity, allowSample]);
 
   const filtered = useMemo(() => {
     if (view === "team") {
@@ -234,6 +243,13 @@ export function PlayerStatsExplorer({
         </div>
       ) : null}
 
+      {!allowSample && sorted.length === 0 ? (
+        <p className="rounded-md border border-white/10 bg-black/40 px-3 py-3 text-[13px] text-museum-ivory-soft">
+          個人成績はまだ登録されていません。
+        </p>
+      ) : null}
+
+      {sorted.length > 0 ? (
       <div className="overflow-x-auto rounded-lg border border-white/10">
         <table
           className={cn(
@@ -334,6 +350,7 @@ export function PlayerStatsExplorer({
           </tbody>
         </table>
       </div>
+      ) : null}
 
       <p className="text-[10px] text-museum-ivory-soft">
         {scope === "pennant" ? "シーズン全体" : "交流戦期間"}の個人成績。
