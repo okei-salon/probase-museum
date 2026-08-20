@@ -4,6 +4,7 @@
  */
 
 import type { SeasonIdentity } from "@/data/seasons";
+import { resolveTeamColor } from "@/data/teams/colors";
 import { getStandingsForSeason } from "@/data/teamStandings/store";
 import type { StandingEntry } from "@/data/teamStandings";
 import {
@@ -29,15 +30,6 @@ export type StandingsTrendBoardData = {
   official: boolean;
 };
 
-const TEAM_COLORS = [
-  "#fbbf24",
-  "#f87171",
-  "#60a5fa",
-  "#fb923c",
-  "#a78bfa",
-  "#34d399",
-];
-
 function leagueEntries(
   record: { central: StandingEntry[]; pacific: StandingEntry[] } | null,
   league: "central" | "pacific",
@@ -50,6 +42,7 @@ function leagueEntries(
  * identity の順位推移を構築。
  * - 月次は standings-history
  * - final は history があればそれを使い、無ければ Step6 team-standings を参照（二重入力回避）
+ * - 色は teamId（なければ short）固定。出現順では変わらない。
  */
 export function buildStandingsTrendBoard(
   identity: SeasonIdentity,
@@ -83,17 +76,25 @@ export function buildStandingsTrendBoard(
     (c) => STANDINGS_CHECKPOINT_LABELS[c],
   );
 
-  // チーム集合（時系列で現れた順、色は固定パレット）
+  // チーム集合（表示順は出現順のまま。色は teamId/short で固定）
   const teamOrder: string[] = [];
+  const teamIdByShort = new Map<string, string | undefined>();
   for (const c of activeCheckpoints) {
     for (const row of byCheckpoint.get(c) ?? []) {
       if (!teamOrder.includes(row.team)) teamOrder.push(row.team);
+      if (row.teamId && !teamIdByShort.get(row.team)) {
+        teamIdByShort.set(row.team, row.teamId);
+      }
     }
   }
 
-  const series: StandingsTrendSeries[] = teamOrder.map((team, i) => ({
+  const series: StandingsTrendSeries[] = teamOrder.map((team) => ({
     team,
-    color: TEAM_COLORS[i % TEAM_COLORS.length]!,
+    color: resolveTeamColor({
+      teamId: teamIdByShort.get(team),
+      short: team,
+      team,
+    }),
     ranks: activeCheckpoints.map((c) => {
       const rows = byCheckpoint.get(c) ?? [];
       const hit = rows.find((r) => r.team === team);
