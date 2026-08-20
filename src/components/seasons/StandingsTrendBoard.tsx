@@ -39,17 +39,25 @@ export function StandingsTrendBoard({
   const [pacific, setPacific] = useState<StandingsTrendBoardData | null>(null);
 
   useEffect(() => {
-    if (!identity) {
-      setCentral(null);
-      setPacific(null);
-      return;
-    }
-    setCentral(buildStandingsTrendBoard(identity, "central"));
-    setPacific(buildStandingsTrendBoard(identity, "pacific"));
+    if (!identity) return;
+    let cancelled = false;
+    void (async () => {
+      const { hydrateTeamStandingsFromCloud } = await import(
+        "@/data/teamStandings"
+      );
+      await hydrateTeamStandingsFromCloud();
+      if (cancelled) return;
+      setCentral(buildStandingsTrendBoard(identity, "central"));
+      setPacific(buildStandingsTrendBoard(identity, "pacific"));
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [identity, year]);
 
-  const centralView: StandingsTrendBoardData | null =
-    central?.official && central.series.length > 0
+  const centralView: StandingsTrendBoardData | null = !identity
+    ? null
+    : central?.official && central.series.length > 0
       ? central
       : allowSample
         ? {
@@ -58,8 +66,9 @@ export function StandingsTrendBoard({
             official: false,
           }
         : null;
-  const pacificView: StandingsTrendBoardData | null =
-    pacific?.official && pacific.series.length > 0
+  const pacificView: StandingsTrendBoardData | null = !identity
+    ? null
+    : pacific?.official && pacific.series.length > 0
       ? pacific
       : allowSample
         ? {

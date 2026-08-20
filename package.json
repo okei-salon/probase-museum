@@ -10,6 +10,7 @@
     "player-master:npb2026": "python3 scripts/build-npb2026-player-master.py"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.28.0",
     "next": "16.2.12",

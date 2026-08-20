@@ -17,6 +17,10 @@ import {
   verifySanitize2026LocalStorage,
   type Sanitize2026Check,
 } from "@/data/sanitize2026Sample";
+import {
+  listYearStandings,
+  migrateLocalTeamStandingsToCloud,
+} from "@/data/teamStandings";
 import { cn } from "@/lib/cn";
 
 type PendingRestore = {
@@ -30,6 +34,7 @@ export function MuseumBackupPanel() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingRestore | null>(null);
   const [sanitizeConfirm, setSanitizeConfirm] = useState(false);
+  const [migrateConfirm, setMigrateConfirm] = useState(false);
   const [verifyChecks, setVerifyChecks] = useState<Sanitize2026Check[] | null>(
     null,
   );
@@ -153,9 +158,46 @@ export function MuseumBackupPanel() {
     }
   };
 
+  const onConfirmMigrateStandings = () => {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    void (async () => {
+      try {
+        downloadMuseumBackup(buildMuseumBackup());
+        const result = await migrateLocalTeamStandingsToCloud();
+        setMigrateConfirm(false);
+        if (!result.ok) {
+          setError(
+            `クラウドへコピーできませんでした: ${result.error ?? "unknown"}`,
+          );
+          return;
+        }
+        setMessage(
+          `最終順位をクラウドへコピーしました（新規 ${result.inserted.length} / 既存スキップ ${result.skipped.length}）。localStorage は削除していません。`,
+        );
+        refreshPreview();
+      } catch (e) {
+        setError(
+          e instanceof Error ? e.message : "クラウドへのコピーに失敗しました。",
+        );
+      } finally {
+        setBusy(false);
+      }
+    })();
+  };
+
   const onReload = () => {
     window.location.reload();
   };
+
+  const localStandingsCount = (() => {
+    try {
+      return listYearStandings().length;
+    } catch {
+      return 0;
+    }
+  })();
 
   return (
     <div className="space-y-5">
@@ -230,11 +272,12 @@ export function MuseumBackupPanel() {
           type="button"
           onClick={() => {
             setSanitizeConfirm(true);
+            setMigrateConfirm(false);
             setPending(null);
             setError(null);
             setMessage(null);
           }}
-          disabled={busy || sanitizeConfirm}
+          disabled={busy || sanitizeConfirm || migrateConfirm}
           className={cn(
             "rounded-[var(--radius-control)] border border-white/25",
             "bg-black/55 px-4 py-2 text-[12px] tracking-[0.08em]",
@@ -244,6 +287,25 @@ export function MuseumBackupPanel() {
         >
           2026サンプルを整理…
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMigrateConfirm(true);
+            setSanitizeConfirm(false);
+            setPending(null);
+            setError(null);
+            setMessage(null);
+          }}
+          disabled={busy || sanitizeConfirm || migrateConfirm}
+          className={cn(
+            "rounded-[var(--radius-control)] border border-sky-400/40",
+            "bg-sky-950/30 px-4 py-2 text-[12px] tracking-[0.08em]",
+            "text-sky-100/90 transition-colors hover:bg-sky-950/50",
+            "disabled:opacity-50",
+          )}
+        >
+          最終順位をクラウドへコピー…
+        </button>
         <input
           ref={fileRef}
           type="file"
@@ -252,6 +314,51 @@ export function MuseumBackupPanel() {
           onChange={(e) => void onPickFile(e.target.files?.[0] ?? null)}
         />
       </div>
+
+      {migrateConfirm ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="space-y-4 rounded-xl border border-sky-400/40 bg-black/80 p-4"
+        >
+          <h3 className="text-[14px] text-sky-100">
+            最終順位（team_standings）をクラウドへコピー
+          </h3>
+          <p className="text-[13px] leading-relaxed text-museum-ivory-muted">
+            この端末の localStorage にある最終順位{" "}
+            <span className="text-museum-ivory">{localStandingsCount} 件</span>{" "}
+            を Neon（museum_documents）へコピーします。クラウドに既にある id
+            は上書きしません。localStorage
+            は削除しません。バックアップ／復元機能はそのままです。
+          </p>
+          <p className="text-[11px] text-museum-ivory-soft">
+            実行直前に現状の安全用バックアップも書き出します。
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onConfirmMigrateStandings}
+              disabled={busy || localStandingsCount === 0}
+              className={cn(
+                "rounded-[var(--radius-control)] border border-sky-400/50",
+                "bg-sky-950/50 px-4 py-2 text-[12px] tracking-[0.08em]",
+                "text-sky-100 transition-colors hover:bg-sky-900/50",
+                "disabled:opacity-50",
+              )}
+            >
+              確認したのでコピーする
+            </button>
+            <button
+              type="button"
+              onClick={() => setMigrateConfirm(false)}
+              disabled={busy}
+              className="rounded-[var(--radius-control)] border border-white/20 bg-black/50 px-4 py-2 text-[12px] text-museum-ivory-soft hover:border-white/40"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {sanitizeConfirm ? (
         <div

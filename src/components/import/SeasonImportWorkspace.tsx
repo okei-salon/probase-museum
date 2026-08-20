@@ -35,7 +35,7 @@ import {
 } from "@/data/seasons";
 import {
   getStandingsForSeason,
-  upsertYearStandings,
+  upsertYearStandingsAsync,
   yearStandingsKey,
   type StandingEntry,
 } from "@/data/teamStandings";
@@ -257,7 +257,7 @@ export function SeasonImportWorkspace() {
     setError(null);
     setMessage(null);
     const kind = sub === "team_batting" ? "batting" : "pitching";
-    let merged = [...teamRows];
+    const merged = [...teamRows];
 
     for (const file of files) {
       setProgress(`${file.name}: OCR中…`);
@@ -303,7 +303,7 @@ export function SeasonImportWorkspace() {
     );
   }
 
-  function saveStandings(force: boolean) {
+  async function saveStandings(force: boolean) {
     const useSandbox = shouldUseIsolatedDemoStore(year);
     const ex =
       checkpoint === "final"
@@ -339,13 +339,39 @@ export function SeasonImportWorkspace() {
       if (useSandbox) {
         upsertDemoStandings(payload);
       } else {
-        upsertYearStandings({
+        const { cloud } = await upsertYearStandingsAsync({
           year,
           world,
           central,
           pacific,
           source: "ocr",
+          createdAt,
         });
+        if (!cloud.ok) {
+          setMessage(
+            `${label}の順位をこの端末に保存しました（クラウド同期は後で再試行: ${cloud.error ?? "error"}）。`,
+          );
+          upsertStandingsHistory({
+            year,
+            world,
+            checkpoint: "final",
+            central,
+            pacific,
+            source: "sync",
+          });
+          appendImportHistory({
+            id: `hist-${Date.now()}`,
+            at: new Date().toISOString(),
+            year,
+            fileName: "standings",
+            screenType: "standings",
+            summary: `${label} チーム順位を登録（ローカルのみ）`,
+            recordIds: [id],
+          });
+          notifyImportStoreChanged();
+          setConfirmOpen(false);
+          return;
+        }
       }
       upsertStandingsHistory({
         year,
@@ -401,7 +427,7 @@ export function SeasonImportWorkspace() {
     setMessage(
       useSandbox
         ? `${label}のチーム順位を分離デモ領域に登録しました。`
-        : `${label}の順位を登録しました。シーズン画面の順位推移へ反映されます。`,
+        : `${label}の順位を登録しました（この端末＋共有クラウド）。シーズン画面へ反映されます。`,
     );
   }
 
@@ -571,7 +597,7 @@ export function SeasonImportWorkspace() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => saveStandings(false)}
+              onClick={() => void saveStandings(false)}
               className="rounded-md border border-[color:var(--museum-accent,#d4af37)] bg-[color:var(--museum-accent,#d4af37)]/15 px-3 py-2 text-[12px] text-[color:var(--museum-accent,#d4af37)]"
             >
               順位を登録…
@@ -664,7 +690,9 @@ export function SeasonImportWorkspace() {
               <button
                 type="button"
                 onClick={() =>
-                  sub === "standings" ? saveStandings(true) : saveTeamStats(true)
+                  sub === "standings"
+                    ? void saveStandings(true)
+                    : saveTeamStats(true)
                 }
                 className="rounded-md border border-[color:var(--museum-accent,#d4af37)] bg-[color:var(--museum-accent,#d4af37)]/20 px-3 py-2 text-[12px] text-[color:var(--museum-accent,#d4af37)]"
               >

@@ -12,8 +12,8 @@ import {
   parseSeasonKey,
 } from "@/data/seasons";
 import {
-  getStandingsForSeason,
-  getYearStandings,
+  getStandingsForSeasonAsync,
+  getYearStandingsAsync,
   type StandingEntry,
 } from "@/data/teamStandings";
 import { cn } from "@/lib/cn";
@@ -48,14 +48,21 @@ export function FinalStandingsBoard({
   const allowSample = allowsLayoutSampleFallback(identity);
 
   useEffect(() => {
-    const stored = identity
-      ? getStandingsForSeason(identity)
-      : getYearStandings(Number(year));
-    const c = stored?.central?.length ? stored.central : null;
-    const p = stored?.pacific?.length ? stored.pacific : null;
-    setCentral(c);
-    setPacific(p);
-    setHasAnyStored(Boolean(c || p));
+    let cancelled = false;
+    void (async () => {
+      const stored = identity
+        ? await getStandingsForSeasonAsync(identity)
+        : await getYearStandingsAsync(Number(year));
+      if (cancelled) return;
+      const c = stored?.central?.length ? stored.central : null;
+      const p = stored?.pacific?.length ? stored.pacific : null;
+      setCentral(c);
+      setPacific(p);
+      setHasAnyStored(Boolean(c || p));
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [year, identity]);
 
   const useFullSample = allowSample && !hasAnyStored;

@@ -99,14 +99,102 @@ export function getYearStandings(
   );
 }
 
-/** シーズン画面用: identity（world + year）で厳密取得 */
+/** シーズン画面用: identity（world + year）で厳密取得（localStorage） */
 export function getStandingsForSeason(
   identity: SeasonIdentity,
 ): YearStandingsRecord | null {
   return listYearStandings().find((r) => matchSeason(r, identity)) ?? null;
 }
 
-export function upsertYearStandings(
+/**
+ * クラウドの team_standings を取得し、localStorage にマージする（ローカル専用行は削除しない）。
+ * 同一 id はクラウド側を優先。
+ */
+export async function hydrateTeamStandingsFromCloud(): Promise<
+  YearStandingsRecord[]
+> {
+  if (!canUseStorage()) return [];
+  try {
+    const res = await fetch("/api/museum/team-standings", {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) return listYearStandings();
+    const data = (await res.json()) as {
+      ok?: boolean;
+      records?: YearStandingsRecord[];
+    };
+    if (!data.ok || !Array.isArray(data.records)) return listYearStandings();
+
+    const localRaw = window.localStorage.getItem(STORAGE_KEY);
+    let localList: YearStandingsRecord[] = [];
+    if (localRaw) {
+      try {
+        const parsed = JSON.parse(localRaw) as YearStandingsRecord[];
+        localList = Array.isArray(parsed) ? parsed.map(normalizeRecord) : [];
+      } catch {
+        localList = [];
+      }
+    }
+
+    const map = new Map<string, YearStandingsRecord>();
+    for (const r of localList) map.set(r.id, r);
+    for (const r of data.records) {
+      map.set(r.id, normalizeRecord(r));
+    }
+    const merged = [...map.values()];
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    return excludeDemoRecords(merged);
+  } catch {
+    return listYearStandings();
+  }
+}
+
+export async function getStandingsForSeasonAsync(
+  identity: SeasonIdentity,
+): Promise<YearStandingsRecord | null> {
+  await hydrateTeamStandingsFromCloud();
+  return getStandingsForSeason(identity);
+}
+
+export async function getYearStandingsAsync(
+  year: number,
+  world?: SeasonWorld | null,
+): Promise<YearStandingsRecord | null> {
+  await hydrateTeamStandingsFromCloud();
+  return getYearStandings(year, world);
+}
+
+async function pushStandingsToCloud(
+  record: YearStandingsRecord,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(
+      `/api/museum/team-standings/${encodeURIComponent(record.id)}`,
+      {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(record),
+      },
+    );
+    if (!res.ok) {
+      const data = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      return { ok: false, error: data?.error ?? `http_${res.status}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "network_error",
+    };
+  }
+}
+
+function upsertYearStandingsLocal(
   input: Omit<YearStandingsRecord, "id" | "createdAt" | "updatedAt" | "world"> & {
     world?: SeasonWorld | null;
     createdAt?: string;
@@ -132,6 +220,83 @@ export function upsertYearStandings(
   else list.push(record);
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   return record;
+}
+
+/**
+ * localStorage に保存（既存互換）。クラウドへは非同期で送る（失敗してもローカルは残す）。
+ */
+export function upsertYearStandings(
+  input: Omit<YearStandingsRecord, "id" | "createdAt" | "updatedAt" | "world"> & {
+    world?: SeasonWorld | null;
+    createdAt?: string;
+  },
+): YearStandingsRecord {
+  const record = upsertYearStandingsLocal(input);
+  void pushStandingsToCloud(record);
+  return record;
+}
+
+/** local 保存後にクラウド PUT を待ち、結果を返す */
+export async function upsertYearStandingsAsync(
+  input: Omit<YearStandingsRecord, "id" | "createdAt" | "updatedAt" | "world"> & {
+    world?: SeasonWorld | null;
+    createdAt?: string;
+  },
+): Promise<{ record: YearStandingsRecord; cloud: { ok: boolean; error?: string } }> {
+  const record = upsertYearStandingsLocal(input);
+  const cloud = await pushStandingsToCloud(record);
+  return { record, cloud };
+}
+
+/**
+ * 端末の localStorage 全件をクラウドへコピー（既存クラウド行は上書きしない）。
+ */
+export async function migrateLocalTeamStandingsToCloud(): Promise<{
+  ok: boolean;
+  inserted: string[];
+  skipped: string[];
+  errors: Array<{ id: string; error: string }>;
+  error?: string;
+}> {
+  const records = listYearStandings();
+  try {
+    const res = await fetch("/api/museum/team-standings", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ records }),
+    });
+    const data = (await res.json()) as {
+      ok?: boolean;
+      inserted?: string[];
+      skipped?: string[];
+      errors?: Array<{ id: string; error: string }>;
+      error?: string;
+    };
+    if (!res.ok || !data.ok) {
+      return {
+        ok: false,
+        inserted: [],
+        skipped: [],
+        errors: data.errors ?? [],
+        error: data.error ?? `http_${res.status}`,
+      };
+    }
+    return {
+      ok: true,
+      inserted: data.inserted ?? [],
+      skipped: data.skipped ?? [],
+      errors: data.errors ?? [],
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      inserted: [],
+      skipped: [],
+      errors: [],
+      error: e instanceof Error ? e.message : "network_error",
+    };
+  }
 }
 
 export const TEAM_STANDINGS_STORAGE_KEY = STORAGE_KEY;
