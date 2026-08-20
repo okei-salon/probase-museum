@@ -64,18 +64,35 @@ function normalizeRecord(r: YearStandingsRecord): YearStandingsRecord {
   };
 }
 
-export function listYearStandings(): YearStandingsRecord[] {
+/** localStorage 生読み（デモ除外なし）。書き込み・hydrate マージ用 */
+function readRawYearStandings(): YearStandingsRecord[] {
   if (!canUseStorage()) return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as YearStandingsRecord[];
-    return excludeDemoRecords(
-      Array.isArray(parsed) ? parsed.map(normalizeRecord) : [],
-    );
+    return Array.isArray(parsed) ? parsed.map(normalizeRecord) : [];
   } catch {
     return [];
   }
+}
+
+function writeRawYearStandings(list: YearStandingsRecord[]): void {
+  if (!canUseStorage()) return;
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+
+/** a が b 以上に新しい（同タイムスタンプは a 側を新しいとみなさない→クラウド優先に倒す） */
+function isStrictlyNewer(a: string, b: string): boolean {
+  const ta = Date.parse(a);
+  const tb = Date.parse(b);
+  if (!Number.isFinite(ta)) return false;
+  if (!Number.isFinite(tb)) return true;
+  return ta > tb;
+}
+
+export function listYearStandings(): YearStandingsRecord[] {
+  return excludeDemoRecords(readRawYearStandings());
 }
 
 /**
@@ -108,7 +125,8 @@ export function getStandingsForSeason(
 
 /**
  * クラウドの team_standings を取得し、localStorage にマージする（ローカル専用行は削除しない）。
- * 同一 id はクラウド側を優先。
+ * 同一 id: 新しい updatedAt を優先。同刻 or ローカル不明ならクラウド優先。
+ * ローカルの方が新しい行は表示を保ちつつ、裏で PUT 再送（失敗してもUIは壊さない）。
  */
 export async function hydrateTeamStandingsFromCloud(): Promise<
   YearStandingsRecord[]
@@ -127,24 +145,35 @@ export async function hydrateTeamStandingsFromCloud(): Promise<
     };
     if (!data.ok || !Array.isArray(data.records)) return listYearStandings();
 
-    const localRaw = window.localStorage.getItem(STORAGE_KEY);
-    let localList: YearStandingsRecord[] = [];
-    if (localRaw) {
-      try {
-        const parsed = JSON.parse(localRaw) as YearStandingsRecord[];
-        localList = Array.isArray(parsed) ? parsed.map(normalizeRecord) : [];
-      } catch {
-        localList = [];
+    const localList = readRawYearStandings();
+    const cloudList = data.records.map(normalizeRecord);
+    const map = new Map<string, YearStandingsRecord>();
+    const pendingPush: YearStandingsRecord[] = [];
+
+    for (const local of localList) {
+      map.set(local.id, local);
+    }
+    for (const cloud of cloudList) {
+      const local = map.get(cloud.id);
+      if (!local) {
+        map.set(cloud.id, cloud);
+        continue;
+      }
+      if (isStrictlyNewer(local.updatedAt, cloud.updatedAt)) {
+        // ローカルが新しい（直前の保存で PUT 未完了／失敗など）→ 保持して再送
+        pendingPush.push(local);
+      } else {
+        map.set(cloud.id, cloud);
       }
     }
 
-    const map = new Map<string, YearStandingsRecord>();
-    for (const r of localList) map.set(r.id, r);
-    for (const r of data.records) {
-      map.set(r.id, normalizeRecord(r));
-    }
     const merged = [...map.values()];
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    writeRawYearStandings(merged);
+
+    if (pendingPush.length > 0) {
+      void Promise.all(pendingPush.map((r) => pushStandingsToCloud(r)));
+    }
+
     return excludeDemoRecords(merged);
   } catch {
     return listYearStandings();
@@ -203,7 +232,7 @@ function upsertYearStandingsLocal(
   const now = new Date().toISOString();
   const world = normalizeSeasonWorld(input.world);
   const id = yearStandingsKey(input.year, world);
-  const list = listYearStandings();
+  const list = readRawYearStandings();
   const existing = list.find((r) => r.id === id) ?? null;
   const record: YearStandingsRecord = {
     id,
@@ -218,7 +247,7 @@ function upsertYearStandingsLocal(
   const idx = list.findIndex((r) => r.id === id);
   if (idx >= 0) list[idx] = record;
   else list.push(record);
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  writeRawYearStandings(list);
   return record;
 }
 
