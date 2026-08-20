@@ -15,12 +15,14 @@ import {
 import { appendImportHistory } from "@/data/import/store";
 import { formatSeasonLineLabel, normalizeSeasonWorld, type SeasonWorld } from "@/data/seasons";
 import {
-  buildTeamSeasonBatting,
   buildTeamSeasonPitching,
   getTeamSeasonStats,
+  mergeTeamSeasonBatting,
   teamSeasonStatsKey,
   upsertTeamSeasonStats,
+  type TeamBattingScreenRates,
   type TeamCompetition,
+  type TeamSeasonStatsRecord,
 } from "@/data/teamSeasonStats";
 import { npbTeams } from "@/data/teams";
 import {
@@ -29,17 +31,36 @@ import {
   type TeamStatPartial,
 } from "@/lib/import/parseTeamSeasonOcr";
 
-function battingScreenRates(fields: TeamStatPartial["fields"]) {
-  return {
-    avg: fields.avg?.value ?? null,
-    hrRate: fields.hrRate?.value ?? null,
-    slg: fields.slg?.value ?? null,
-    soRate: fields.soRate?.value ?? null,
-    gdpRate: fields.gdpRate?.value ?? null,
-    sbRate: fields.sbRate?.value ?? null,
-    obp: fields.obp?.value ?? null,
-    ops: fields.ops?.value ?? null,
-  };
+const BATTING_SCREEN_KEYS: Array<keyof TeamBattingScreenRates> = [
+  "avg",
+  "hrRate",
+  "slg",
+  "soRate",
+  "gdpRate",
+  "sbRate",
+  "obp",
+  "ops",
+  "rispAvg",
+  "rispAvgDiff",
+  "basesLoadedAvg",
+  "basesLoadedAvgDiff",
+  "vsRhbAvg",
+  "vsRhbAvgDiff",
+  "vsLhbAvg",
+  "vsLhbAvgDiff",
+];
+
+/** 貼り付けに含まれた率項目のみパッチ（未入力は既存維持） */
+function battingScreenRatesPatch(
+  fields: TeamStatPartial["fields"],
+): TeamBattingScreenRates {
+  const patch: TeamBattingScreenRates = {};
+  for (const key of BATTING_SCREEN_KEYS) {
+    if (fields[key] !== undefined) {
+      patch[key] = fields[key]?.value ?? null;
+    }
+  }
+  return patch;
 }
 
 function pitchingScreenRates(fields: TeamStatPartial["fields"]) {
@@ -50,7 +71,36 @@ function pitchingScreenRates(fields: TeamStatPartial["fields"]) {
     winPct: fields.winPct?.value ?? null,
     soRate: fields.soRate?.value ?? null,
     bbRate: fields.bbRate?.value ?? null,
+    hbpRate: fields.hbpRate?.value ?? null,
+    avgAgainst: fields.avgAgainst?.value ?? null,
+    rispAvg: fields.rispAvg?.value ?? null,
+    rispAvgDiff: fields.rispAvgDiff?.value ?? null,
+    vsRhbAvg: fields.vsRhbAvg?.value ?? null,
+    vsRhbAvgDiff: fields.vsRhbAvgDiff?.value ?? null,
+    vsLhbAvg: fields.vsLhbAvg?.value ?? null,
+    vsLhbAvgDiff: fields.vsLhbAvgDiff?.value ?? null,
+    hrRateAllowed: fields.hrRateAllowed?.value ?? null,
+    sbRateAgainst: fields.sbRateAgainst?.value ?? null,
   };
+}
+
+function findExistingTeamStats(
+  year: number,
+  teamId: TeamSeasonStatsRecord["teamId"],
+  competition: TeamCompetition,
+  world: SeasonWorld | null,
+  useSandbox: boolean,
+): TeamSeasonStatsRecord | undefined {
+  if (useSandbox) {
+    return listDemoTeamStats().find(
+      (r) =>
+        r.year === year &&
+        r.teamId === teamId &&
+        r.competition === competition &&
+        normalizeSeasonWorld(r.world) === world,
+    );
+  }
+  return getTeamSeasonStats(year, teamId, competition, world) ?? undefined;
 }
 
 export function findConflictingTeamStats(
@@ -64,15 +114,13 @@ export function findConflictingTeamStats(
   const conflicts: string[] = [];
   for (const row of rows) {
     if (!row.teamId) continue;
-    const ex = useSandbox
-      ? listDemoTeamStats().find(
-          (r) =>
-            r.year === year &&
-            r.teamId === row.teamId &&
-            r.competition === competition &&
-            normalizeSeasonWorld(r.world) === world,
-        )
-      : getTeamSeasonStats(year, row.teamId, competition, world);
+    const ex = findExistingTeamStats(
+      year,
+      row.teamId,
+      competition,
+      world,
+      useSandbox,
+    );
     if (
       ex &&
       ((kind === "batting" && ex.batting) ||
@@ -109,20 +157,22 @@ export function saveTeamSeasonStatsRows(params: {
     if (!team) continue;
     if (Object.keys(row.fields).length === 0) continue;
 
+    const existing = findExistingTeamStats(
+      year,
+      row.teamId,
+      competition,
+      world,
+      useSandbox,
+    );
+
     if (kind === "batting") {
-      const counting = teamFieldsToBattingCounting(row.fields);
-      const batting = buildTeamSeasonBatting(
-        counting,
-        battingScreenRates(row.fields),
+      const countingPatch = teamFieldsToBattingCounting(row.fields);
+      const batting = mergeTeamSeasonBatting(
+        existing?.batting,
+        countingPatch,
+        battingScreenRatesPatch(row.fields),
       );
       if (useSandbox) {
-        const existing = listDemoTeamStats().find(
-          (r) =>
-            r.year === year &&
-            r.teamId === row.teamId &&
-            r.competition === competition &&
-            normalizeSeasonWorld(r.world) === world,
-        );
         const now = new Date().toISOString();
         const rec = upsertDemoTeamStats({
           id: teamSeasonStatsKey(year, row.teamId, competition, world),
@@ -157,13 +207,6 @@ export function saveTeamSeasonStatsRows(params: {
         pitchingScreenRates(row.fields),
       );
       if (useSandbox) {
-        const existing = listDemoTeamStats().find(
-          (r) =>
-            r.year === year &&
-            r.teamId === row.teamId &&
-            r.competition === competition &&
-            normalizeSeasonWorld(r.world) === world,
-        );
         const now = new Date().toISOString();
         const rec = upsertDemoTeamStats({
           id: teamSeasonStatsKey(year, row.teamId, competition, world),

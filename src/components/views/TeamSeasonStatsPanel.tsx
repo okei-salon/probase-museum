@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { SortableTeamStatsTable } from "@/components/views/SortableTeamStatsTable";
 import {
   buildLayoutSampleBattingRows,
@@ -41,19 +41,13 @@ export function TeamSeasonStatsPanel({
   seasonKey,
 }: TeamSeasonStatsPanelProps) {
   const y = Number(year);
-  const [tick, setTick] = useState(0);
   const identity = useMemo(
     () => (seasonKey ? parseSeasonKey(seasonKey) : null),
     [seasonKey],
   );
   const allowSample = allowsLayoutSampleFallback(identity);
 
-  useEffect(() => {
-    setTick((t) => t + 1);
-  }, [year, kind, competition, seasonKey]);
-
   const { rows, columns, official } = useMemo(() => {
-    void tick;
     const columns =
       kind === "batting"
         ? formalTeamBattingColumns
@@ -84,11 +78,11 @@ export function TeamSeasonStatsPanel({
       columns,
       official: officialRows.length > 0,
     };
-  }, [kind, y, competition, tick, identity, allowSample]);
+  }, [kind, y, competition, identity, allowSample]);
 
   const competitionLabel =
     competition === "interleague" ? "交流戦" : "通常シーズン";
-  const fieldLabel = kind === "batting" ? "打者28項目" : "投手19項目";
+  const fieldLabel = kind === "batting" ? "打者成績（全項目）" : "投手成績（全項目）";
   const seasonLabel = identity
     ? formatSeasonLineLabel(identity)
     : `${y}年`;

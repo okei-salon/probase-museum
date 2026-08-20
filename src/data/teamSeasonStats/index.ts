@@ -5,7 +5,7 @@
  * Key: 正式 `${world}:${year}:${teamId}:${competition}` /
  *      レガシー `${year}:${teamId}:${competition}`  (regular | interleague)
  *
- * batting 28 / pitching 19 — 率は counting から再計算。
+ * batting / pitching 全項目 — 率は counting から再計算可能なものは再計算。
  * 通算は年度率の平均ではなく、カウント合算後に再計算。
  */
 
@@ -40,6 +40,9 @@ export {
   computeTeamPitchingDerived,
   formatTeamBattingField,
   formatTeamPitchingField,
+  mergeTeamSeasonBatting,
+  normalizeTeamBattingCounting,
+  normalizeTeamPitchingCounting,
   resolveSingles,
   resolveTb,
   totalEr,

@@ -19,56 +19,23 @@ import {
   pitchingFieldLabel,
   teamSeasonToBattingValues,
   teamSeasonToPitchingValues,
+  TEAM_BATTING_FIELD_KEYS,
+  TEAM_PITCHING_FIELD_KEYS,
   type TeamSeasonBatting,
   type TeamSeasonPitching,
   type TeamSeasonStatsRecord,
 } from "@/data/teamSeasonStats";
 
-/** 仕様で明示された打撃表示キー（盗塁死は sba-sb で導出） */
+/** 球団詳細：正式打撃全項目 + 盗塁死（sba-sb 導出） */
 export const TEAM_DETAIL_BATTING_KEYS = [
-  "avg",
-  "g",
-  "pa",
-  "ab",
-  "h",
-  "singles",
-  "doubles",
-  "triples",
-  "hr",
-  "hrRate",
-  "tb",
-  "slg",
-  "rbi",
-  "obp",
-  "ops",
-  "r",
-  "sb",
-  "cs",
-  "sac",
-  "sf",
-  "bb",
-  "hbp",
+  ...TEAM_BATTING_FIELD_KEYS.flatMap((key) =>
+    key === "sb" ? (["sb", "cs"] as const) : ([key] as const),
+  ),
 ] as const;
 
-/** 被本塁打・被打率は正式保存フィールド未整備のため表示対象外 */
+/** 被本塁打・被打率など正式保存フィールドを含む投手表示キー */
 export const TEAM_DETAIL_PITCHING_KEYS = [
-  "era",
-  "starterEra",
-  "reliefEra",
-  "ip",
-  "winPct",
-  "w",
-  "l",
-  "sv",
-  "hp",
-  "hld",
-  "g",
-  "sho",
-  "cg",
-  "so",
-  "soRate",
-  "bb",
-  "bbRate",
+  ...TEAM_PITCHING_FIELD_KEYS,
 ] as const;
 
 export type TeamStatFieldRow = {
@@ -99,7 +66,8 @@ function hasBattingKey(batting: TeamSeasonBatting, key: string): boolean {
     updatedAt: "",
   });
   const v = values[key];
-  return v != null && v >= 0;
+  if (v == null || v === -1 || v === -999) return false;
+  return true;
 }
 
 function hasPitchingKey(pitching: TeamSeasonPitching, key: string): boolean {
@@ -116,7 +84,7 @@ function hasPitchingKey(pitching: TeamSeasonPitching, key: string): boolean {
     updatedAt: "",
   });
   const v = values[key];
-  if (v == null || v < 0) return false;
+  if (v == null || v === -1 || v === -999) return false;
   // 先発／救援防御率は IP 不明時は出さない
   if (
     (key === "starterEra" || key === "reliefEra") &&
@@ -147,6 +115,7 @@ function battingFieldsFromBatting(
         key,
         batting.counting,
         batting.derived,
+        batting.screenRates,
       ),
     });
   }

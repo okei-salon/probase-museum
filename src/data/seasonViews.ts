@@ -264,7 +264,8 @@ export const teamPitchingStats: TeamStatRow[] = [
 ];
 
 export function formatTeamStatValue(key: string, value: number): string {
-  if (value < 0) return "---";
+  // -1（旧）/ -999（新）を未登録表示。符号付き率差（負値）は残す。
+  if (value === -1 || value === -999) return "---";
   if (
     key === "avg" ||
     key === "obp" ||
@@ -273,9 +274,21 @@ export function formatTeamStatValue(key: string, value: number): string {
     key === "hrRate" ||
     key === "gdpRate" ||
     key === "sbRate" ||
-    key === "winPct"
+    key === "winPct" ||
+    key === "avgAgainst" ||
+    key === "rispAvg" ||
+    key === "rispAvgDiff" ||
+    key === "basesLoadedAvg" ||
+    key === "basesLoadedAvgDiff" ||
+    key === "vsRhbAvg" ||
+    key === "vsRhbAvgDiff" ||
+    key === "vsLhbAvg" ||
+    key === "vsLhbAvgDiff" ||
+    key === "sbRateAgainst"
   ) {
-    return value.toFixed(3).replace(/^0\./, ".");
+    const s = value.toFixed(3);
+    if (s.startsWith("-0.")) return `-.${s.slice(3)}`;
+    return s.replace(/^0\./, ".");
   }
   // 打者三振率は 0.xxx、投手奪三振率は 9.xx 程度
   if (key === "soRate") {
@@ -287,7 +300,9 @@ export function formatTeamStatValue(key: string, value: number): string {
     key === "era" ||
     key === "starterEra" ||
     key === "reliefEra" ||
-    key === "bbRate"
+    key === "bbRate" ||
+    key === "hbpRate" ||
+    key === "hrRateAllowed"
   ) {
     return value.toFixed(2);
   }

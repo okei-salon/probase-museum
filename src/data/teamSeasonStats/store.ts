@@ -9,6 +9,7 @@ import {
 import {
   buildTeamSeasonBatting,
   buildTeamSeasonPitching,
+  normalizeTeamPitchingCounting,
 } from "./compute";
 import type {
   TeamCompetition,
@@ -107,15 +108,7 @@ function normalizeRecord(r: TeamSeasonStatsRecord): TeamSeasonStatsRecord {
     : null;
   const pitching = r.pitching
     ? buildTeamSeasonPitching(
-        {
-          ...r.pitching.counting,
-          starterIpOuts: r.pitching.counting.starterIpOuts ?? null,
-          reliefIpOuts: r.pitching.counting.reliefIpOuts ?? null,
-          starterEr: r.pitching.counting.starterEr ?? 0,
-          reliefEr: r.pitching.counting.reliefEr ?? 0,
-          hld: r.pitching.counting.hld ?? 0,
-          hp: r.pitching.counting.hp ?? 0,
-        },
+        normalizeTeamPitchingCounting(r.pitching.counting),
         r.pitching.screenRates,
       )
     : null;

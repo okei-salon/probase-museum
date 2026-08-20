@@ -94,7 +94,7 @@ function renderPennant(item: string, year: string, seasonKey: string) {
       return (
         <DataPanel
           title="チーム打撃成績"
-          description="セ・パ / 12球団を切替して比較・ソート（打者28項目）"
+          description="セ・パ / 12球団を切替して比較・ソート（打者全項目）"
         >
           <TeamSeasonStatsPanel
             year={year}

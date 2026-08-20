@@ -213,56 +213,86 @@ export function parseStandingsOcrText(rawText: string): StandingPartial[] {
 
 export function teamFieldsToBattingCounting(
   fields: TeamStatPartial["fields"],
-): import("@/data/teamSeasonStats").TeamBattingCounting {
-  const n = (k: string, fb = 0) => fields[k]?.value ?? fb;
-  return {
-    g: n("g"),
-    pa: n("pa"),
-    ab: n("ab"),
-    h: n("h"),
-    singles: n("singles"),
-    doubles: n("doubles"),
-    triples: n("triples"),
-    hr: n("hr"),
-    tb: n("tb"),
-    rbi: n("rbi"),
-    r: n("r"),
-    so: n("so"),
-    bb: n("bb"),
-    hbp: n("hbp"),
-    sac: n("sac"),
-    sf: n("sf"),
-    gdp: n("gdp"),
-    sba: n("sba"),
-    sb: n("sb"),
-    multiHit: n("multiHit"),
+): Partial<import("@/data/teamSeasonStats").TeamBattingCounting> {
+  const patch: Partial<
+    import("@/data/teamSeasonStats").TeamBattingCounting
+  > = {};
+  const set = (
+    key: keyof import("@/data/teamSeasonStats").TeamBattingCounting,
+    fieldKey: string = key,
+  ) => {
+    if (fields[fieldKey]?.value != null) {
+      patch[key] = Number(fields[fieldKey]!.value);
+    }
   };
+  set("g");
+  set("pa");
+  set("ab");
+  set("h");
+  set("singles");
+  set("doubles");
+  set("triples");
+  set("hr");
+  set("tb");
+  set("rbi");
+  set("r");
+  set("so");
+  set("bb");
+  set("hbp");
+  set("sac");
+  set("sf");
+  set("gdp");
+  set("sba");
+  set("sb");
+  set("multiHit");
+  set("rispAb");
+  set("rispH");
+  set("basesLoadedAb");
+  set("basesLoadedH");
+  set("vsRhbAb");
+  set("vsRhbH");
+  set("vsLhbAb");
+  set("vsLhbH");
+  set("bip");
+  return patch;
 }
 
 export function teamFieldsToPitchingCounting(
   fields: TeamStatPartial["fields"],
 ): import("@/data/teamSeasonStats").TeamPitchingCounting {
   const n = (k: string, fb = 0) => fields[k]?.value ?? fb;
+  const opt = (k: string): number | null =>
+    fields[k]?.value != null ? Number(fields[k]!.value) : null;
   const ipRaw = fields.ip?.raw ?? "";
   const outs = ipRaw ? ipDisplayToOuts(ipRaw) : null;
-  const starterEr =
-    fields.starterEr?.value != null ? n("starterEr") : n("er");
-  const reliefEr = n("reliefEr", 0);
   return {
     ipOuts: outs ?? Math.round((fields.ip?.value ?? 0) * 3),
     w: n("w"),
     l: n("l"),
     sv: n("sv"),
-    hp: n("hp") || n("hld"),
-    hld: n("hld") || n("hp"),
+    hp: fields.hp?.value != null ? n("hp") : 0,
+    hld: fields.hld?.value != null ? n("hld") : 0,
     g: n("g"),
     sho: n("sho"),
     cg: n("cg"),
     so: n("so"),
     bb: n("bb"),
-    starterEr,
-    reliefEr,
+    starterEr: fields.starterEr?.value != null ? n("starterEr") : 0,
+    reliefEr: fields.reliefEr?.value != null ? n("reliefEr") : 0,
     starterIpOuts: null,
     reliefIpOuts: null,
+    hbp: opt("hbp"),
+    bf: opt("bf"),
+    abAgainst: opt("abAgainst"),
+    hitsAllowed: opt("hitsAllowed"),
+    rispH: opt("rispH"),
+    vsRhbH: opt("vsRhbH"),
+    vsLhbH: opt("vsLhbH"),
+    hrAllowed: opt("hrAllowed"),
+    sbaAgainst: opt("sbaAgainst"),
+    sbAllowed: opt("sbAllowed"),
+    wp: opt("wp"),
+    r: opt("r"),
+    er: opt("er"),
   };
 }

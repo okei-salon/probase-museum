@@ -241,6 +241,7 @@ export function outsToIpDisplay(outs: number): string {
 export function formatAvgDisplay(avg: number): string {
   if (!Number.isFinite(avg)) return "—";
   const s = avg.toFixed(3);
+  if (s.startsWith("-0.")) return `-.${s.slice(3)}`;
   return s.startsWith("0") ? s.slice(1) : s;
 }
 
@@ -256,4 +257,45 @@ export function formatEraDisplay(era: number): string {
 export function formatWinPctDisplay(pct: number): string {
   if (!Number.isFinite(pct)) return "—";
   return formatAvgDisplay(pct);
+}
+
+/**
+ * 符号付き率差（圏率差 / 右率差 / 左率差など）。
+ * -.004 / -0.004 / .018 を許容（概ね -1〜1）。
+ */
+export function normalizeSignedRateInput(raw: string): NormalizedNumber {
+  const half = toHalfwidthDigits(raw).trim();
+  if (!half) {
+    return { raw, text: "", value: null, confidence: "invalid" };
+  }
+  const cleaned = half.replace(/[^\d.-]/g, "");
+  const m = cleaned.match(/^(-)?(\d*\.?\d+)$/);
+  if (!m) {
+    return {
+      raw,
+      text: cleaned,
+      value: null,
+      confidence: "invalid",
+      note: "率差として読み取れません",
+    };
+  }
+  const neg = Boolean(m[1]);
+  const absRaw = m[2]!;
+  const abs = Number(absRaw.startsWith(".") ? `0${absRaw}` : absRaw);
+  if (!Number.isFinite(abs) || abs > 1) {
+    return {
+      raw,
+      text: cleaned,
+      value: null,
+      confidence: "invalid",
+      note: "率差の範囲外です",
+    };
+  }
+  const value = Math.round((neg ? -abs : abs) * 1000) / 1000;
+  return {
+    raw,
+    text: formatAvgDisplay(value),
+    value,
+    confidence: "high",
+  };
 }
