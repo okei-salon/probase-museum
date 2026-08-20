@@ -10,7 +10,7 @@ import {
   sanitize2026SampleEntries,
   sanitize2026SampleInLocalStorage,
   verifySanitize2026LocalStorage,
-} from "../src/data/sanitize2026Sample.ts";
+} from "../src/data/sanitize2026Sample";
 
 type Store = Record<string, string>;
 
