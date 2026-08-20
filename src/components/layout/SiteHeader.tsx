@@ -27,6 +27,15 @@ export function SiteHeader() {
           <Button
             variant="ghost"
             size="sm"
+            href="/import"
+            className="h-8 rounded-md border-white/25 bg-black/55 px-2.5 text-[11px] text-museum-ivory"
+          >
+            <MuseumIcon name="file" size={13} className="text-museum-ivory" />
+            <span className="hidden sm:inline">データ取り込み</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             href="/settings"
             className="h-8 rounded-md border-white/25 bg-black/55 px-2.5 text-[11px] text-museum-ivory"
           >
