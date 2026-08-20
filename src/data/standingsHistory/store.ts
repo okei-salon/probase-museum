@@ -107,8 +107,9 @@ export function upsertStandingsHistory(
     year: number;
     world?: SeasonWorld | null;
     checkpoint: StandingsCheckpoint;
-    central: StandingEntry[];
-    pacific: StandingEntry[];
+    /** 省略時は既存リーグを維持 */
+    central?: StandingEntry[];
+    pacific?: StandingEntry[];
     source?: StandingsHistoryRecord["source"];
     createdAt?: string;
   },
@@ -123,8 +124,14 @@ export function upsertStandingsHistory(
     year: input.year,
     world,
     checkpoint: input.checkpoint,
-    central: input.central,
-    pacific: input.pacific,
+    central:
+      input.central !== undefined
+        ? input.central
+        : (existing?.central ?? []),
+    pacific:
+      input.pacific !== undefined
+        ? input.pacific
+        : (existing?.pacific ?? []),
     source: input.source ?? existing?.source ?? "manual",
     createdAt: existing?.createdAt ?? input.createdAt ?? now,
     updatedAt: now,

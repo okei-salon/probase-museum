@@ -119,6 +119,9 @@ export function SeasonImportWorkspace() {
   const [activeLeague, setActiveLeague] = useState<"central" | "pacific">(
     "central",
   );
+  /** 今回の編集で更新するリーグだけ true（未タッチのリーグは既存を維持） */
+  const [touchedCentral, setTouchedCentral] = useState(false);
+  const [touchedPacific, setTouchedPacific] = useState(false);
 
   // team stats
   const [teamRows, setTeamRows] = useState<TeamStatPartial[]>([]);
@@ -138,6 +141,9 @@ export function SeasonImportWorkspace() {
     if (ex) {
       setCentral(ex.central.length ? ex.central : defaultLeagueRows("central"));
       setPacific(ex.pacific.length ? ex.pacific : defaultLeagueRows("pacific"));
+      // 表示用読み込み。保存対象にはしない（未編集リーグの上書き防止）
+      setTouchedCentral(false);
+      setTouchedPacific(false);
       setMessage(
         `${formatSeasonLineLabel({ year, world })} ${STANDINGS_CHECKPOINT_LABELS[checkpoint]}の既存順位を読み込みました`,
       );
@@ -158,7 +164,16 @@ export function SeasonImportWorkspace() {
           setError("チーム順位は TYPE=TEAM_STANDINGS を指定してください");
           return;
         }
-        setSeasonKey(seasonKeyFromYearHint(parsed.year, world));
+        const nextKey = seasonKeyFromYearHint(parsed.year, world);
+        setSeasonKey(nextKey);
+        const nextIdentity = parseSeasonKey(nextKey);
+        const existingForYear =
+          checkpoint === "final" && nextIdentity
+            ? getStandingsForSeason(nextIdentity)
+            : nextIdentity
+              ? getCheckpointStandingsForEdit(nextIdentity, checkpoint)
+              : null;
+
         if (parsed.central.length) {
           setCentral(
             parsed.central.length >= 6
@@ -168,8 +183,13 @@ export function SeasonImportWorkspace() {
                   ...defaultLeagueRows("central").slice(parsed.central.length),
                 ].slice(0, 6),
           );
+          setTouchedCentral(true);
           setActiveLeague("central");
+        } else if (existingForYear?.central.length) {
+          // CL未入力時は既存CLを表示用に載せる（保存対象にはしない）
+          setCentral(existingForYear.central);
         }
+
         if (parsed.pacific.length) {
           setPacific(
             parsed.pacific.length >= 6
@@ -179,7 +199,11 @@ export function SeasonImportWorkspace() {
                   ...defaultLeagueRows("pacific").slice(parsed.pacific.length),
                 ].slice(0, 6),
           );
+          setTouchedPacific(true);
           if (!parsed.central.length) setActiveLeague("pacific");
+        } else if (existingForYear?.pacific.length) {
+          // PL未入力時は既存PLを表示用に載せる（保存対象にはしない）
+          setPacific(existingForYear.pacific);
         }
         setMessage(parsed.message);
         return;
@@ -245,8 +269,13 @@ export function SeasonImportWorkspace() {
         setError(e instanceof Error ? e.message : "OCRに失敗しました");
       }
     }
-    if (league === "central") setCentral(merged);
-    else setPacific(merged);
+    if (league === "central") {
+      setCentral(merged);
+      setTouchedCentral(true);
+    } else {
+      setPacific(merged);
+      setTouchedPacific(true);
+    }
     setProgress("");
     setMessage(
       `${league === "central" ? "セ" : "パ"}・リーグ順位候補を更新しました。確認後に登録してください。`,
@@ -298,12 +327,21 @@ export function SeasonImportWorkspace() {
     patch: Partial<StandingEntry>,
   ) {
     const setter = league === "central" ? setCentral : setPacific;
+    if (league === "central") setTouchedCentral(true);
+    else setTouchedPacific(true);
     setter((rows) =>
       rows.map((r, i) => (i === index ? { ...r, ...patch } : r)),
     );
   }
 
   async function saveStandings(force: boolean) {
+    if (!touchedCentral && !touchedPacific) {
+      setError(
+        "セまたはパの順位を貼り付け／OCR／編集してから登録してください（未編集のリーグは既存データのまま残ります）。",
+      );
+      return;
+    }
+
     const useSandbox = shouldUseIsolatedDemoStore(year);
     const ex =
       checkpoint === "final"
@@ -317,35 +355,50 @@ export function SeasonImportWorkspace() {
     }
 
     const label = `${formatSeasonLineLabel({ year, world })} ${STANDINGS_CHECKPOINT_LABELS[checkpoint]}`;
+    const updatedLeaguesLabel = [
+      touchedCentral ? "セ" : null,
+      touchedPacific ? "パ" : null,
+    ]
+      .filter(Boolean)
+      .join("・");
+    const existingFinal = useSandbox
+      ? getDemoStandings()
+      : getStandingsForSeason(identity);
+
+    // 触ったリーグだけ更新。未タッチのリーグは入力payloadに含めない。
+    const leaguePatch = {
+      ...(touchedCentral ? { central } : {}),
+      ...(touchedPacific ? { pacific } : {}),
+    };
 
     if (checkpoint === "final") {
       // 最終: team-standings 本体 + history(final) を同時更新（二重手入力回避）
       const id = yearStandingsKey(year, world);
-      const existingFinal = useSandbox
-        ? getDemoStandings()
-        : getStandingsForSeason(identity);
       const createdAt =
         existingFinal?.createdAt ?? new Date().toISOString();
-      const payload = {
-        id,
-        year,
-        world,
-        central,
-        pacific,
-        source: "ocr" as const,
-        createdAt,
-        updatedAt: new Date().toISOString(),
-      };
       if (useSandbox) {
-        upsertDemoStandings(payload);
-      } else {
-        const { cloud } = await upsertYearStandingsAsync({
+        const mergedDemo = {
+          id,
           year,
           world,
-          central,
-          pacific,
+          central: touchedCentral
+            ? central
+            : (existingFinal?.central ?? []),
+          pacific: touchedPacific
+            ? pacific
+            : (existingFinal?.pacific ?? []),
+          source: "ocr" as const,
+          createdAt,
+          updatedAt: new Date().toISOString(),
+        };
+        upsertDemoStandings(mergedDemo);
+      } else {
+        const { cloud, record } = await upsertYearStandingsAsync({
+          year,
+          world,
           source: "ocr",
           createdAt,
+          ...leaguePatch,
         });
         if (!cloud.ok) {
           setMessage(
@@ -355,9 +408,8 @@ export function SeasonImportWorkspace() {
             year,
             world,
             checkpoint: "final",
-            central,
-            pacific,
             source: "sync",
+            ...leaguePatch,
           });
           appendImportHistory({
             id: `hist-${Date.now()}`,
@@ -365,11 +417,24 @@ export function SeasonImportWorkspace() {
             year,
             fileName: "standings",
             screenType: "standings",
-            summary: `${label} チーム順位を登録（ローカルのみ）`,
+            summary: `${label} チーム順位を登録（ローカルのみ / ${updatedLeaguesLabel}）`,
             recordIds: [id],
           });
           notifyImportStoreChanged();
+          setTouchedCentral(false);
+          setTouchedPacific(false);
           setConfirmOpen(false);
+          // 保存後の表示を実データに合わせる
+          setCentral(
+            record.central.length
+              ? record.central
+              : defaultLeagueRows("central"),
+          );
+          setPacific(
+            record.pacific.length
+              ? record.pacific
+              : defaultLeagueRows("pacific"),
+          );
           return;
         }
       }
@@ -377,9 +442,8 @@ export function SeasonImportWorkspace() {
         year,
         world,
         checkpoint: "final",
-        central,
-        pacific,
         source: useSandbox ? "ocr" : "sync",
+        ...leaguePatch,
       });
       const hist = {
         id: `hist-${Date.now()}`,
@@ -387,11 +451,25 @@ export function SeasonImportWorkspace() {
         year,
         fileName: "standings",
         screenType: "standings" as const,
-        summary: `${label} チーム順位を登録`,
+        summary: `${label} チーム順位を登録（${updatedLeaguesLabel}）`,
         recordIds: [id],
       };
       if (useSandbox) appendDemoImportHistory(hist);
       else appendImportHistory(hist);
+
+      const saved = useSandbox
+        ? getDemoStandings()
+        : getStandingsForSeason(identity);
+      if (saved) {
+        setCentral(
+          saved.central.length ? saved.central : defaultLeagueRows("central"),
+        );
+        setPacific(
+          saved.pacific.length ? saved.pacific : defaultLeagueRows("pacific"),
+        );
+      }
+      setTouchedCentral(false);
+      setTouchedPacific(false);
     } else {
       // 月次: 順位推移ストアのみ（最終順位は変更しない）
       if (!useSandbox) {
@@ -399,9 +477,8 @@ export function SeasonImportWorkspace() {
           year,
           world,
           checkpoint,
-          central,
-          pacific,
           source: "ocr",
+          ...leaguePatch,
         });
         appendImportHistory({
           id: `hist-${Date.now()}`,
@@ -409,9 +486,17 @@ export function SeasonImportWorkspace() {
           year,
           fileName: "standings-history",
           screenType: "standings",
-          summary: `${label} 順位推移を登録`,
+          summary: `${label} 順位推移を登録（${updatedLeaguesLabel}）`,
           recordIds: [rec.id],
         });
+        setCentral(
+          rec.central.length ? rec.central : defaultLeagueRows("central"),
+        );
+        setPacific(
+          rec.pacific.length ? rec.pacific : defaultLeagueRows("pacific"),
+        );
+        setTouchedCentral(false);
+        setTouchedPacific(false);
       } else {
         // デモ分離領域に月次履歴は未対応 — 正式ストアへは書かない方針を維持し案内のみ
         setError(
@@ -426,8 +511,8 @@ export function SeasonImportWorkspace() {
     setConfirmOpen(false);
     setMessage(
       useSandbox
-        ? `${label}のチーム順位を分離デモ領域に登録しました。`
-        : `${label}の順位を登録しました（この端末＋共有クラウド）。シーズン画面へ反映されます。`,
+        ? `${label}のチーム順位を分離デモ領域に登録しました（${updatedLeaguesLabel}）。`
+        : `${label}の順位を登録しました（この端末＋共有クラウド / ${updatedLeaguesLabel}を更新、他リーグは維持）。シーズン画面へ反映されます。`,
     );
   }
 

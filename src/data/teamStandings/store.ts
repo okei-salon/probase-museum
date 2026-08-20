@@ -223,23 +223,56 @@ async function pushStandingsToCloud(
   }
 }
 
+/**
+ * 最終順位 upsert 入力。
+ * central / pacific は「渡したリーグだけ更新」。省略したリーグは既存を維持する。
+ * （空配列を明示的に渡した場合のみ、そのリーグを空にできる）
+ */
+export type UpsertYearStandingsInput = {
+  year: number;
+  world?: SeasonWorld | null;
+  createdAt?: string;
+  source: YearStandingsRecord["source"];
+  central?: StandingEntry[];
+  pacific?: StandingEntry[];
+};
+
 function upsertYearStandingsLocal(
-  input: Omit<YearStandingsRecord, "id" | "createdAt" | "updatedAt" | "world"> & {
-    world?: SeasonWorld | null;
-    createdAt?: string;
-  },
+  input: UpsertYearStandingsInput,
 ): YearStandingsRecord {
   const now = new Date().toISOString();
   const world = normalizeSeasonWorld(input.world);
   const id = yearStandingsKey(input.year, world);
   const list = readRawYearStandings();
   const existing = list.find((r) => r.id === id) ?? null;
+  if (input.central === undefined && input.pacific === undefined) {
+    if (existing) return existing;
+    const empty: YearStandingsRecord = {
+      id,
+      year: input.year,
+      world,
+      central: [],
+      pacific: [],
+      source: input.source,
+      createdAt: input.createdAt ?? now,
+      updatedAt: now,
+    };
+    list.push(empty);
+    writeRawYearStandings(list);
+    return empty;
+  }
   const record: YearStandingsRecord = {
     id,
     year: input.year,
     world,
-    central: input.central,
-    pacific: input.pacific,
+    central:
+      input.central !== undefined
+        ? input.central
+        : (existing?.central ?? []),
+    pacific:
+      input.pacific !== undefined
+        ? input.pacific
+        : (existing?.pacific ?? []),
     source: input.source,
     createdAt: existing?.createdAt ?? input.createdAt ?? now,
     updatedAt: now,
@@ -253,12 +286,10 @@ function upsertYearStandingsLocal(
 
 /**
  * localStorage に保存（既存互換）。クラウドへは非同期で送る（失敗してもローカルは残す）。
+ * 省略したリーグ（central / pacific）は既存値を維持する。
  */
 export function upsertYearStandings(
-  input: Omit<YearStandingsRecord, "id" | "createdAt" | "updatedAt" | "world"> & {
-    world?: SeasonWorld | null;
-    createdAt?: string;
-  },
+  input: UpsertYearStandingsInput,
 ): YearStandingsRecord {
   const record = upsertYearStandingsLocal(input);
   void pushStandingsToCloud(record);
@@ -267,10 +298,7 @@ export function upsertYearStandings(
 
 /** local 保存後にクラウド PUT を待ち、結果を返す */
 export async function upsertYearStandingsAsync(
-  input: Omit<YearStandingsRecord, "id" | "createdAt" | "updatedAt" | "world"> & {
-    world?: SeasonWorld | null;
-    createdAt?: string;
-  },
+  input: UpsertYearStandingsInput,
 ): Promise<{ record: YearStandingsRecord; cloud: { ok: boolean; error?: string } }> {
   const record = upsertYearStandingsLocal(input);
   const cloud = await pushStandingsToCloud(record);

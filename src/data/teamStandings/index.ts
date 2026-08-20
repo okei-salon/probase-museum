@@ -1,6 +1,7 @@
 export type {
   LeagueSideStandings,
   StandingEntry,
+  UpsertYearStandingsInput,
   YearStandingsRecord,
 } from "./store";
 

@@ -90,12 +90,19 @@ export async function PUT(request: Request, { params }: Params) {
   const world = normalizeSeasonWorld(incoming.world);
   const now = new Date().toISOString();
   const existing = await getTeamStandingsFromDb(id);
+  // リーグは「リクエストに含まれたときだけ」更新。省略時は既存を維持（CL保存でPLを消さない）。
   const record: YearStandingsRecord = {
     id,
     year,
     world,
-    central: Array.isArray(incoming.central) ? incoming.central : [],
-    pacific: Array.isArray(incoming.pacific) ? incoming.pacific : [],
+    central:
+      incoming.central !== undefined && Array.isArray(incoming.central)
+        ? incoming.central
+        : (existing?.central ?? []),
+    pacific:
+      incoming.pacific !== undefined && Array.isArray(incoming.pacific)
+        ? incoming.pacific
+        : (existing?.pacific ?? []),
     source:
       incoming.source === "manual" ||
       incoming.source === "ocr" ||
