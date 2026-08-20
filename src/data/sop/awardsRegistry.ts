@@ -183,8 +183,8 @@ export function upsertRegisteredAward(
 }
 
 /**
- * 同一 WORLD・年・種別・リーグの B9/GG をまとめて置換。
- * 渡された world スコープのみ触り、他 WORLD・レガシーは残す。
+ * 同一 WORLD・年・種別・リーグの B9/GG をポジション単位で merge。
+ * 渡された position だけ更新し、未入力の他ポジションは残す。
  */
 export function replaceRegisteredAwardsForLeague(params: {
   year: number;
@@ -194,15 +194,17 @@ export function replaceRegisteredAwardsForLeague(params: {
   awards: Omit<RegisteredSeasonAward, "id" | "kind" | "year" | "league">[];
 }): RegisteredSeasonAward[] {
   const world = normalizeSeasonWorld(params.world);
-  const kept = listRegisteredAwards().filter(
-    (a) =>
-      !(
-        a.year === params.year &&
-        normalizeSeasonWorld(a.world) === world &&
-        a.kind === params.kind &&
-        a.league === params.league
-      ),
+  const incomingPositions = new Set(
+    params.awards.map((a) => a.position ?? ""),
   );
+  // 今回明示されたポジションだけ外し、他ポジションは保持
+  const kept = listRegisteredAwards().filter((a) => {
+    if (a.year !== params.year) return true;
+    if (normalizeSeasonWorld(a.world) !== world) return true;
+    if (a.kind !== params.kind) return true;
+    if (a.league !== params.league) return true;
+    return !incomingPositions.has(a.position ?? "");
+  });
   const inserted: RegisteredSeasonAward[] = params.awards.map((award, i) => {
     const pos = award.position ?? "";
     const id = world

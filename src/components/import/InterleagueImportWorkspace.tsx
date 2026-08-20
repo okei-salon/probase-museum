@@ -265,12 +265,42 @@ export function InterleagueImportWorkspace() {
   const [matrix, setMatrix] = useState<InterleagueMatrix>(() => emptyMatrix());
   const [teamRows, setTeamRows] = useState<TeamStatPartial[]>([]);
   const [playerMode, setPlayerMode] = useState<"batch" | "hand">("batch");
+  /** 今回ユーザーが編集した交流戦順位／対戦表だけ保存する */
+  const [touchedStandings, setTouchedStandings] = useState(false);
+  const [touchedStandingTeams, setTouchedStandingTeams] = useState<string[]>(
+    [],
+  );
+  const [touchedMatrix, setTouchedMatrix] = useState(false);
 
   const stored = useMemo(
     () => getStoredInterleagueForSeason(identity),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [identity, message],
   );
+
+  function standingTeamKey(row: {
+    teamId?: string;
+    team: string;
+  }): string {
+    return row.teamId || normalizeTeamShort(row.team);
+  }
+
+  function markStandingTeams(keys: string[]) {
+    if (keys.length === 0) return;
+    setTouchedStandings(true);
+    setTouchedStandingTeams((prev) => {
+      const next = new Set(prev);
+      for (const k of keys) {
+        if (k) next.add(k);
+      }
+      return [...next];
+    });
+  }
+
+  function clearStandingTouch() {
+    setTouchedStandings(false);
+    setTouchedStandingTeams([]);
+  }
 
   function mergeUpsert(partial: {
     standings?: InterleagueStandingEntry[];
@@ -280,8 +310,10 @@ export function InterleagueImportWorkspace() {
     return upsertInterleagueSeason({
       year,
       world,
-      standings: partial.standings ?? existing?.standings ?? [],
-      matrix: partial.matrix ?? existing?.matrix ?? emptyMatrix(),
+      ...(partial.standings !== undefined
+        ? { standings: partial.standings }
+        : {}),
+      ...(partial.matrix !== undefined ? { matrix: partial.matrix } : {}),
       champion: existing?.champion ?? null,
       championTeamId: existing?.championTeamId ?? null,
       source: "manual",
@@ -303,22 +335,24 @@ export function InterleagueImportWorkspace() {
           const byShort = new Map(
             parsed.rows.map((r) => [normalizeTeamShort(r.team), r]),
           );
+          const touched: string[] = [];
           setStandings(
             defaultStandings().map((row) => {
               const ex = byShort.get(normalizeTeamShort(row.team));
-              return ex
-                ? {
-                    ...row,
-                    rank: ex.rank,
-                    w: ex.w,
-                    l: ex.l,
-                    d: ex.d,
-                    pct: ex.pct,
-                    gb: ex.gb,
-                  }
-                : row;
+              if (!ex) return row;
+              touched.push(standingTeamKey(row));
+              return {
+                ...row,
+                rank: ex.rank,
+                w: ex.w,
+                l: ex.l,
+                d: ex.d,
+                pct: ex.pct,
+                gb: ex.gb,
+              };
             }),
           );
+          markStandingTeams(touched);
           setMessage(parsed.message);
           return;
         }
@@ -328,22 +362,24 @@ export function InterleagueImportWorkspace() {
           const byShort = new Map(
             all.map((r) => [normalizeTeamShort(r.team), r]),
           );
+          const touched: string[] = [];
           setStandings(
             defaultStandings().map((row) => {
               const ex = byShort.get(normalizeTeamShort(row.team));
-              return ex
-                ? {
-                    ...row,
-                    rank: ex.rank,
-                    w: ex.w,
-                    l: ex.l,
-                    d: ex.d,
-                    pct: ex.pct,
-                    gb: ex.gb,
-                  }
-                : row;
+              if (!ex) return row;
+              touched.push(standingTeamKey(row));
+              return {
+                ...row,
+                rank: ex.rank,
+                w: ex.w,
+                l: ex.l,
+                d: ex.d,
+                pct: ex.pct,
+                gb: ex.gb,
+              };
             }),
           );
+          markStandingTeams(touched);
           setMessage(
             `${parsed.message}（交流戦表へ転記。TYPE=INTERLEAGUE_STANDINGS 推奨）`,
           );
@@ -365,6 +401,7 @@ export function InterleagueImportWorkspace() {
           colTeams: parsed.colTeams,
           cells: parsed.cells,
         });
+        setTouchedMatrix(true);
         setMessage(parsed.message);
         return;
       }
@@ -398,6 +435,7 @@ export function InterleagueImportWorkspace() {
     setError(null);
     setMessage(null);
     let merged = [...standings];
+    const touched: string[] = [];
     for (const file of files) {
       setProgress(`${file.name}: OCR中…`);
       try {
@@ -422,6 +460,7 @@ export function InterleagueImportWorkspace() {
           };
           if (idx >= 0) {
             merged[idx] = { ...merged[idx]!, ...entry, team: short };
+            touched.push(standingTeamKey(merged[idx]!));
           }
         }
         merged = [...merged]
@@ -432,6 +471,7 @@ export function InterleagueImportWorkspace() {
       }
     }
     setStandings(merged);
+    markStandingTeams(touched);
     setProgress("");
     setMessage("交流戦順位候補を更新しました。確認後に登録してください。");
   }
@@ -440,7 +480,7 @@ export function InterleagueImportWorkspace() {
     setError(null);
     setMessage(null);
     const kind = sub === "team_batting" ? "batting" : "pitching";
-    let merged = [...teamRows];
+    const merged = [...teamRows];
     for (const file of files) {
       setProgress(`${file.name}: OCR中…`);
       try {
@@ -487,11 +527,13 @@ export function InterleagueImportWorkspace() {
             : row;
         }),
       );
+      clearStandingTouch();
       setMessage(
         `${formatSeasonLineLabel({ year, world })} の交流戦順位を読み込みました`,
       );
     } else {
       setStandings(defaultStandings());
+      clearStandingTouch();
       setMessage("未登録のため空の順位表を表示しています");
     }
   }
@@ -507,11 +549,13 @@ export function InterleagueImportWorkspace() {
           : emptyMatrix().colTeams,
         cells: stored.matrix.cells.map((row) => [...row]),
       });
+      setTouchedMatrix(false);
       setMessage(
         `${formatSeasonLineLabel({ year, world })} の交流戦対戦表を読み込みました`,
       );
     } else {
       setMatrix(emptyMatrix());
+      setTouchedMatrix(false);
       setMessage("未登録のため空の対戦表を表示しています");
     }
   }
@@ -538,10 +582,12 @@ export function InterleagueImportWorkspace() {
     index: number,
     patch: Partial<InterleagueStandingEntry>,
   ) {
+    const row = standings[index];
+    if (row) markStandingTeams([standingTeamKey(row)]);
     setStandings((prev) =>
-      prev.map((row, i) => {
-        if (i !== index) return row;
-        const next = { ...row, ...patch };
+      prev.map((r, i) => {
+        if (i !== index) return r;
+        const next = { ...r, ...patch };
         if (patch.w != null || patch.l != null) {
           next.pct = calcPct(next.w, next.l);
         }
@@ -556,6 +602,7 @@ export function InterleagueImportWorkspace() {
     part: "w" | "l" | "d",
     value: number,
   ) {
+    setTouchedMatrix(true);
     setMatrix((prev) => {
       const cells = prev.cells.map((row) => [...row]);
       const cur = parseMatrixCell(cells[ri]?.[ci] ?? "0-0");
@@ -573,13 +620,47 @@ export function InterleagueImportWorkspace() {
       );
       return;
     }
+    if (!touchedStandings || touchedStandingTeams.length === 0) {
+      setError(
+        "交流戦順位を貼り付け／OCR／編集してから登録してください（未編集の球団は既存のまま残ります）。",
+      );
+      return;
+    }
     const existing = getStoredInterleagueForSeason(identity);
     if (existing?.standings?.length && !force) {
       setPendingAction("standings");
       setConfirmOpen(true);
       return;
     }
-    const sorted = [...standings]
+    const touched = new Set(touchedStandingTeams);
+    const existingByKey = new Map<string, InterleagueStandingEntry>();
+    for (const r of existing?.standings ?? []) {
+      existingByKey.set(standingTeamKey(r), r);
+      if (r.teamId) existingByKey.set(r.teamId, r);
+      existingByKey.set(normalizeTeamShort(r.team), r);
+    }
+    const uiByKey = new Map(
+      standings.map((r) => [standingTeamKey(r), r] as const),
+    );
+    const merged = defaultStandings().map((base) => {
+      const key = standingTeamKey(base);
+      const ui = uiByKey.get(key);
+      if (touched.has(key) || (base.teamId && touched.has(base.teamId))) {
+        const src = ui ?? base;
+        return {
+          ...src,
+          teamId: base.teamId,
+          team: base.team,
+          rank: src.rank || base.rank,
+        };
+      }
+      const ex = existingByKey.get(key) ?? existingByKey.get(base.team);
+      if (ex) {
+        return { ...base, ...ex, teamId: base.teamId, team: base.team };
+      }
+      return ui ?? base;
+    });
+    const sorted = [...merged]
       .map((r, i) => ({ ...r, rank: r.rank || i + 1 }))
       .sort((a, b) => a.rank - b.rank);
     const rec = mergeUpsert({ standings: sorted });
@@ -589,14 +670,16 @@ export function InterleagueImportWorkspace() {
       year,
       fileName: "interleague-standings",
       screenType: "interleague",
-      summary: `${formatSeasonLineLabel({ year, world })} 交流戦順位を登録`,
+      summary: `${formatSeasonLineLabel({ year, world })} 交流戦順位を登録（編集球団 ${touched.size}）`,
       recordIds: [rec.id],
     });
     notifyImportStoreChanged();
+    setStandings(sorted);
+    clearStandingTouch();
     setConfirmOpen(false);
     setPendingAction(null);
     setMessage(
-      `${formatSeasonLineLabel({ year, world })} の交流戦順位を登録しました。`,
+      `${formatSeasonLineLabel({ year, world })} の交流戦順位を登録しました（編集した球団のみ更新）。`,
     );
   }
 
@@ -604,6 +687,12 @@ export function InterleagueImportWorkspace() {
     if (shouldUseIsolatedDemoStore(year)) {
       setError(
         "分離デモモード中は交流戦対戦表を正式ストアへ保存できません。デモモードをOFFにしてください。",
+      );
+      return;
+    }
+    if (!touchedMatrix) {
+      setError(
+        "対戦表を貼り付け／編集してから登録してください（未編集のままでは既存対戦表を上書きしません）。",
       );
       return;
     }
@@ -624,6 +713,7 @@ export function InterleagueImportWorkspace() {
       recordIds: [rec.id],
     });
     notifyImportStoreChanged();
+    setTouchedMatrix(false);
     setConfirmOpen(false);
     setPendingAction(null);
     setMessage(
@@ -712,6 +802,8 @@ export function InterleagueImportWorkspace() {
             setStandings(defaultStandings());
             setMatrix(emptyMatrix());
             setTeamRows([]);
+            clearStandingTouch();
+            setTouchedMatrix(false);
           }}
           className="w-full rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-[13px] text-white"
         >

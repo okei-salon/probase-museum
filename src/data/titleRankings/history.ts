@@ -110,27 +110,23 @@ export function upsertTitleWinner(record: TitleWinRecord): void {
   writeStore(list);
 }
 
-/** 同一タイトル・年度・リーグ・WORLD の TOP 順位をまとめて置換登録 */
+/**
+ * 同一タイトル・年度・リーグ・WORLD の順位を merge 登録。
+ * 渡された rank だけ更新し、未入力の他順位は残す（全面置換しない）。
+ */
 export function upsertTitleBoard(entries: TitleWinRecord[]): void {
   if (entries.length === 0) return;
-  const first = entries[0]!;
-  const world = normalizeSeasonWorld(first.world);
-  let list = readStore().filter(
-    (r) =>
-      !(
-        r.titleId === first.titleId &&
-        r.year === first.year &&
-        r.league === first.league &&
-        normalizeSeasonWorld(r.world) === world
-      ),
-  );
+  let list = readStore();
   for (const e of entries) {
     if (!e.playerId) continue;
-    list.push({
+    const world = normalizeSeasonWorld(e.world);
+    const next: TitleWinRecord = {
       ...e,
-      world: normalizeSeasonWorld(e.world) ?? world,
+      world,
       rank: e.rank ?? 1,
-    });
+    };
+    list = list.filter((r) => !sameTitleSlot(r, next));
+    list.push(next);
   }
   writeStore(list);
 }

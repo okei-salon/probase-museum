@@ -11,7 +11,11 @@ import {
   type SeasonIdentity,
   type SeasonWorld,
 } from "@/data/seasons";
-import type { InterleagueSeasonRecord } from "./types";
+import type {
+  InterleagueMatrix,
+  InterleagueSeasonRecord,
+  InterleagueStandingEntry,
+} from "./types";
 
 const STORAGE_KEY = "probase-museum.interleague.v1";
 
@@ -69,14 +73,20 @@ export function getStoredInterleagueForSeason(
   );
 }
 
+/**
+ * 交流戦シーズン upsert。
+ * standings / matrix を省略した場合は既存値を維持する（未編集パートを初期値で潰さない）。
+ */
 export function upsertInterleagueSeason(
   input: Omit<
     InterleagueSeasonRecord,
-    "id" | "createdAt" | "updatedAt" | "world"
+    "id" | "createdAt" | "updatedAt" | "world" | "standings" | "matrix"
   > & {
     world?: SeasonWorld | null;
     id?: string;
     createdAt?: string;
+    standings?: InterleagueStandingEntry[];
+    matrix?: InterleagueMatrix;
   },
 ): InterleagueSeasonRecord {
   const now = new Date().toISOString();
@@ -89,10 +99,20 @@ export function upsertInterleagueSeason(
     id,
     year: input.year,
     world,
-    standings: input.standings,
-    matrix: input.matrix,
-    champion: input.champion ?? null,
-    championTeamId: input.championTeamId ?? null,
+    standings:
+      input.standings !== undefined
+        ? input.standings
+        : (existing?.standings ?? []),
+    matrix:
+      input.matrix !== undefined
+        ? input.matrix
+        : (existing?.matrix ?? {
+            rowTeams: [],
+            colTeams: [],
+            cells: [],
+          }),
+    champion: input.champion ?? existing?.champion ?? null,
+    championTeamId: input.championTeamId ?? existing?.championTeamId ?? null,
     source: input.source,
     createdAt: existing?.createdAt ?? input.createdAt ?? now,
     updatedAt: now,
