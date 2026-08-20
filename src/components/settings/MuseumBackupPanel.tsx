@@ -22,12 +22,6 @@ import {
   restoreBlue2026PacificStandingsOnly,
   type RestoreBlue2026PacificResult,
 } from "@/data/restoreBlue2026PacificStandings";
-import {
-  clearBlue2026CentralOnly,
-  inspectClearBlue2026Central,
-  type ClearBlue2026CentralPreview,
-  type ClearBlue2026CentralResult,
-} from "@/data/clearBlue2026CentralStandings";
 import { cn } from "@/lib/cn";
 
 type PendingRestore = {
@@ -44,11 +38,6 @@ export function MuseumBackupPanel() {
   const [restorePacificConfirm, setRestorePacificConfirm] = useState(false);
   const [restorePacificResult, setRestorePacificResult] =
     useState<RestoreBlue2026PacificResult | null>(null);
-  const [clearCentralConfirm, setClearCentralConfirm] = useState(false);
-  const [clearCentralPreview, setClearCentralPreview] =
-    useState<ClearBlue2026CentralPreview | null>(null);
-  const [clearCentralResult, setClearCentralResult] =
-    useState<ClearBlue2026CentralResult | null>(null);
   const [verifyChecks, setVerifyChecks] = useState<Sanitize2026Check[] | null>(
     null,
   );
@@ -203,52 +192,6 @@ export function MuseumBackupPanel() {
     }
   };
 
-  const onOpenClearCentral = () => {
-    setSanitizeConfirm(false);
-    setRestorePacificConfirm(false);
-    setPending(null);
-    setError(null);
-    setMessage(null);
-    setClearCentralResult(null);
-    try {
-      setClearCentralPreview(inspectClearBlue2026Central());
-      setClearCentralConfirm(true);
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "プレビューの取得に失敗しました。",
-      );
-    }
-  };
-
-  const onConfirmClearCentral = () => {
-    setBusy(true);
-    setError(null);
-    setMessage(null);
-    setClearCentralResult(null);
-    try {
-      downloadMuseumBackup(buildMuseumBackup());
-      const result = clearBlue2026CentralOnly();
-      setClearCentralConfirm(false);
-      setClearCentralResult(result);
-      if (!result.ok) {
-        setError(
-          `セ順位クリアで問題: ${result.issues.join(" / ") || "不明なエラー"}`,
-        );
-      } else {
-        setMessage(
-          "2026 BLUE セ・リーグ（central）のみ空にしました。パ6球団は維持。再読み込みしてください。",
-        );
-      }
-      refreshPreview();
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "セ順位クリアに失敗しました。",
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const onReload = () => {
     window.location.reload();
   };
@@ -327,17 +270,11 @@ export function MuseumBackupPanel() {
           onClick={() => {
             setSanitizeConfirm(true);
             setRestorePacificConfirm(false);
-            setClearCentralConfirm(false);
             setPending(null);
             setError(null);
             setMessage(null);
           }}
-          disabled={
-            busy ||
-            sanitizeConfirm ||
-            restorePacificConfirm ||
-            clearCentralConfirm
-          }
+          disabled={busy || sanitizeConfirm || restorePacificConfirm}
           className={cn(
             "rounded-[var(--radius-control)] border border-white/25",
             "bg-black/55 px-4 py-2 text-[12px] tracking-[0.08em]",
@@ -352,18 +289,12 @@ export function MuseumBackupPanel() {
           onClick={() => {
             setRestorePacificConfirm(true);
             setSanitizeConfirm(false);
-            setClearCentralConfirm(false);
             setPending(null);
             setError(null);
             setMessage(null);
             setRestorePacificResult(null);
           }}
-          disabled={
-            busy ||
-            sanitizeConfirm ||
-            restorePacificConfirm ||
-            clearCentralConfirm
-          }
+          disabled={busy || sanitizeConfirm || restorePacificConfirm}
           className={cn(
             "rounded-[var(--radius-control)] border border-museum-gold/40",
             "bg-museum-gold/10 px-4 py-2 text-[12px] tracking-[0.08em]",
@@ -372,24 +303,6 @@ export function MuseumBackupPanel() {
           )}
         >
           2026 BLUEパ順位だけ復元…
-        </button>
-        <button
-          type="button"
-          onClick={onOpenClearCentral}
-          disabled={
-            busy ||
-            sanitizeConfirm ||
-            restorePacificConfirm ||
-            clearCentralConfirm
-          }
-          className={cn(
-            "rounded-[var(--radius-control)] border border-amber-400/40",
-            "bg-amber-950/30 px-4 py-2 text-[12px] tracking-[0.08em]",
-            "text-amber-100/90 transition-colors hover:bg-amber-950/50",
-            "disabled:opacity-50",
-          )}
-        >
-          2026 BLUEセ（0勝）だけ空に…
         </button>
         <input
           ref={fileRef}
@@ -473,121 +386,6 @@ export function MuseumBackupPanel() {
           {restorePacificResult.issues.length > 0 ? (
             <ul className="space-y-1 text-[12px] text-red-200/90">
               {restorePacificResult.issues.map((n) => (
-                <li key={n}>・ {n}</li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      ) : null}
-
-      {clearCentralConfirm && clearCentralPreview ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="space-y-4 rounded-xl border border-amber-400/40 bg-black/80 p-4"
-        >
-          <h3 className="text-[14px] text-amber-100">
-            2026 BLUE セ（central）だけ空にする確認
-          </h3>
-          <p className="text-[13px] leading-relaxed text-museum-ivory-muted">
-            本番で残っている0勝セ6球団を削除します。
-            <span className="text-museum-ivory"> パ正式6球団は絶対に変更しません。</span>
-            RED・他年度・選手マスタ・他キーも触りません。
-          </p>
-          <dl className="grid gap-2 text-[12px] sm:grid-cols-2">
-            <div className="rounded-lg border border-white/10 bg-black/50 px-3 py-2">
-              <dt className="text-museum-ivory-soft">変更対象キー</dt>
-              <dd className="mt-1 font-mono text-[11px] text-museum-ivory">
-                {clearCentralPreview.teamStandingsKey}
-              </dd>
-              <dd className="mt-1 font-mono text-[11px] text-museum-ivory-soft">
-                (+ {clearCentralPreview.historyKey} の BLUE central のみ)
-              </dd>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-black/50 px-3 py-2">
-              <dt className="text-museum-ivory-soft">変更前件数</dt>
-              <dd className="mt-1 text-museum-ivory">
-                central = {clearCentralPreview.centralCount} 件
-              </dd>
-              <dd className="mt-0.5 text-museum-ivory">
-                pacific = {clearCentralPreview.pacificCount} 件
-                {clearCentralPreview.pacificTop
-                  ? `（1位 ${clearCentralPreview.pacificTop}）`
-                  : ""}
-              </dd>
-            </div>
-          </dl>
-          {clearCentralPreview.historyRecordsTouchingBlue > 0 ? (
-            <p className="text-[11px] text-museum-ivory-soft">
-              standings-history の BLUE:2026{" "}
-              {clearCentralPreview.historyRecordsTouchingBlue} 件について、
-              central 合計 {clearCentralPreview.historyCentralTotal}{" "}
-              件を空にします（pacific 合計{" "}
-              {clearCentralPreview.historyPacificTotal} 件は維持）。
-            </p>
-          ) : (
-            <p className="text-[11px] text-museum-ivory-soft">
-              standings-history に BLUE:2026 は無し（または central 済み空）。
-            </p>
-          )}
-          {!clearCentralPreview.canRun ? (
-            <ul className="space-y-1 text-[12px] text-red-200/90">
-              {clearCentralPreview.blockReasons.map((r) => (
-                <li key={r}>・ {r}</li>
-              ))}
-            </ul>
-          ) : null}
-          <p className="text-[11px] text-museum-ivory-soft">
-            実行直前に現状の安全用バックアップも書き出します。
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={onConfirmClearCentral}
-              disabled={busy || !clearCentralPreview.canRun}
-              className={cn(
-                "rounded-[var(--radius-control)] border border-amber-400/50",
-                "bg-amber-950/50 px-4 py-2 text-[12px] tracking-[0.08em]",
-                "text-amber-100 transition-colors hover:bg-amber-900/50",
-                "disabled:opacity-50",
-              )}
-            >
-              確認したのでセだけ空にする
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setClearCentralConfirm(false);
-                setClearCentralPreview(null);
-              }}
-              disabled={busy}
-              className="rounded-[var(--radius-control)] border border-white/20 bg-black/50 px-4 py-2 text-[12px] text-museum-ivory-soft hover:border-white/40"
-            >
-              キャンセル
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {clearCentralResult ? (
-        <div className="space-y-2 rounded-xl border border-white/15 bg-black/60 p-4">
-          <h3 className="text-[13px] text-museum-gold">セ順位クリアの結果</h3>
-          <p className="text-[12px] text-museum-ivory-soft">
-            before central={clearCentralResult.before.centralCount} / pacific=
-            {clearCentralResult.before.pacificCount} → after central=
-            {clearCentralResult.after.centralCount} / pacific=
-            {clearCentralResult.after.pacificCount} / 日本ハム=
-            {clearCentralResult.after.fightersWins ?? "?"}勝 / history更新=
-            {clearCentralResult.historyRecordsUpdated}
-          </p>
-          <ul className="space-y-1 text-[12px] text-museum-ivory-muted">
-            {clearCentralResult.notes.map((n) => (
-              <li key={n}>・ {n}</li>
-            ))}
-          </ul>
-          {clearCentralResult.issues.length > 0 ? (
-            <ul className="space-y-1 text-[12px] text-red-200/90">
-              {clearCentralResult.issues.map((n) => (
                 <li key={n}>・ {n}</li>
               ))}
             </ul>
