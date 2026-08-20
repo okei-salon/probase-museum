@@ -46,6 +46,14 @@ import {
   upsertStandingsHistory,
   type StandingsCheckpoint,
 } from "@/data/standingsHistory";
+import {
+  cardPairKey,
+  getPennantMatchups,
+  normalizeMatchupCard,
+  upsertPennantMatchupCardsAsync,
+  type PennantLeague,
+  type PennantMatchupDraft,
+} from "@/data/pennantMatchups";
 import { npbTeams, type TeamId } from "@/data/teams";
 import { runImageOcr } from "@/lib/import/ocr";
 import {
@@ -53,6 +61,7 @@ import {
   parseTeamStatsOcrText,
   type TeamStatPartial,
 } from "@/lib/import/parseTeamSeasonOcr";
+import { parsePennantMatchupsOcrText } from "@/lib/import/parsePennantMatchupsOcr";
 import { normalizeTeamShort } from "@/lib/import/seasonBatchMerge";
 import { cn } from "@/lib/cn";
 
@@ -125,6 +134,13 @@ export function SeasonImportWorkspace() {
 
   // team stats
   const [teamRows, setTeamRows] = useState<TeamStatPartial[]>([]);
+
+  // pennant matchups（対戦表）
+  const [matchupLeague, setMatchupLeague] =
+    useState<PennantLeague>("central");
+  const [matchupDrafts, setMatchupDrafts] = useState<PennantMatchupDraft[]>(
+    [],
+  );
 
   const existingStandings = useMemo(() => {
     if (checkpoint === "final") {
@@ -218,13 +234,28 @@ export function SeasonImportWorkspace() {
         setMessage(parsed.message);
         return;
       }
-      if (parsed.kind !== "team_pitching") {
-        setError("チーム投手は TYPE=TEAM_PITCHING を指定してください");
+      if (sub === "team_pitching") {
+        if (parsed.kind !== "team_pitching") {
+          setError("チーム投手は TYPE=TEAM_PITCHING を指定してください");
+          return;
+        }
+        setSeasonKey(seasonKeyFromYearHint(parsed.year, world));
+        setTeamRows(parsed.rows);
+        setMessage(parsed.message);
         return;
       }
-      setSeasonKey(seasonKeyFromYearHint(parsed.year, world));
-      setTeamRows(parsed.rows);
-      setMessage(parsed.message);
+      if (sub === "matchups") {
+        if (parsed.kind !== "team_matchups") {
+          setError("対戦表は TYPE=TEAM_MATCHUPS を指定してください");
+          return;
+        }
+        setSeasonKey(seasonKeyFromYearHint(parsed.year, world));
+        setMatchupLeague(parsed.league);
+        setMatchupDrafts(mergeMatchupDrafts([], parsed.cards));
+        setMessage(parsed.message);
+        return;
+      }
+      setError("このサブ項目では未対応のTYPEです");
     } catch (e) {
       setError(e instanceof Error ? e.message : "解析に失敗しました");
     }
@@ -319,6 +350,79 @@ export function SeasonImportWorkspace() {
     setMessage(
       `${merged.length}球団分を統合しました。確認後に一括登録してください（自動保存なし）。`,
     );
+  }
+
+  async function handleMatchupFiles(files: File[]) {
+    setError(null);
+    setMessage(null);
+    let merged = [...matchupDrafts];
+    for (const file of files) {
+      setProgress(`${file.name}: OCR中…`);
+      try {
+        const ocr = await runImageOcr(file, (p) =>
+          setProgress(`${file.name}: ${p}%`),
+        );
+        const parsed = parsePennantMatchupsOcrText(ocr.text, matchupLeague);
+        merged = mergeMatchupDrafts(merged, parsed);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "OCRに失敗しました");
+      }
+    }
+    setMatchupDrafts(merged);
+    setProgress("");
+    setMessage(
+      `${matchupLeague === "central" ? "セ" : "パ"}・リーグ対戦カード ${merged.length}件を確認表へ載せました。確認後に登録してください（自動保存なし）。`,
+    );
+  }
+
+  async function saveMatchups(force: boolean) {
+    if (matchupDrafts.length === 0) {
+      setError("対戦カードをOCR／貼り付けしてから登録してください");
+      return;
+    }
+    const existing = getPennantMatchups(identity, matchupLeague);
+    const incomingKeys = new Set(
+      matchupDrafts
+        .map((d) => normalizeMatchupCard(d))
+        .filter(Boolean)
+        .map((c) => cardPairKey(c!)),
+    );
+    const overlap =
+      existing?.cards.some((c) => incomingKeys.has(cardPairKey(c))) ?? false;
+    if (existing && overlap && !force) {
+      setConfirmOpen(true);
+      return;
+    }
+    setProgress("対戦表を保存・同期中…");
+    try {
+      const { record: rec, cloud } = await upsertPennantMatchupCardsAsync({
+        year,
+        world,
+        league: matchupLeague,
+        cards: matchupDrafts,
+        source: inputMode === "partner" ? "partner" : "ocr",
+      });
+      appendImportHistory({
+        id: `hist-${Date.now()}`,
+        at: new Date().toISOString(),
+        year,
+        fileName: `pennant-matchups-${matchupLeague}`,
+        screenType: "pennant_matchups",
+        summary: `${formatSeasonLineLabel({ year, world })} ${matchupLeague === "central" ? "セ" : "パ"}対戦表 ${matchupDrafts.length}カード upsert（合計 ${rec.cards.length}${cloud.ok ? " / クラウド同期OK" : " / クラウド同期失敗・ローカル保持"}）`,
+        recordIds: [rec.id],
+      });
+      notifyImportStoreChanged();
+      setConfirmOpen(false);
+      setError(null);
+      setMessage(
+        cloud.ok
+          ? `${formatSeasonLineLabel({ year, world })} ${matchupLeague === "central" ? "セ" : "パ"}対戦表を登録・クラウド同期しました（今回 ${matchupDrafts.length} / 合計 ${rec.cards.length}カード）。`
+          : `${formatSeasonLineLabel({ year, world })} ${matchupLeague === "central" ? "セ" : "パ"}対戦表をこの端末に保存しました（クラウド同期は後で再試行: ${cloud.error ?? "error"}）。合計 ${rec.cards.length}カード。`,
+      );
+      setMatchupDrafts([]);
+    } finally {
+      setProgress("");
+    }
   }
 
   function patchStanding(
@@ -559,6 +663,7 @@ export function SeasonImportWorkspace() {
         onChange={(id) => {
           setSub(id as SeasonImportSubId);
           setTeamRows([]);
+          setMatchupDrafts([]);
           setMessage(null);
           setError(null);
           setConfirmOpen(false);
@@ -600,7 +705,9 @@ export function SeasonImportWorkspace() {
               ? "TEAM_STANDINGS"
               : sub === "team_batting"
                 ? "TEAM_BATTING"
-                : "TEAM_PITCHING"
+                : sub === "team_pitching"
+                  ? "TEAM_PITCHING"
+                  : "TEAM_MATCHUPS"
           }
         />
       ) : null}
@@ -689,6 +796,96 @@ export function SeasonImportWorkspace() {
             </button>
           </div>
         </>
+      ) : sub === "matchups" ? (
+        <>
+          <p className="text-[12px] text-white/55">
+            同一リーグ6球団の球団別対戦成績を登録します。入力されたカードだけ更新し、未入力カード・他リーグ・他YEAR/WORLDは保持します。
+            {(() => {
+              const ex = getPennantMatchups(identity, matchupLeague);
+              if (!ex?.cards.length) return null;
+              return (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMatchupDrafts(
+                      ex.cards.map((c) => ({
+                        teamA: c.teamA,
+                        teamB: c.teamB,
+                        teamAId: c.teamAId,
+                        teamBId: c.teamBId,
+                        wins: c.wins,
+                        losses: c.losses,
+                        draws: c.draws,
+                      })),
+                    );
+                    setMessage(
+                      `既存 ${ex.cards.length}カードを確認表に読み込みました（保存はしません）`,
+                    );
+                  }}
+                  className="ml-2 text-[color:var(--museum-accent,#d4af37)] underline"
+                >
+                  既存データを表示
+                </button>
+              );
+            })()}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { id: "central" as const, label: "セ・リーグ" },
+                { id: "pacific" as const, label: "パ・リーグ" },
+              ] as const
+            ).map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                onClick={() => {
+                  setMatchupLeague(l.id);
+                  setMatchupDrafts([]);
+                  setMessage(null);
+                  setError(null);
+                }}
+                className={cn(
+                  "rounded-md border px-3 py-1.5 text-[12px]",
+                  matchupLeague === l.id
+                    ? "border-[color:var(--museum-accent,#d4af37)] text-[color:var(--museum-accent,#d4af37)]"
+                    : "border-white/15 text-white/70",
+                )}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+          {inputMode === "image" ? (
+            <ImageDropzone
+              onFiles={handleMatchupFiles}
+              disabled={!!progress}
+              maxFiles={6}
+              hint={`${matchupLeague === "central" ? "セ" : "パ"}・リーグ対戦表の画像を選択`}
+            />
+          ) : null}
+          <MatchupsReviewTable
+            drafts={matchupDrafts}
+            onChange={(index, patch) => {
+              setMatchupDrafts((prev) =>
+                prev.map((d, i) => (i === index ? { ...d, ...patch } : d)),
+              );
+            }}
+          />
+          <button
+            type="button"
+            disabled={matchupDrafts.length === 0}
+            onClick={() => void saveMatchups(false)}
+            className={cn(
+              "rounded-md border px-3 py-2 text-[12px]",
+              matchupDrafts.length === 0
+                ? "border-white/10 text-white/30"
+                : "border-[color:var(--museum-accent,#d4af37)] bg-[color:var(--museum-accent,#d4af37)]/15 text-[color:var(--museum-accent,#d4af37)]",
+            )}
+          >
+            {matchupDrafts.length}カードを登録…
+          </button>
+        </>
       ) : (
         <>
           <p className="text-[12px] text-white/55">
@@ -762,7 +959,9 @@ export function SeasonImportWorkspace() {
               登録の確認
             </h3>
             <p className="mt-2 text-[12px] text-white/60">
-              既存データがある場合は上書き更新します。重複新規作成はしません。
+              {sub === "matchups"
+                ? "入力カードだけ更新します。未入力の既存カード・他リーグ・他YEAR/WORLDは保持されます。"
+                : "既存データがある場合は上書き更新します。重複新規作成はしません。"}
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
@@ -777,7 +976,9 @@ export function SeasonImportWorkspace() {
                 onClick={() =>
                   sub === "standings"
                     ? void saveStandings(true)
-                    : saveTeamStats(true)
+                    : sub === "matchups"
+                      ? void saveMatchups(true)
+                      : saveTeamStats(true)
                 }
                 className="rounded-md border border-[color:var(--museum-accent,#d4af37)] bg-[color:var(--museum-accent,#d4af37)]/20 px-3 py-2 text-[12px] text-[color:var(--museum-accent,#d4af37)]"
               >
@@ -853,6 +1054,84 @@ function StandingsEditTable({
                   onChange={(e) => onChange(i, { gb: e.target.value })}
                 />
               </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** 向きを正規化したうえで同一カードを畳む（確認表用） */
+function mergeMatchupDrafts(
+  prev: PennantMatchupDraft[],
+  next: PennantMatchupDraft[],
+): PennantMatchupDraft[] {
+  const map = new Map<string, PennantMatchupDraft>();
+  for (const d of [...prev, ...next]) {
+    const n = normalizeMatchupCard(d);
+    if (!n) continue;
+    map.set(cardPairKey(n), {
+      teamA: n.teamA,
+      teamB: n.teamB,
+      teamAId: n.teamAId,
+      teamBId: n.teamBId,
+      wins: n.wins,
+      losses: n.losses,
+      draws: n.draws,
+    });
+  }
+  return [...map.values()];
+}
+
+function MatchupsReviewTable({
+  drafts,
+  onChange,
+}: {
+  drafts: PennantMatchupDraft[];
+  onChange: (index: number, patch: Partial<PennantMatchupDraft>) => void;
+}) {
+  if (drafts.length === 0) {
+    return (
+      <p className="rounded-xl border border-white/10 bg-black/40 px-3 py-4 text-[12px] text-white/45">
+        まだ対戦カードがありません。画像OCRまたは相棒データ貼り付けで読み込んでください。
+      </p>
+    );
+  }
+  return (
+    <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/40">
+      <p className="border-b border-white/10 px-3 py-2 text-[12px] text-[color:var(--museum-accent,#d4af37)]">
+        確認表（{drafts.length}カード）
+      </p>
+      <table className="min-w-full text-left text-[12px]">
+        <thead>
+          <tr className="text-white/50">
+            {["球団A", "球団B", "Aの勝", "Aの敗", "分"].map((h) => (
+              <th key={h} className="px-2 py-2">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {drafts.map((row, i) => (
+            <tr
+              key={`${row.teamAId ?? row.teamA}-${row.teamBId ?? row.teamB}-${i}`}
+              className="border-t border-white/5"
+            >
+              <td className="px-2 py-1 text-white">{row.teamA}</td>
+              <td className="px-2 py-1 text-white">{row.teamB}</td>
+              {(["wins", "losses", "draws"] as const).map((k) => (
+                <td key={k} className="px-2 py-1">
+                  <input
+                    className="w-14 rounded border border-white/10 bg-black/50 px-1 py-1 text-white"
+                    value={row[k]}
+                    onChange={(e) =>
+                      onChange(i, { [k]: Number(e.target.value) || 0 })
+                    }
+                  />
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>

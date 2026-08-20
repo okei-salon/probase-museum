@@ -14,6 +14,7 @@ export type ImportScreenType =
   | "best9"
   | "gg"
   | "standings"
+  | "pennant_matchups"
   | "player_batting"
   | "player_pitching"
   | "interleague"

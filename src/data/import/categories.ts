@@ -30,7 +30,7 @@ export const IMPORT_CATEGORIES: ImportCategory[] = [
   {
     id: "season",
     label: "シーズン",
-    description: "チーム順位・チーム打撃・チーム投手",
+    description: "チーム順位・チーム打撃・チーム投手・対戦表",
   },
   {
     id: "interleague",
@@ -53,7 +53,8 @@ export const IMPORT_CATEGORIES: ImportCategory[] = [
 export type SeasonImportSubId =
   | "standings"
   | "team_batting"
-  | "team_pitching";
+  | "team_pitching"
+  | "matchups";
 
 export const SEASON_IMPORT_SUBS: Array<{
   id: SeasonImportSubId;
@@ -62,6 +63,7 @@ export const SEASON_IMPORT_SUBS: Array<{
   { id: "standings", label: "チーム順位" },
   { id: "team_batting", label: "チーム打撃成績" },
   { id: "team_pitching", label: "チーム投手成績" },
+  { id: "matchups", label: "対戦表" },
 ];
 
 /** 表彰内サブ種別 */

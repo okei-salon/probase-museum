@@ -9,7 +9,9 @@ import { resolveImportPlayer } from "@/lib/import/resolveImportPlayer";
 import { normalizeTeamShort } from "@/lib/import/seasonBatchMerge";
 import { npbTeams, type TeamId } from "@/data/teams";
 import type { StandingEntry } from "@/data/teamStandings";
+import type { PennantMatchupDraft } from "@/data/pennantMatchups/types";
 import type { TeamStatPartial } from "@/lib/import/parseTeamSeasonOcr";
+import { parsePennantMatchupsOcrText } from "@/lib/import/parsePennantMatchupsOcr";
 import {
   BATTER_TITLES,
   PITCHER_TITLES,
@@ -64,6 +66,15 @@ export type PartnerInterleagueMatrixResult = {
   rowTeams: string[];
   colTeams: string[];
   cells: string[][];
+  message: string;
+};
+
+export type PartnerTeamMatchupsResult = {
+  kind: "team_matchups";
+  type: "TEAM_MATCHUPS";
+  year: number;
+  league: "central" | "pacific";
+  cards: PennantMatchupDraft[];
   message: string;
 };
 
@@ -439,6 +450,39 @@ export function parseInterleagueMatrixPartner(
     colTeams: cols,
     cells,
     message: `交流戦対戦表 ${year}: ${rows.length}×${cols.length} を確認表へ展開しました（未登録）`,
+  };
+}
+
+/**
+ * リーグ内対戦表。
+ * LEAGUE=CL|PL
+ * 行: 阪神|中日=14-11-0 または 阪神 vs 中日|14勝11敗0分
+ */
+export function parseTeamMatchupsPartner(
+  rawText: string,
+  fallbackYear: number,
+): PartnerTeamMatchupsResult | PartnerUnsupportedResult {
+  const lines = splitPartnerLines(rawText);
+  const meta = parsePartnerMeta(lines);
+  const year = meta.year ?? fallbackYear;
+  const league = meta.league;
+  if (!league) {
+    return {
+      kind: "unsupported",
+      type: "TEAM_MATCHUPS",
+      message: "対戦表は LEAGUE=CL または LEAGUE=PL を指定してください",
+    };
+  }
+  const body = meta.rest.join("\n");
+  const cards = parsePennantMatchupsOcrText(body, league);
+  const label = league === "central" ? "セ" : "パ";
+  return {
+    kind: "team_matchups",
+    type: "TEAM_MATCHUPS",
+    year,
+    league,
+    cards,
+    message: `対戦表 ${year} ${label}: ${cards.length}カードを確認表へ展開しました（未登録）`,
   };
 }
 
@@ -828,6 +872,7 @@ export type PartnerNonSeasonResult =
   | PartnerStandingsResult
   | PartnerInterleagueStandingsResult
   | PartnerInterleagueMatrixResult
+  | PartnerTeamMatchupsResult
   | PartnerTeamStatsResult
   | PartnerTitleResult
   | PartnerAwardResult
@@ -860,6 +905,8 @@ export function parseNonSeasonPartnerPaste(
       return parseInterleagueStandingsPartner(rawText, fallbackYear);
     case "INTERLEAGUE_MATRIX":
       return parseInterleagueMatrixPartner(rawText, fallbackYear);
+    case "TEAM_MATCHUPS":
+      return parseTeamMatchupsPartner(rawText, fallbackYear);
     case "TEAM_BATTING":
       return parseTeamStatsPartner(rawText, fallbackYear, "batting");
     case "TEAM_PITCHING":

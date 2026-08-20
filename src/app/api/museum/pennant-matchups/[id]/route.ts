@@ -1,0 +1,137 @@
+import { NextResponse } from "next/server";
+import {
+  requireDatabaseOr503,
+  requireMuseumApiSession,
+} from "@/lib/db/apiGuard";
+import {
+  getPennantMatchupsFromDb,
+  upsertPennantMatchupsToDb,
+} from "@/lib/db/pennantMatchupsDb";
+import type { PennantMatchupsRecord } from "@/data/pennantMatchups";
+import { normalizeSeasonWorld } from "@/data/seasons";
+
+export const runtime = "nodejs";
+
+type Params = { params: Promise<{ id: string }> };
+
+/** 1リーグ分の対戦表 */
+export async function GET(_request: Request, { params }: Params) {
+  const session = await requireMuseumApiSession();
+  if (session instanceof NextResponse) return session;
+  const dbErr = requireDatabaseOr503();
+  if (dbErr) return dbErr;
+
+  const { id: rawId } = await params;
+  const id = decodeURIComponent(rawId);
+  if (!id) {
+    return NextResponse.json({ ok: false, error: "id_required" }, { status: 400 });
+  }
+
+  try {
+    const record = await getPennantMatchupsFromDb(id);
+    if (!record) {
+      return NextResponse.json(
+        { ok: false, error: "not_found" },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json({ ok: true, record });
+  } catch (e) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "query_failed",
+        detail: e instanceof Error ? e.message : "unknown",
+      },
+      { status: 500 },
+    );
+  }
+}
+
+/**
+ * 対戦表 upsert。
+ * クライアントは local+cloud+入力をカード単位 merge した完全レコードを送る想定。
+ * サーバは受け取った cards 配列をそのまま当該 id に保存する（他 id は触らない）。
+ */
+export async function PUT(request: Request, { params }: Params) {
+  const session = await requireMuseumApiSession();
+  if (session instanceof NextResponse) return session;
+  const dbErr = requireDatabaseOr503();
+  if (dbErr) return dbErr;
+
+  const { id: rawId } = await params;
+  const id = decodeURIComponent(rawId);
+  if (!id) {
+    return NextResponse.json({ ok: false, error: "id_required" }, { status: 400 });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: "invalid_json" },
+      { status: 400 },
+    );
+  }
+
+  const incoming = body as Partial<PennantMatchupsRecord>;
+  const year = Number(incoming.year);
+  if (!Number.isFinite(year)) {
+    return NextResponse.json(
+      { ok: false, error: "year_required" },
+      { status: 400 },
+    );
+  }
+
+  if (incoming.id && incoming.id !== id) {
+    return NextResponse.json(
+      { ok: false, error: "id_mismatch" },
+      { status: 400 },
+    );
+  }
+
+  const league =
+    incoming.league === "pacific" || incoming.league === "central"
+      ? incoming.league
+      : id.endsWith(":pacific")
+        ? "pacific"
+        : "central";
+
+  const world = normalizeSeasonWorld(incoming.world);
+  const now = new Date().toISOString();
+  const existing = await getPennantMatchupsFromDb(id);
+
+  const record: PennantMatchupsRecord = {
+    id,
+    year,
+    world,
+    league,
+    cards: Array.isArray(incoming.cards)
+      ? incoming.cards
+      : (existing?.cards ?? []),
+    source:
+      incoming.source === "manual" ||
+      incoming.source === "ocr" ||
+      incoming.source === "import" ||
+      incoming.source === "partner"
+        ? incoming.source
+        : (existing?.source ?? "manual"),
+    createdAt: existing?.createdAt ?? incoming.createdAt ?? now,
+    updatedAt: now,
+  };
+
+  try {
+    const saved = await upsertPennantMatchupsToDb(record);
+    return NextResponse.json({ ok: true, record: saved });
+  } catch (e) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "upsert_failed",
+        detail: e instanceof Error ? e.message : "unknown",
+      },
+      { status: 500 },
+    );
+  }
+}

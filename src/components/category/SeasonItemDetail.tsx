@@ -4,12 +4,12 @@ import {
   PageHeading,
 } from "@/components/category";
 import {
-  MatchMatrix,
   PlayerStatsExplorer,
   TeamSeasonStatsPanel,
 } from "@/components/views";
 import { FinalStandingsBoard } from "@/components/seasons/FinalStandingsBoard";
 import { InterleagueStandingsBoard } from "@/components/seasons/InterleagueStandingsBoard";
+import { PennantMatchupsBoard } from "@/components/seasons/PennantMatchupsBoard";
 import { StandingsTrendBoard } from "@/components/seasons/StandingsTrendBoard";
 import { InterleagueSopSeasonBoard } from "@/components/sop/InterleagueSopSeasonBoard";
 import type { CategoryThemeId } from "@/config/categoryThemes";
@@ -18,11 +18,7 @@ import {
   allowsLayoutSampleFallback,
   parseSeasonKey,
 } from "@/data/seasons";
-import {
-  centralMatrix,
-  pacificMatrix,
-  pennantReview,
-} from "@/data/seasonViews";
+import { pennantReview } from "@/data/seasonViews";
 
 type SeasonItemDetailProps = {
   year: string;
@@ -223,9 +219,6 @@ function PennantStandingsBoard({
   year: string;
   seasonKey: string;
 }) {
-  const identity = parseSeasonKey(seasonKey);
-  const showSampleMatrix = allowsLayoutSampleFallback(identity);
-
   return (
     <div className="space-y-6">
       <section>
@@ -246,30 +239,7 @@ function PennantStandingsBoard({
         <h3 className="mb-2 text-[12px] tracking-[0.14em] text-[color:var(--museum-accent,#38bdf8)]">
           3. 対戦成績
         </h3>
-        {showSampleMatrix ? (
-          <div className="grid gap-3 lg:grid-cols-2">
-            <DataPanel>
-              <MatchMatrix
-                title="セ・リーグ対戦表"
-                teams={centralMatrix.teams}
-                cells={centralMatrix.cells}
-              />
-            </DataPanel>
-            <DataPanel>
-              <MatchMatrix
-                title="パ・リーグ対戦表"
-                teams={pacificMatrix.teams}
-                cells={pacificMatrix.cells}
-              />
-            </DataPanel>
-          </div>
-        ) : (
-          <DataPanel>
-            <p className="text-[13px] text-museum-ivory-soft">
-              リーグ内対戦成績はまだ登録されていません。
-            </p>
-          </DataPanel>
-        )}
+        <PennantMatchupsBoard seasonKey={seasonKey} />
       </section>
     </div>
   );

@@ -7,6 +7,7 @@ import { getDb } from "@/lib/db/client";
 import { normalizeSeasonWorld, type SeasonWorld } from "@/data/seasons";
 
 export const TEAM_STANDINGS_COLLECTION = "team_standings" as const;
+export const PENNANT_MATCHUPS_COLLECTION = "pennant_matchups" as const;
 
 export type MuseumDocumentRow = {
   id: string;
