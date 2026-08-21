@@ -18,12 +18,14 @@ export {
   listRegisteredAwardsForSeason,
   upsertRegisteredAward,
   registeredAwardId,
+  hydrateSopAwardsFromCloud,
   type RegisteredSeasonAward,
 } from "./awardsRegistry";
 export {
   listSopFeats,
   getSopFeat,
   upsertSopFeat,
+  hydrateSopFeatsFromCloud,
   type SopFeatRecord,
 } from "./featsStore";
 export {

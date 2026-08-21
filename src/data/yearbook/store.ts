@@ -1,6 +1,7 @@
 /**
  * シーズン総評ストア（localStorage）
  * キー名は変更しない。正式は seasonKey / world で分離、レガシーは year のみ。
+ * + museum_documents(collection=yearbook_reviews) 同期（id = seasonKey）
  */
 
 import {
@@ -8,22 +9,37 @@ import {
   normalizeSeasonWorld,
   type SeasonIdentity,
 } from "@/data/seasons";
+import {
+  hydrateLocalArrayFromCloud,
+  putMuseumCollectionRecord,
+} from "@/lib/museumCloud/clientSync";
 import type { YearbookSeasonReview, YearbookReviewSource } from "./types";
 
 const STORAGE_KEY = "probase-museum.yearbook-reviews.v1";
+const COLLECTION = "yearbook_reviews";
+
+/** クラウド同期用: id = seasonKey */
+export type YearbookReviewSyncRecord = YearbookSeasonReview & {
+  id: string;
+};
 
 function canUseStorage() {
   return typeof window !== "undefined";
 }
 
-function normalizeReview(r: YearbookSeasonReview): YearbookSeasonReview {
+function normalizeReview(r: YearbookSeasonReview & { id?: string }): YearbookReviewSyncRecord {
   const world = normalizeSeasonWorld(r.world);
   const seasonKey =
     r.seasonKey ?? identityFromWorldYear(r.year, world).seasonKey;
-  return { ...r, world, seasonKey };
+  return {
+    ...r,
+    world,
+    seasonKey,
+    id: r.id || seasonKey,
+  };
 }
 
-function readAll(): YearbookSeasonReview[] {
+function readRawYearbookReviews(): YearbookReviewSyncRecord[] {
   if (!canUseStorage()) return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -35,7 +51,7 @@ function readAll(): YearbookSeasonReview[] {
   }
 }
 
-function writeAll(list: YearbookSeasonReview[]) {
+function writeRawYearbookReviews(list: YearbookReviewSyncRecord[]): void {
   if (!canUseStorage()) return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
 }
@@ -67,11 +83,11 @@ export function getYearbookReview(
     typeof yearOrIdentity === "number"
       ? identityFromWorldYear(yearOrIdentity, null)
       : yearOrIdentity;
-  return readAll().find((r) => reviewMatches(r, identity)) ?? null;
+  return readRawYearbookReviews().find((r) => reviewMatches(r, identity)) ?? null;
 }
 
 export function listYearbookReviews(): YearbookSeasonReview[] {
-  return [...readAll()].sort((a, b) => {
+  return [...readRawYearbookReviews()].sort((a, b) => {
     if (b.year !== a.year) return b.year - a.year;
     return (a.world ?? "").localeCompare(b.world ?? "");
   });
@@ -112,11 +128,11 @@ export function upsertYearbookReview(
     "identity" in input
       ? input.identity
       : identityFromWorldYear(input.year, input.world ?? null);
-  const list = readAll();
+  const list = readRawYearbookReviews();
   const now = new Date().toISOString();
   const idx = list.findIndex((r) => reviewMatches(r, identity));
   const prev = idx >= 0 ? list[idx]! : null;
-  const next: YearbookSeasonReview = {
+  const next = normalizeReview({
     year: identity.year,
     world: identity.world,
     seasonKey: identity.seasonKey,
@@ -125,11 +141,24 @@ export function upsertYearbookReview(
     confirmed: input.confirmed ?? prev?.confirmed ?? true,
     createdAt: prev?.createdAt ?? now,
     updatedAt: now,
-  };
+  });
   if (idx >= 0) list[idx] = next;
   else list.push(next);
-  writeAll(list);
+  writeRawYearbookReviews(list);
+  void putMuseumCollectionRecord(COLLECTION, next);
   return next;
+}
+
+export async function hydrateYearbookReviewsFromCloud(): Promise<
+  YearbookSeasonReview[]
+> {
+  if (!canUseStorage()) return [];
+  return hydrateLocalArrayFromCloud({
+    collection: COLLECTION,
+    readRaw: readRawYearbookReviews,
+    writeRaw: writeRawYearbookReviews,
+    normalize: normalizeReview,
+  });
 }
 
 export function clearYearbookReview(
@@ -139,5 +168,7 @@ export function clearYearbookReview(
     typeof yearOrIdentity === "number"
       ? identityFromWorldYear(yearOrIdentity, null)
       : yearOrIdentity;
-  writeAll(readAll().filter((r) => !reviewMatches(r, identity)));
+  writeRawYearbookReviews(
+    readRawYearbookReviews().filter((r) => !reviewMatches(r, identity)),
+  );
 }

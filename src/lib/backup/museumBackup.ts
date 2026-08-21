@@ -14,6 +14,7 @@ export const KNOWN_MUSEUM_STORAGE_KEYS = [
   "probase-museum.team-season-stats.v1",
   "probase-museum.team-standings.v1",
   "probase-museum.standings-history.v1",
+  "probase-museum.pennant-matchups.v1",
   "probase-museum.interleague.v1",
   "probase-museum.postseason.v1",
   "probase-museum.yearbook-reviews.v1",

@@ -3,6 +3,7 @@
  * 既存の awards.ts ハードコードは削除せず、こちらが優先される。
  *
  * Step9: 正式 WORLD のみ world を付与。レガシー／DEMO の既存 ID は再生成しない。
+ * localStorage + museum_documents(collection=sop_awards_registry) 同期。
  */
 
 import type { AnnualAwardKind } from "@/lib/sop/rules";
@@ -13,8 +14,13 @@ import {
   type SeasonIdentity,
   type SeasonWorld,
 } from "@/data/seasons";
+import {
+  hydrateLocalArrayFromCloud,
+  putMuseumCollectionRecord,
+} from "@/lib/museumCloud/clientSync";
 
 const STORAGE_KEY = "probase-museum.sop-awards-registry.v1";
+const COLLECTION = "sop_awards_registry";
 
 export type RegisteredSeasonAward = {
   id: string;
@@ -31,6 +37,8 @@ export type RegisteredSeasonAward = {
   count?: number;
   /** ベストナイン／ゴールデングラブの守備位置 */
   position?: string;
+  /** クラウド merge 用 */
+  updatedAt?: string;
 };
 
 function canUseStorage() {
@@ -41,6 +49,7 @@ function normalizeAward(a: RegisteredSeasonAward): RegisteredSeasonAward {
   return {
     ...a,
     world: normalizeSeasonWorld(a.world),
+    updatedAt: a.updatedAt || new Date(0).toISOString(),
   };
 }
 
@@ -122,18 +131,25 @@ export function sameMajorAwardSlot(
   return a.league === b.league;
 }
 
-export function listRegisteredAwards(): RegisteredSeasonAward[] {
+function readRawAwards(): RegisteredSeasonAward[] {
   if (!canUseStorage()) return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as RegisteredSeasonAward[];
-    return excludeDemoRecords(
-      Array.isArray(parsed) ? parsed.map(normalizeAward) : [],
-    );
+    return Array.isArray(parsed) ? parsed.map(normalizeAward) : [];
   } catch {
     return [];
   }
+}
+
+function writeRawAwards(list: RegisteredSeasonAward[]): void {
+  if (!canUseStorage()) return;
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+
+export function listRegisteredAwards(): RegisteredSeasonAward[] {
+  return excludeDemoRecords(readRawAwards());
 }
 
 export function listRegisteredAwardsForYear(
@@ -152,6 +168,7 @@ export function listRegisteredAwardsForSeason(
 export function upsertRegisteredAward(
   award: RegisteredSeasonAward,
 ): RegisteredSeasonAward {
+  const now = new Date().toISOString();
   const world = normalizeSeasonWorld(award.world);
   const id =
     award.id ||
@@ -163,9 +180,14 @@ export function upsertRegisteredAward(
       position: award.position,
       playerId: award.playerId,
     });
-  const next: RegisteredSeasonAward = { ...award, id, world };
+  const next: RegisteredSeasonAward = {
+    ...award,
+    id,
+    world,
+    updatedAt: now,
+  };
 
-  let list = listRegisteredAwards();
+  let list = readRawAwards();
   if (
     next.kind === "mvp" ||
     next.kind === "rookie" ||
@@ -178,7 +200,8 @@ export function upsertRegisteredAward(
     list = list.filter((a) => a.id !== id);
   }
   list.push(next);
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  writeRawAwards(list);
+  void putMuseumCollectionRecord(COLLECTION, next);
   return next;
 }
 
@@ -191,14 +214,18 @@ export function replaceRegisteredAwardsForLeague(params: {
   world?: SeasonWorld | null;
   kind: "bestNine" | "goldenGlove";
   league: "central" | "pacific";
-  awards: Omit<RegisteredSeasonAward, "id" | "kind" | "year" | "league">[];
+  awards: Omit<
+    RegisteredSeasonAward,
+    "id" | "kind" | "year" | "league" | "updatedAt"
+  >[];
 }): RegisteredSeasonAward[] {
+  const now = new Date().toISOString();
   const world = normalizeSeasonWorld(params.world);
   const incomingPositions = new Set(
     params.awards.map((a) => a.position ?? ""),
   );
   // 今回明示されたポジションだけ外し、他ポジションは保持
-  const kept = listRegisteredAwards().filter((a) => {
+  const kept = readRawAwards().filter((a) => {
     if (a.year !== params.year) return true;
     if (normalizeSeasonWorld(a.world) !== world) return true;
     if (a.kind !== params.kind) return true;
@@ -225,11 +252,25 @@ export function replaceRegisteredAwardsForLeague(params: {
       kind: params.kind,
       league: params.league,
       position: pos || award.position,
+      updatedAt: now,
     };
   });
-  window.localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify([...kept, ...inserted]),
-  );
+  writeRawAwards([...kept, ...inserted]);
+  for (const rec of inserted) {
+    void putMuseumCollectionRecord(COLLECTION, rec);
+  }
   return inserted;
+}
+
+export async function hydrateSopAwardsFromCloud(): Promise<
+  RegisteredSeasonAward[]
+> {
+  if (!canUseStorage()) return [];
+  return hydrateLocalArrayFromCloud({
+    collection: COLLECTION,
+    readRaw: readRawAwards,
+    writeRaw: writeRawAwards,
+    normalize: normalizeAward,
+    filterPublic: excludeDemoRecords,
+  });
 }

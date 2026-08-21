@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   buildTeamBattingBoard,
   buildTeamPitchingBoard,
@@ -14,36 +14,51 @@ type Props = {
   kind: "batting" | "pitching";
 };
 
+type LoadedState = {
+  key: string;
+  board: TeamSideBoard;
+  mode: "year" | "career";
+  seasonKey: string | null;
+};
+
 export function TeamSideStatsBoard({ teamId, kind }: Props) {
-  const [ready, setReady] = useState(false);
-  const [mode, setMode] = useState<"year" | "career">("year");
-  const [seasonKey, setSeasonKey] = useState<string | null>(null);
+  const loadKey = `${teamId}:${kind}`;
+  const [state, setState] = useState<LoadedState | null>(null);
 
   useEffect(() => {
-    setReady(true);
-    setMode("year");
-    setSeasonKey(null);
+    let cancelled = false;
+    void (async () => {
+      const { hydrateTeamSeasonStatsFromCloud } = await import(
+        "@/data/teamSeasonStats"
+      );
+      await hydrateTeamSeasonStatsFromCloud();
+      if (cancelled) return;
+      const board =
+        kind === "batting"
+          ? buildTeamBattingBoard(teamId)
+          : buildTeamPitchingBoard(teamId);
+      setState({
+        key: `${teamId}:${kind}`,
+        board,
+        mode: "year",
+        seasonKey:
+          board.years.length > 0
+            ? board.years[board.years.length - 1]!.seasonKey
+            : null,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [teamId, kind]);
 
-  const board: TeamSideBoard | null = useMemo(() => {
-    if (!ready) return null;
-    return kind === "batting"
-      ? buildTeamBattingBoard(teamId)
-      : buildTeamPitchingBoard(teamId);
-  }, [ready, teamId, kind]);
-
-  useEffect(() => {
-    if (!board) return;
-    if (seasonKey == null && board.years.length > 0) {
-      setSeasonKey(board.years[board.years.length - 1]!.seasonKey);
-    }
-  }, [board, seasonKey]);
-
-  if (!ready) {
+  if (!state || state.key !== loadKey) {
     return <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>;
   }
 
-  if (!board || (board.years.length === 0 && !board.career)) {
+  const { board, mode, seasonKey } = state;
+
+  if (board.years.length === 0 && !board.career) {
     return (
       <p className="text-[13px] text-museum-ivory-soft">
         この球団の
@@ -65,13 +80,21 @@ export function TeamSideStatsBoard({ teamId, kind }: Props) {
         <ModeBtn
           active={mode === "year"}
           label="年度"
-          onClick={() => setMode("year")}
+          onClick={() =>
+            setState((prev) =>
+              prev ? { ...prev, mode: "year" } : prev,
+            )
+          }
         />
         {board.career ? (
           <ModeBtn
             active={mode === "career"}
             label="通算"
-            onClick={() => setMode("career")}
+            onClick={() =>
+              setState((prev) =>
+                prev ? { ...prev, mode: "career" } : prev,
+              )
+            }
           />
         ) : null}
       </div>
@@ -82,7 +105,11 @@ export function TeamSideStatsBoard({ teamId, kind }: Props) {
             <button
               key={y.seasonKey}
               type="button"
-              onClick={() => setSeasonKey(y.seasonKey)}
+              onClick={() =>
+                setState((prev) =>
+                  prev ? { ...prev, seasonKey: y.seasonKey } : prev,
+                )
+              }
               className={cn(
                 "rounded-full border px-3 py-1.5 text-[11px] tracking-[0.06em] transition-colors",
                 seasonKey === y.seasonKey
@@ -117,12 +144,6 @@ export function TeamSideStatsBoard({ teamId, kind }: Props) {
           ))}
         </div>
       )}
-
-      {kind === "pitching" ? (
-        <p className="text-[10px] text-museum-ivory-soft">
-          被本塁打・被打率は正式保存フィールド未整備のため表示していません。
-        </p>
-      ) : null}
     </div>
   );
 }

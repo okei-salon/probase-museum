@@ -44,6 +44,7 @@ import {
   STANDINGS_CHECKPOINT_LABELS,
   getCheckpointStandingsForEdit,
   upsertStandingsHistory,
+  upsertStandingsHistoryAsync,
   type StandingsCheckpoint,
 } from "@/data/standingsHistory";
 import {
@@ -508,7 +509,7 @@ export function SeasonImportWorkspace() {
           setMessage(
             `${label}の順位をこの端末に保存しました（クラウド同期は後で再試行: ${cloud.error ?? "error"}）。`,
           );
-          upsertStandingsHistory({
+          await upsertStandingsHistoryAsync({
             year,
             world,
             checkpoint: "final",
@@ -542,13 +543,23 @@ export function SeasonImportWorkspace() {
           return;
         }
       }
-      upsertStandingsHistory({
-        year,
-        world,
-        checkpoint: "final",
-        source: useSandbox ? "ocr" : "sync",
-        ...leaguePatch,
-      });
+      if (useSandbox) {
+        upsertStandingsHistory({
+          year,
+          world,
+          checkpoint: "final",
+          source: "ocr",
+          ...leaguePatch,
+        });
+      } else {
+        await upsertStandingsHistoryAsync({
+          year,
+          world,
+          checkpoint: "final",
+          source: "sync",
+          ...leaguePatch,
+        });
+      }
       const hist = {
         id: `hist-${Date.now()}`,
         at: new Date().toISOString(),
@@ -577,7 +588,7 @@ export function SeasonImportWorkspace() {
     } else {
       // 月次: 順位推移ストアのみ（最終順位は変更しない）
       if (!useSandbox) {
-        const rec = upsertStandingsHistory({
+        const { record: rec, cloud } = await upsertStandingsHistoryAsync({
           year,
           world,
           checkpoint,
@@ -601,14 +612,21 @@ export function SeasonImportWorkspace() {
         );
         setTouchedCentral(false);
         setTouchedPacific(false);
-      } else {
-        // デモ分離領域に月次履歴は未対応 — 正式ストアへは書かない方針を維持し案内のみ
-        setError(
-          "月別順位推移の登録は正式ストア向けです。DEMO取込モードをオフにしてください（または最終を選択）。",
-        );
+        if (!useSandbox) notifyImportStoreChanged();
         setConfirmOpen(false);
+        setMessage(
+          cloud.ok
+            ? `${label}の順位推移を登録し共有DBへ同期しました（${updatedLeaguesLabel}）。`
+            : `${label}の順位推移をこの端末に保存しました（クラウド同期は後で再試行: ${cloud.error ?? "error"}）。`,
+        );
         return;
       }
+      // デモ分離領域に月次履歴は未対応 — 正式ストアへは書かない方針を維持し案内のみ
+      setError(
+        "月別順位推移の登録は正式ストア向けです。DEMO取込モードをオフにしてください（または最終を選択）。",
+      );
+      setConfirmOpen(false);
+      return;
     }
 
     if (!useSandbox) notifyImportStoreChanged();
@@ -620,7 +638,7 @@ export function SeasonImportWorkspace() {
     );
   }
 
-  function saveTeamStats(force: boolean) {
+  async function saveTeamStats(force: boolean) {
     const kind = sub === "team_batting" ? "batting" : "pitching";
     const conflicts = findConflictingTeamStats(
       teamRows,
@@ -637,7 +655,7 @@ export function SeasonImportWorkspace() {
       return;
     }
 
-    const { ids, message: msg } = saveTeamSeasonStatsRows({
+    const { ids, message: msg } = await saveTeamSeasonStatsRows({
       rows: teamRows,
       year,
       world,
@@ -923,7 +941,7 @@ export function SeasonImportWorkspace() {
           <button
             type="button"
             disabled={teamRows.length === 0}
-            onClick={() => saveTeamStats(false)}
+            onClick={() => void saveTeamStats(false)}
             className={cn(
               "rounded-md border px-3 py-2 text-[12px]",
               teamRows.length === 0
@@ -978,7 +996,7 @@ export function SeasonImportWorkspace() {
                     ? void saveStandings(true)
                     : sub === "matchups"
                       ? void saveMatchups(true)
-                      : saveTeamStats(true)
+                      : void saveTeamStats(true)
                 }
                 className="rounded-md border border-[color:var(--museum-accent,#d4af37)] bg-[color:var(--museum-accent,#d4af37)]/20 px-3 py-2 text-[12px] text-[color:var(--museum-accent,#d4af37)]"
               >

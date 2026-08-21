@@ -12,6 +12,10 @@ import {
   type SeasonIdentity,
   type SeasonWorld,
 } from "@/data/seasons";
+import {
+  hydrateLocalArrayFromCloud,
+  putMuseumCollectionRecord,
+} from "@/lib/museumCloud/clientSync";
 import type {
   BatterSeasonLine,
   PitcherSeasonLine,
@@ -22,6 +26,7 @@ import type {
 import { seasonLineKey } from "./types";
 
 const STORAGE_KEY = "probase-museum.season-lines.v1";
+const COLLECTION = "season_lines";
 
 function canUseStorage() {
   return typeof window !== "undefined";
@@ -64,17 +69,26 @@ function compareSeasonLines(a: PlayerSeasonLine, b: PlayerSeasonLine): number {
   );
 }
 
-export function listSeasonLines(): PlayerSeasonLine[] {
+function readRawSeasonLines(): PlayerSeasonLine[] {
   if (!canUseStorage()) return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as PlayerSeasonLine[];
     if (!Array.isArray(parsed)) return [];
-    return excludeDemoRecords(parsed.map(normalizeLine));
+    return parsed.map(normalizeLine);
   } catch {
     return [];
   }
+}
+
+function writeRawSeasonLines(list: PlayerSeasonLine[]): void {
+  if (!canUseStorage()) return;
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+
+export function listSeasonLines(): PlayerSeasonLine[] {
+  return excludeDemoRecords(readRawSeasonLines());
 }
 
 /**
@@ -115,12 +129,17 @@ export function listSeasonLinesByPlayer(
 export function upsertSeasonLine(
   record: PlayerSeasonLine,
 ): PlayerSeasonLine {
-  const normalized = normalizeLine(record);
-  const list = listSeasonLines();
+  const now = new Date().toISOString();
+  const normalized = normalizeLine({
+    ...record,
+    updatedAt: record.updatedAt || now,
+  });
+  const list = readRawSeasonLines();
   const idx = list.findIndex((r) => r.id === normalized.id);
   if (idx >= 0) list[idx] = normalized;
   else list.push(normalized);
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  writeRawSeasonLines(list);
+  void putMuseumCollectionRecord(COLLECTION, normalized);
   return normalized;
 }
 
@@ -134,6 +153,17 @@ export function upsertPitcherSeasonLine(
   record: PitcherSeasonLine,
 ): PitcherSeasonLine {
   return upsertSeasonLine(record) as PitcherSeasonLine;
+}
+
+export async function hydrateSeasonLinesFromCloud(): Promise<PlayerSeasonLine[]> {
+  if (!canUseStorage()) return [];
+  return hydrateLocalArrayFromCloud({
+    collection: COLLECTION,
+    readRaw: readRawSeasonLines,
+    writeRaw: writeRawSeasonLines,
+    normalize: normalizeLine,
+    filterPublic: excludeDemoRecords,
+  });
 }
 
 /**

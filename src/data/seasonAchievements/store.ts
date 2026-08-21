@@ -1,6 +1,7 @@
 /**
  * 記録・偉業の手動／登録ストア。
  * 自動判定分は別途 detect で合成し、二重保存しない。
+ * localStorage + museum_documents(collection=season_achievements) 同期。
  */
 
 import type { SeasonAchievement } from "./types";
@@ -11,36 +12,62 @@ import {
   type SeasonIdentity,
   type SeasonWorld,
 } from "@/data/seasons";
+import {
+  hydrateLocalArrayFromCloud,
+  putMuseumCollectionRecord,
+} from "@/lib/museumCloud/clientSync";
 
 const STORAGE_KEY = "probase-museum.season-achievements.v1";
+const COLLECTION = "season_achievements";
+
+/** クラウド用: year インデックスを season から付与 */
+type SeasonAchievementSyncRecord = SeasonAchievement & {
+  year: number;
+};
 
 function canUseStorage() {
   return typeof window !== "undefined";
 }
 
-function normalizeAchievement(a: SeasonAchievement): SeasonAchievement {
+function normalizeAchievement(
+  a: SeasonAchievement & { year?: number },
+): SeasonAchievementSyncRecord {
+  const season =
+    typeof a.season === "number" && Number.isFinite(a.season)
+      ? a.season
+      : typeof a.year === "number" && Number.isFinite(a.year)
+        ? a.year
+        : 0;
   return {
     ...a,
     world: normalizeSeasonWorld(a.world),
+    season,
+    year: season,
   };
 }
 
-export function listStoredAchievements(): SeasonAchievement[] {
+function readRawAchievements(): SeasonAchievementSyncRecord[] {
   if (!canUseStorage()) return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as SeasonAchievement[];
-    return excludeDemoRecords(
-      Array.isArray(parsed)
-        ? parsed
-            .filter((a) => a.source !== "demo")
-            .map(normalizeAchievement)
-        : [],
-    );
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(normalizeAchievement);
   } catch {
     return [];
   }
+}
+
+function writeRawAchievements(list: SeasonAchievementSyncRecord[]): void {
+  if (!canUseStorage()) return;
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+
+export function listStoredAchievements(): SeasonAchievement[] {
+  return excludeDemoRecords(
+    readRawAchievements().filter((a) => a.source !== "demo"),
+  );
 }
 
 export function listStoredAchievementsForSeason(
@@ -62,22 +89,37 @@ export function upsertStoredAchievement(
   record: SeasonAchievement,
 ): SeasonAchievement {
   const world = normalizeSeasonWorld(record.world);
-  const list = listStoredAchievements();
-  const next = {
+  const list = readRawAchievements();
+  const next = normalizeAchievement({
     ...record,
     world,
     updatedAt: new Date().toISOString(),
-  };
+  });
   const idx = list.findIndex((a) => a.id === next.id);
   if (idx >= 0) list[idx] = next;
   else list.push(next);
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  writeRawAchievements(list);
+  void putMuseumCollectionRecord(COLLECTION, next);
   return next;
 }
 
 export function removeStoredAchievement(id: string): void {
-  const list = listStoredAchievements().filter((a) => a.id !== id);
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  const list = readRawAchievements().filter((a) => a.id !== id);
+  writeRawAchievements(list);
+}
+
+export async function hydrateSeasonAchievementsFromCloud(): Promise<
+  SeasonAchievement[]
+> {
+  if (!canUseStorage()) return [];
+  return hydrateLocalArrayFromCloud({
+    collection: COLLECTION,
+    readRaw: readRawAchievements,
+    writeRaw: writeRawAchievements,
+    normalize: normalizeAchievement,
+    filterPublic: (list) =>
+      excludeDemoRecords(list.filter((a) => a.source !== "demo")),
+  });
 }
 
 /** 正式 WORLD 付き手動登録向け ID（既存レガシー ID は再生成しない） */

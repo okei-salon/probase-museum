@@ -38,6 +38,7 @@ export type {
 export {
   INTERLEAGUE_STORAGE_KEY,
   getStoredInterleagueForSeason,
+  hydrateInterleagueFromCloud,
   interleagueRecordId,
   listStoredInterleague,
   listStoredInterleagueIdentities,

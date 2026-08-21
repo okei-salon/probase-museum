@@ -19,5 +19,6 @@ export {
   listTitleWinsForSeason,
   upsertTitleWinner,
   upsertTitleBoard,
+  hydrateTitleWinHistoryFromCloud,
 } from "./history";
 export type { TitleWinRecord } from "./history";

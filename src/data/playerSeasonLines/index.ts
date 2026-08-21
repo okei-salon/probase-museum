@@ -13,6 +13,7 @@ export {
   listSeasonLinesByPlayer,
   listSeasonLinesForSeason,
   listPennantSeasonIdentities,
+  hydrateSeasonLinesFromCloud,
   upsertBatterSeasonLine,
   upsertPitcherSeasonLine,
   upsertSeasonLine,

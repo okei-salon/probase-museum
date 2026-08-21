@@ -8,6 +8,18 @@ import { normalizeSeasonWorld, type SeasonWorld } from "@/data/seasons";
 
 export const TEAM_STANDINGS_COLLECTION = "team_standings" as const;
 export const PENNANT_MATCHUPS_COLLECTION = "pennant_matchups" as const;
+export const STANDINGS_HISTORY_COLLECTION = "standings_history" as const;
+export const TEAM_SEASON_STATS_COLLECTION = "team_season_stats" as const;
+export const SEASON_LINES_COLLECTION = "season_lines" as const;
+export const MONTHLY_MVP_COLLECTION = "monthly_mvp" as const;
+export const INTERLEAGUE_COLLECTION = "interleague" as const;
+export const POSTSEASON_COLLECTION = "postseason" as const;
+export const YEARBOOK_REVIEWS_COLLECTION = "yearbook_reviews" as const;
+export const SEASON_ACHIEVEMENTS_COLLECTION = "season_achievements" as const;
+export const SOP_AWARDS_REGISTRY_COLLECTION = "sop_awards_registry" as const;
+export const TITLE_WIN_HISTORY_COLLECTION = "title_win_history" as const;
+export const PLAYER_MASTER_COLLECTION = "player_master" as const;
+export const SOP_FEATS_COLLECTION = "sop_feats" as const;
 
 export type MuseumDocumentRow = {
   id: string;

@@ -1,6 +1,7 @@
 /**
  * 交流戦結果ストア（順位・対戦表・優勝）。
  * Step13: 正式 WORLD のみ world を付与。既存静的ダミーは触らない。
+ * localStorage + museum_documents(collection=interleague) 同期。
  */
 
 import { excludeDemoRecords } from "@/data/import/demoStore";
@@ -11,6 +12,10 @@ import {
   type SeasonIdentity,
   type SeasonWorld,
 } from "@/data/seasons";
+import {
+  hydrateLocalArrayFromCloud,
+  putMuseumCollectionRecord,
+} from "@/lib/museumCloud/clientSync";
 import type {
   InterleagueMatrix,
   InterleagueSeasonRecord,
@@ -18,6 +23,7 @@ import type {
 } from "./types";
 
 const STORAGE_KEY = "probase-museum.interleague.v1";
+const COLLECTION = "interleague";
 
 function canUseStorage() {
   return typeof window !== "undefined";
@@ -47,22 +53,25 @@ function normalizeRecord(r: InterleagueSeasonRecord): InterleagueSeasonRecord {
   };
 }
 
-export function listStoredInterleague(): InterleagueSeasonRecord[] {
+function readRawInterleague(): InterleagueSeasonRecord[] {
   if (!canUseStorage()) return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as InterleagueSeasonRecord[];
-    return excludeDemoRecords(
-      Array.isArray(parsed) ? parsed.map(normalizeRecord) : [],
-    );
+    return Array.isArray(parsed) ? parsed.map(normalizeRecord) : [];
   } catch {
     return [];
   }
 }
 
-function writeAll(list: InterleagueSeasonRecord[]) {
+function writeRawInterleague(list: InterleagueSeasonRecord[]): void {
+  if (!canUseStorage()) return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+
+export function listStoredInterleague(): InterleagueSeasonRecord[] {
+  return excludeDemoRecords(readRawInterleague());
 }
 
 export function getStoredInterleagueForSeason(
@@ -92,7 +101,7 @@ export function upsertInterleagueSeason(
   const now = new Date().toISOString();
   const world = normalizeSeasonWorld(input.world);
   const id = input.id || interleagueRecordId(input.year, world);
-  const list = listStoredInterleague();
+  const list = readRawInterleague();
   const existing = list.find((r) => r.id === id) ?? null;
 
   const record: InterleagueSeasonRecord = normalizeRecord({
@@ -121,8 +130,22 @@ export function upsertInterleagueSeason(
   const idx = list.findIndex((r) => r.id === id);
   if (idx >= 0) list[idx] = record;
   else list.push(record);
-  writeAll(list);
+  writeRawInterleague(list);
+  void putMuseumCollectionRecord(COLLECTION, record);
   return record;
+}
+
+export async function hydrateInterleagueFromCloud(): Promise<
+  InterleagueSeasonRecord[]
+> {
+  if (!canUseStorage()) return [];
+  return hydrateLocalArrayFromCloud({
+    collection: COLLECTION,
+    readRaw: readRawInterleague,
+    writeRaw: writeRawInterleague,
+    normalize: normalizeRecord,
+    filterPublic: excludeDemoRecords,
+  });
 }
 
 export function listStoredInterleagueIdentities(): SeasonIdentity[] {

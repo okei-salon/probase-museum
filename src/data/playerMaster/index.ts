@@ -3,6 +3,10 @@ import {
   normalizeSeasonWorld,
   type SeasonWorld,
 } from "@/data/seasons";
+import {
+  fetchMuseumCollectionRecords,
+  putMuseumCollectionRecord,
+} from "@/lib/museumCloud/clientSync";
 import { buildInitialPlayerMasterSeed } from "./seed";
 import type {
   PlayerMaster,
@@ -26,11 +30,33 @@ export { UNKNOWN_PLAYER_STATUS } from "./types";
 
 /** v3: 2026 NPB初期辞書を含む。学習分はシードへマージして復元する。 */
 const STORAGE_KEY = "probase-museum.player-master.v3";
+const COLLECTION = "player_master";
+const BUNDLE_ID = "bundle" as const;
 
 type PersistedBundle = {
   masters: PlayerMaster[];
   affiliations: PlayerSeasonAffiliation[];
+  updatedAt?: string;
 };
+
+type PlayerMasterCloudBundle = {
+  id: typeof BUNDLE_ID;
+  year: null;
+  world: null;
+  updatedAt: string;
+  masters: PlayerMaster[];
+  affiliations: PlayerSeasonAffiliation[];
+};
+
+function isStrictlyNewer(a: string | undefined, b: string | undefined): boolean {
+  const ta = Date.parse(a ?? "");
+  const tb = Date.parse(b ?? "");
+  if (!Number.isFinite(ta)) return false;
+  if (!Number.isFinite(tb)) return true;
+  return ta > tb;
+}
+
+let bundleUpdatedAt: string | null = null;
 
 /** 所属の照合キー。world 無しはレガシー互換（既存キー形式を維持）。 */
 export function affiliationSlotKey(
@@ -304,6 +330,40 @@ function parseBool(value: boolean | string | undefined, fallback: boolean) {
   return fallback;
 }
 
+function mergeBundleIntoStores(
+  masters: PlayerMaster[],
+  affiliations: PlayerSeasonAffiliation[],
+): void {
+  const seed = buildInitialPlayerMasterSeed();
+  const byId = new Map(seed.masters.map((p) => [p.playerId, p]));
+  for (const p of masters) byId.set(p.playerId, p);
+  masterStore.splice(0, masterStore.length, ...byId.values());
+
+  const affKey = (a: PlayerSeasonAffiliation) =>
+    affiliationSlotKey(a.playerId, a.year, a.world);
+  const affMap = new Map(seed.affiliations.map((a) => [affKey(a), a]));
+  for (const a of affiliations) {
+    affMap.set(affKey({ ...a, world: normalizeSeasonWorld(a.world) }), {
+      ...a,
+      world: normalizeSeasonWorld(a.world),
+    });
+  }
+  affiliationStore.splice(0, affiliationStore.length, ...affMap.values());
+}
+
+function buildCloudBundle(): PlayerMasterCloudBundle {
+  const updatedAt = new Date().toISOString();
+  bundleUpdatedAt = updatedAt;
+  return {
+    id: BUNDLE_ID,
+    year: null,
+    world: null,
+    updatedAt,
+    masters: [...masterStore],
+    affiliations: [...affiliationStore],
+  };
+}
+
 /** ブラウザで育てた辞書を復元（クライアントでのみ有効） */
 export function hydratePlayerMasterFromStorage(): void {
   if (hydrated || typeof window === "undefined") return;
@@ -316,16 +376,8 @@ export function hydratePlayerMasterFromStorage(): void {
       return;
     }
     // 初期辞書（2026 NPB等）＋学習分をマージ（同一IDは学習側を優先）
-    const seed = buildInitialPlayerMasterSeed();
-    const byId = new Map(seed.masters.map((p) => [p.playerId, p]));
-    for (const p of parsed.masters) byId.set(p.playerId, p);
-    masterStore.splice(0, masterStore.length, ...byId.values());
-
-    const affKey = (a: PlayerSeasonAffiliation) =>
-      affiliationSlotKey(a.playerId, a.year, a.world);
-    const affMap = new Map(seed.affiliations.map((a) => [affKey(a), a]));
-    for (const a of parsed.affiliations) affMap.set(affKey(a), a);
-    affiliationStore.splice(0, affiliationStore.length, ...affMap.values());
+    mergeBundleIntoStores(parsed.masters, parsed.affiliations);
+    if (parsed.updatedAt) bundleUpdatedAt = parsed.updatedAt;
   } catch {
     // ignore corrupt storage
   }
@@ -333,14 +385,72 @@ export function hydratePlayerMasterFromStorage(): void {
 
 export function persistPlayerMasterStore(): void {
   if (typeof window === "undefined") return;
+  const cloudBundle = buildCloudBundle();
   try {
     const bundle: PersistedBundle = {
-      masters: [...masterStore],
-      affiliations: [...affiliationStore],
+      masters: cloudBundle.masters,
+      affiliations: cloudBundle.affiliations,
+      updatedAt: cloudBundle.updatedAt,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(bundle));
   } catch {
     // quota / private mode
+  }
+  void putMuseumCollectionRecord(COLLECTION, cloudBundle);
+}
+
+/**
+ * ストレージ hydrate 後、Neon の bundle ドキュメントを merge。
+ * ローカルの方が新しければクラウドへ再送する。
+ */
+export async function hydratePlayerMasterFromCloud(): Promise<void> {
+  if (typeof window === "undefined") return;
+  hydratePlayerMasterFromStorage();
+
+  const cloudList =
+    await fetchMuseumCollectionRecords<PlayerMasterCloudBundle>(COLLECTION);
+  if (!cloudList) return;
+
+  const cloud = cloudList.find((r) => r.id === BUNDLE_ID);
+  if (!cloud) {
+    void putMuseumCollectionRecord(COLLECTION, buildCloudBundle());
+    return;
+  }
+
+  const localAt = bundleUpdatedAt ?? "";
+  if (isStrictlyNewer(localAt, cloud.updatedAt)) {
+    void putMuseumCollectionRecord(COLLECTION, buildCloudBundle());
+    return;
+  }
+
+  if (Array.isArray(cloud.masters) && Array.isArray(cloud.affiliations)) {
+    // seed + 既存メモリ（localStorage 反映済み）の上にクラウドを重ねる
+    const byId = new Map(masterStore.map((p) => [p.playerId, p]));
+    for (const p of cloud.masters) byId.set(p.playerId, p);
+    masterStore.splice(0, masterStore.length, ...byId.values());
+
+    const affKey = (a: PlayerSeasonAffiliation) =>
+      affiliationSlotKey(a.playerId, a.year, a.world);
+    const affMap = new Map(
+      affiliationStore.map((a) => [affKey(a), a] as const),
+    );
+    for (const a of cloud.affiliations) {
+      const next = { ...a, world: normalizeSeasonWorld(a.world) };
+      affMap.set(affKey(next), next);
+    }
+    affiliationStore.splice(0, affiliationStore.length, ...affMap.values());
+    bundleUpdatedAt = cloud.updatedAt || bundleUpdatedAt;
+
+    try {
+      const bundle: PersistedBundle = {
+        masters: [...masterStore],
+        affiliations: [...affiliationStore],
+        updatedAt: bundleUpdatedAt ?? cloud.updatedAt,
+      };
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(bundle));
+    } catch {
+      // ignore
+    }
   }
 }
 
@@ -349,6 +459,7 @@ export function __resetPlayerMasterStoreForTests() {
   masterStore.splice(0, masterStore.length, ...seed.masters);
   affiliationStore.splice(0, affiliationStore.length, ...seed.affiliations);
   hydrated = false;
+  bundleUpdatedAt = null;
   if (typeof window !== "undefined") {
     window.localStorage.removeItem(STORAGE_KEY);
   }

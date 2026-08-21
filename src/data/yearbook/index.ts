@@ -15,6 +15,7 @@ export type {
 export {
   clearYearbookReview,
   getYearbookReview,
+  hydrateYearbookReviewsFromCloud,
   listYearbookReviews,
   upsertYearbookReview,
 } from "./store";

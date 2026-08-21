@@ -11,9 +11,14 @@ import {
   type SeasonIdentity,
   type SeasonWorld,
 } from "@/data/seasons";
+import {
+  hydrateLocalArrayFromCloud,
+  putMuseumCollectionRecord,
+} from "@/lib/museumCloud/clientSync";
 
 const RECORDS_KEY = "probase-museum.import.monthly-mvp.v1";
 const HISTORY_KEY = "probase-museum.import.history.v1";
+const COLLECTION = "monthly_mvp";
 
 function canUseStorage() {
   return typeof window !== "undefined";
@@ -23,21 +28,29 @@ function normalizeRecord(r: SavedMonthlyMvpRecord): SavedMonthlyMvpRecord {
   return {
     ...r,
     world: normalizeSeasonWorld(r.world),
+    updatedAt: r.updatedAt || new Date(0).toISOString(),
   };
 }
 
-export function listSavedMonthlyMvpRecords(): SavedMonthlyMvpRecord[] {
+function readRawMonthlyMvp(): SavedMonthlyMvpRecord[] {
   if (!canUseStorage()) return [];
   try {
     const raw = window.localStorage.getItem(RECORDS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as SavedMonthlyMvpRecord[];
-    return excludeDemoRecords(
-      Array.isArray(parsed) ? parsed.map(normalizeRecord) : [],
-    );
+    return Array.isArray(parsed) ? parsed.map(normalizeRecord) : [];
   } catch {
     return [];
   }
+}
+
+function writeRawMonthlyMvp(list: SavedMonthlyMvpRecord[]): void {
+  if (!canUseStorage()) return;
+  window.localStorage.setItem(RECORDS_KEY, JSON.stringify(list));
+}
+
+export function listSavedMonthlyMvpRecords(): SavedMonthlyMvpRecord[] {
+  return excludeDemoRecords(readRawMonthlyMvp());
 }
 
 /** シーズン画面用: world + year で厳密フィルタ */
@@ -71,6 +84,7 @@ export function getSavedMonthlyMvpRecord(
 export function upsertSavedMonthlyMvpRecord(
   record: SavedMonthlyMvpRecord,
 ): SavedMonthlyMvpRecord {
+  const now = new Date().toISOString();
   const world = normalizeSeasonWorld(record.world);
   const id = monthlyMvpRecordKey(
     record.year,
@@ -78,13 +92,32 @@ export function upsertSavedMonthlyMvpRecord(
     record.league,
     world,
   );
-  const next: SavedMonthlyMvpRecord = { ...record, id, world };
-  const list = listSavedMonthlyMvpRecords();
+  const next: SavedMonthlyMvpRecord = {
+    ...record,
+    id,
+    world,
+    updatedAt: now,
+  };
+  const list = readRawMonthlyMvp();
   const idx = list.findIndex((r) => r.id === id);
   if (idx >= 0) list[idx] = next;
   else list.push(next);
-  window.localStorage.setItem(RECORDS_KEY, JSON.stringify(list));
+  writeRawMonthlyMvp(list);
+  void putMuseumCollectionRecord(COLLECTION, next);
   return next;
+}
+
+export async function hydrateMonthlyMvpFromCloud(): Promise<
+  SavedMonthlyMvpRecord[]
+> {
+  if (!canUseStorage()) return [];
+  return hydrateLocalArrayFromCloud({
+    collection: COLLECTION,
+    readRaw: readRawMonthlyMvp,
+    writeRaw: writeRawMonthlyMvp,
+    normalize: normalizeRecord,
+    filterPublic: excludeDemoRecords,
+  });
 }
 
 export function listImportHistory(): ImportHistoryEntry[] {

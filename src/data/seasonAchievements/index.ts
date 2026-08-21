@@ -13,6 +13,7 @@ export {
   upsertStoredAchievement,
   removeStoredAchievement,
   seasonAchievementId,
+  hydrateSeasonAchievementsFromCloud,
 } from "./store";
 export {
   SHOW_SEASON_FEATS_DEMO,

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Noto_Sans_JP, Noto_Serif_JP } from "next/font/google";
+import { MuseumCloudBootstrap } from "@/components/museum/MuseumCloudBootstrap";
 import "./globals.css";
 
 /**
@@ -54,7 +55,10 @@ export default function RootLayout({
       lang="ja"
       className={`${display.variable} ${sans.variable} h-full antialiased`}
     >
-      <body className="min-h-full font-sans">{children}</body>
+      <body className="min-h-full font-sans">
+        <MuseumCloudBootstrap />
+        {children}
+      </body>
     </html>
   );
 }

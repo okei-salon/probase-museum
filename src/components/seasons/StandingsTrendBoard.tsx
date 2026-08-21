@@ -25,6 +25,7 @@ type StandingsTrendBoardProps = {
  * ペナント「順位推移」。
  * 正式履歴があれば表示。正式 WORLD で未登録のときは空（サンプル推移へフォールバックしない）。
  * DEMO／レガシーのみ静的ダミーを許可。
+ * 表示前に standings_history + team_standings をクラウドから hydrate。
  */
 export function StandingsTrendBoard({
   year,
@@ -42,10 +43,15 @@ export function StandingsTrendBoard({
     if (!identity) return;
     let cancelled = false;
     void (async () => {
-      const { hydrateTeamStandingsFromCloud } = await import(
-        "@/data/teamStandings"
-      );
-      await hydrateTeamStandingsFromCloud();
+      const [{ hydrateTeamStandingsFromCloud }, { hydrateStandingsHistoryFromCloud }] =
+        await Promise.all([
+          import("@/data/teamStandings"),
+          import("@/data/standingsHistory"),
+        ]);
+      await Promise.all([
+        hydrateTeamStandingsFromCloud(),
+        hydrateStandingsHistoryFromCloud(),
+      ]);
       if (cancelled) return;
       setCentral(buildStandingsTrendBoard(identity, "central"));
       setPacific(buildStandingsTrendBoard(identity, "pacific"));

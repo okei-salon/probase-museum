@@ -51,6 +51,7 @@ export {
 export {
   POSTSEASON_STORAGE_KEY,
   getStoredPostseasonForSeason,
+  hydratePostseasonFromCloud,
   listStoredPostseason,
   listStoredPostseasonIdentities,
   postseasonRecordId,

@@ -6,8 +6,13 @@ import {
   type SeasonIdentity,
   type SeasonWorld,
 } from "@/data/seasons";
+import {
+  hydrateLocalArrayFromCloud,
+  putMuseumCollectionRecord,
+} from "@/lib/museumCloud/clientSync";
 
 const STORAGE_KEY = "probase-museum.title-win-history.v1";
+const COLLECTION = "title_win_history";
 
 export type TitleWinRecord = {
   titleId: string;
@@ -21,6 +26,15 @@ export type TitleWinRecord = {
   playerName?: string;
   teamShort?: string;
   valueText?: string;
+  /** クラウド同期用（recordKey）。シードには無い */
+  id?: string;
+  updatedAt?: string;
+};
+
+/** クラウド同期用レコード */
+type TitleWinSyncRecord = TitleWinRecord & {
+  id: string;
+  updatedAt: string;
 };
 
 /** デモ用の過去受賞（自動判定の種）。実データ集計結果で上書き・追記される。 */
@@ -57,42 +71,51 @@ function sameTitleSlot(
   );
 }
 
-function normalizeRecord(r: TitleWinRecord): TitleWinRecord {
+function normalizeRecord(r: TitleWinRecord): TitleWinSyncRecord {
+  const world = normalizeSeasonWorld(r.world);
+  const withWorld = { ...r, world, rank: r.rank ?? 1 };
   return {
-    ...r,
-    world: normalizeSeasonWorld(r.world),
+    ...withWorld,
+    id: r.id || recordKey(withWorld),
+    updatedAt: r.updatedAt || new Date(0).toISOString(),
   };
 }
 
-function readStore(): TitleWinRecord[] {
-  if (!canUseStorage()) return [...SEED_HISTORY];
+/** localStorage のみ（SEED は含めない）。書き込み・クラウド hydrate 用 */
+function readRawTitleWinHistory(): TitleWinSyncRecord[] {
+  if (!canUseStorage()) return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [...SEED_HISTORY];
+    if (!raw) return [];
     const parsed = JSON.parse(raw) as TitleWinRecord[];
-    if (!Array.isArray(parsed)) return [...SEED_HISTORY];
-    const map = new Map(SEED_HISTORY.map((r) => [recordKey(r), r]));
-    for (const r of parsed) {
-      const n = normalizeRecord(r);
-      map.set(recordKey(n), n);
-    }
-    return [...map.values()];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(normalizeRecord);
   } catch {
-    return [...SEED_HISTORY];
+    return [];
   }
 }
 
-function writeStore(records: TitleWinRecord[]) {
+function writeRawTitleWinHistory(list: TitleWinSyncRecord[]): void {
   if (!canUseStorage()) return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   } catch {
     // ignore
   }
 }
 
+/** SEED + localStorage（表示用）。純 SEED 行はクラウドへ上げない */
 export function listTitleWinHistory(): TitleWinRecord[] {
-  return readStore();
+  const map = new Map(
+    SEED_HISTORY.map((r) => {
+      const n = normalizeRecord(r);
+      return [n.id, n] as const;
+    }),
+  );
+  for (const r of readRawTitleWinHistory()) {
+    map.set(r.id, r);
+  }
+  return [...map.values()];
 }
 
 export function listTitleWinsForSeason(
@@ -103,11 +126,18 @@ export function listTitleWinsForSeason(
 
 /** その年の順位を履歴へ反映（WORLD × 年度・リーグ・タイトル・順位で1件） */
 export function upsertTitleWinner(record: TitleWinRecord): void {
+  const now = new Date().toISOString();
   const world = normalizeSeasonWorld(record.world);
-  const next = { ...record, world, rank: record.rank ?? 1 };
-  const list = readStore().filter((r) => !sameTitleSlot(r, next));
+  const next = normalizeRecord({
+    ...record,
+    world,
+    rank: record.rank ?? 1,
+    updatedAt: now,
+  });
+  const list = readRawTitleWinHistory().filter((r) => !sameTitleSlot(r, next));
   list.push(next);
-  writeStore(list);
+  writeRawTitleWinHistory(list);
+  void putMuseumCollectionRecord(COLLECTION, next);
 }
 
 /**
@@ -116,19 +146,39 @@ export function upsertTitleWinner(record: TitleWinRecord): void {
  */
 export function upsertTitleBoard(entries: TitleWinRecord[]): void {
   if (entries.length === 0) return;
-  let list = readStore();
+  const now = new Date().toISOString();
+  let list = readRawTitleWinHistory();
+  const pushed: TitleWinSyncRecord[] = [];
   for (const e of entries) {
     if (!e.playerId) continue;
     const world = normalizeSeasonWorld(e.world);
-    const next: TitleWinRecord = {
+    const next = normalizeRecord({
       ...e,
       world,
       rank: e.rank ?? 1,
-    };
+      updatedAt: now,
+    });
     list = list.filter((r) => !sameTitleSlot(r, next));
     list.push(next);
+    pushed.push(next);
   }
-  writeStore(list);
+  writeRawTitleWinHistory(list);
+  for (const rec of pushed) {
+    void putMuseumCollectionRecord(COLLECTION, rec);
+  }
+}
+
+export async function hydrateTitleWinHistoryFromCloud(): Promise<
+  TitleWinRecord[]
+> {
+  if (!canUseStorage()) return listTitleWinHistory();
+  await hydrateLocalArrayFromCloud({
+    collection: COLLECTION,
+    readRaw: readRawTitleWinHistory,
+    writeRaw: writeRawTitleWinHistory,
+    normalize: normalizeRecord,
+  });
+  return listTitleWinHistory();
 }
 
 export function getTitleHistoryLabel(

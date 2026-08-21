@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SortableTeamStatsTable } from "@/components/views/SortableTeamStatsTable";
 import {
   buildLayoutSampleBattingRows,
@@ -11,6 +11,7 @@ import {
   getOfficialTeamPitchingRows,
   type TeamCompetition,
 } from "@/data/teamSeasonStats";
+import type { TeamStatColumn, TeamStatRow } from "@/data/seasonViews";
 import {
   allowsLayoutSampleFallback,
   formatSeasonLineLabel,
@@ -28,9 +29,16 @@ type TeamSeasonStatsPanelProps = {
   seasonKey?: string;
 };
 
+type PanelData = {
+  rows: TeamStatRow[];
+  columns: TeamStatColumn[];
+  official: boolean;
+};
+
 /**
  * セ／パ／12球団／交流戦で共通利用。
- * 列定義は常に正式 28 / 19 項目。
+ * 列定義は常に正式全項目。
+ * 表示前に team_season_stats をクラウドから hydrate。
  * 正式 WORLD の未登録時は空表示。DEMO／レガシーのみレイアウト用サンプル。
  */
 export function TeamSeasonStatsPanel({
@@ -46,46 +54,75 @@ export function TeamSeasonStatsPanel({
     [seasonKey],
   );
   const allowSample = allowsLayoutSampleFallback(identity);
+  const [data, setData] = useState<PanelData | null>(null);
 
-  const { rows, columns, official } = useMemo(() => {
-    const columns =
-      kind === "batting"
-        ? formalTeamBattingColumns
-        : formalTeamPitchingColumns;
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { hydrateTeamSeasonStatsFromCloud } = await import(
+        "@/data/teamSeasonStats"
+      );
+      await hydrateTeamSeasonStatsFromCloud();
+      if (cancelled) return;
 
-    if (kind === "batting") {
-      const officialRows = getOfficialTeamBattingRows(y, competition, identity);
-      return {
+      const columns =
+        kind === "batting"
+          ? formalTeamBattingColumns
+          : formalTeamPitchingColumns;
+
+      if (kind === "batting") {
+        const officialRows = getOfficialTeamBattingRows(
+          y,
+          competition,
+          identity,
+        );
+        setData({
+          rows:
+            officialRows.length > 0
+              ? officialRows
+              : allowSample
+                ? buildLayoutSampleBattingRows()
+                : [],
+          columns,
+          official: officialRows.length > 0,
+        });
+        return;
+      }
+
+      const officialRows = getOfficialTeamPitchingRows(
+        y,
+        competition,
+        identity,
+      );
+      setData({
         rows:
           officialRows.length > 0
             ? officialRows
             : allowSample
-              ? buildLayoutSampleBattingRows()
+              ? buildLayoutSamplePitchingRows()
               : [],
         columns,
         official: officialRows.length > 0,
-      };
-    }
-
-    const officialRows = getOfficialTeamPitchingRows(y, competition, identity);
-    return {
-      rows:
-        officialRows.length > 0
-          ? officialRows
-          : allowSample
-            ? buildLayoutSamplePitchingRows()
-            : [],
-      columns,
-      official: officialRows.length > 0,
+      });
+    })();
+    return () => {
+      cancelled = true;
     };
   }, [kind, y, competition, identity, allowSample]);
 
   const competitionLabel =
     competition === "interleague" ? "交流戦" : "通常シーズン";
-  const fieldLabel = kind === "batting" ? "打者成績（全項目）" : "投手成績（全項目）";
+  const fieldLabel =
+    kind === "batting" ? "打者成績（全項目）" : "投手成績（全項目）";
   const seasonLabel = identity
     ? formatSeasonLineLabel(identity)
     : `${y}年`;
+
+  const rows = data?.rows ?? [];
+  const columns = data?.columns ?? (kind === "batting"
+    ? formalTeamBattingColumns
+    : formalTeamPitchingColumns);
+  const official = data?.official ?? false;
 
   return (
     <div className="min-w-0 w-full space-y-2">

@@ -2,6 +2,7 @@
  * チーム年度成績マスター（正式保存）
  *
  * Storage: localStorage `probase-museum.team-season-stats.v1`
+ * + museum_documents(collection=team_season_stats)
  * Key: 正式 `${world}:${year}:${teamId}:${competition}` /
  *      レガシー `${year}:${teamId}:${competition}`  (regular | interleague)
  *
@@ -58,11 +59,13 @@ export {
 export {
   TEAM_SEASON_STATS_STORAGE_KEY,
   getTeamSeasonStats,
+  hydrateTeamSeasonStatsFromCloud,
   listTeamSeasonStats,
   listTeamSeasonStatsByTeam,
   listTeamSeasonStatsByYear,
   listTeamSeasonStatsForSeason,
   upsertTeamSeasonStats,
+  upsertTeamSeasonStatsAsync,
 } from "./store";
 
 export {

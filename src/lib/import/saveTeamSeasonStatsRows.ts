@@ -1,6 +1,7 @@
 /**
  * チーム打撃／投手の一括保存（ペナント / 交流戦 共通）。
  * competition 以外の変換・項目定義は同一。
+ * デモ以外は localStorage + Neon（museum_documents / team_season_stats）へ同期。
  */
 
 import {
@@ -19,7 +20,7 @@ import {
   getTeamSeasonStats,
   mergeTeamSeasonBatting,
   teamSeasonStatsKey,
-  upsertTeamSeasonStats,
+  upsertTeamSeasonStatsAsync,
   type TeamBattingScreenRates,
   type TeamCompetition,
   type TeamSeasonStatsRecord,
@@ -132,14 +133,14 @@ export function findConflictingTeamStats(
   return conflicts;
 }
 
-export function saveTeamSeasonStatsRows(params: {
+export async function saveTeamSeasonStatsRows(params: {
   rows: TeamStatPartial[];
   year: number;
   world: SeasonWorld | null;
   competition: TeamCompetition;
   kind: "batting" | "pitching";
   source?: "ocr" | "manual" | "import";
-}): { ids: string[]; message: string } {
+}): Promise<{ ids: string[]; message: string; cloudOk: boolean }> {
   const {
     rows,
     year,
@@ -150,6 +151,7 @@ export function saveTeamSeasonStatsRows(params: {
   } = params;
   const useSandbox = shouldUseIsolatedDemoStore(year);
   const ids: string[] = [];
+  let cloudFail = 0;
 
   for (const row of rows) {
     if (!row.teamId) continue;
@@ -189,7 +191,7 @@ export function saveTeamSeasonStatsRows(params: {
         });
         ids.push(rec.id);
       } else {
-        const rec = upsertTeamSeasonStats({
+        const { record, cloud } = await upsertTeamSeasonStatsAsync({
           year,
           world,
           teamId: row.teamId,
@@ -198,7 +200,8 @@ export function saveTeamSeasonStatsRows(params: {
           batting,
           source,
         });
-        ids.push(rec.id);
+        ids.push(record.id);
+        if (!cloud.ok) cloudFail += 1;
       }
     } else {
       const counting = teamFieldsToPitchingCounting(row.fields);
@@ -223,7 +226,7 @@ export function saveTeamSeasonStatsRows(params: {
         });
         ids.push(rec.id);
       } else {
-        const rec = upsertTeamSeasonStats({
+        const { record, cloud } = await upsertTeamSeasonStatsAsync({
           year,
           world,
           teamId: row.teamId,
@@ -232,7 +235,8 @@ export function saveTeamSeasonStatsRows(params: {
           pitching,
           source,
         });
-        ids.push(rec.id);
+        ids.push(record.id);
+        if (!cloud.ok) cloudFail += 1;
       }
     }
   }
@@ -256,10 +260,15 @@ export function saveTeamSeasonStatsRows(params: {
   else appendImportHistory(hist);
   if (!useSandbox) notifyImportStoreChanged();
 
-  return {
-    ids,
-    message: useSandbox
-      ? `${ids.length}球団分を分離デモ領域に登録しました。`
-      : `${ids.length}球団分を登録しました。${competition === "interleague" ? "交流戦" : "SEASONS"}のチーム成績へ反映されます。`,
-  };
+  const cloudOk = !useSandbox && cloudFail === 0;
+  let message: string;
+  if (useSandbox) {
+    message = `${ids.length}球団分を分離デモ領域に登録しました。`;
+  } else if (cloudFail > 0) {
+    message = `${ids.length}球団分をこの端末に保存しました（クラウド未同期 ${cloudFail}件。SEASONS画面を開くと再送を試みます）。`;
+  } else {
+    message = `${ids.length}球団分を登録し共有DBへ同期しました。${competition === "interleague" ? "交流戦" : "SEASONS"}のチーム成績へ反映されます。`;
+  }
+
+  return { ids, message, cloudOk };
 }

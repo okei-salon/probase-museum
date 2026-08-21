@@ -721,7 +721,7 @@ export function InterleagueImportWorkspace() {
     );
   }
 
-  function saveTeamStats(force: boolean) {
+  async function saveTeamStats(force: boolean) {
     const kind = sub === "team_batting" ? "batting" : "pitching";
     const conflicts = findConflictingTeamStats(
       teamRows,
@@ -738,7 +738,7 @@ export function InterleagueImportWorkspace() {
       setConfirmOpen(true);
       return;
     }
-    const { ids, message: msg } = saveTeamSeasonStatsRows({
+    const { ids, message: msg } = await saveTeamSeasonStatsRows({
       rows: teamRows,
       year,
       world,
@@ -758,9 +758,9 @@ export function InterleagueImportWorkspace() {
   }
 
   function confirmOverwrite() {
-    if (pendingAction === "standings") saveStandings(true);
-    else if (pendingAction === "matrix") saveMatrix(true);
-    else if (pendingAction === "team") saveTeamStats(true);
+    if (pendingAction === "standings") void saveStandings(true);
+    else if (pendingAction === "matrix") void saveMatrix(true);
+    else if (pendingAction === "team") void saveTeamStats(true);
   }
 
   const showOuterModes = sub !== "player";
@@ -938,7 +938,7 @@ export function InterleagueImportWorkspace() {
           <button
             type="button"
             disabled={teamRows.length === 0}
-            onClick={() => saveTeamStats(false)}
+            onClick={() => void saveTeamStats(false)}
             className={cn(
               "rounded-md border px-3 py-2 text-[12px]",
               teamRows.length === 0

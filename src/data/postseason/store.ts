@@ -1,6 +1,7 @@
 /**
  * ポストシーズン結果ストア（CS + 日本シリーズ）。
  * Step12: 正式 WORLD のみ world を付与。レガシー／DEMO の既存静的データは触らない。
+ * localStorage + museum_documents(collection=postseason) 同期。
  */
 
 import { excludeDemoRecords } from "@/data/import/demoStore";
@@ -11,10 +12,21 @@ import {
   type SeasonIdentity,
   type SeasonWorld,
 } from "@/data/seasons";
+import {
+  hydrateLocalArrayFromCloud,
+  putMuseumCollectionRecord,
+} from "@/lib/museumCloud/clientSync";
 import type { PostseasonSeason } from "./types";
 import { placeholderSeason } from "./catalog";
 
 const STORAGE_KEY = "probase-museum.postseason.v1";
+const COLLECTION = "postseason";
+
+/** クラウド同期用: id 必須・year はローカルでは string */
+type PostseasonSyncRecord = PostseasonSeason & {
+  id: string;
+  updatedAt: string;
+};
 
 function canUseStorage() {
   return typeof window !== "undefined";
@@ -34,13 +46,17 @@ export function postseasonRecordId(
   return String(y);
 }
 
-function normalizeRecord(r: PostseasonSeason): PostseasonSeason {
+function normalizeRecord(r: PostseasonSeason): PostseasonSyncRecord {
   const world = normalizeSeasonWorld(r.world);
   const year = String(r.year);
+  const id = r.id || postseasonRecordId(year, world);
+  const updatedAt = r.updatedAt || new Date(0).toISOString();
   return {
     ...r,
+    id,
     year,
     world,
+    updatedAt,
     japanSeries: {
       ...r.japanSeries,
       year,
@@ -54,22 +70,33 @@ function normalizeRecord(r: PostseasonSeason): PostseasonSeason {
   };
 }
 
-export function listStoredPostseason(): PostseasonSeason[] {
+function toCloudPayload(record: PostseasonSyncRecord) {
+  return {
+    ...record,
+    /** DB インデックス用の数値 year（payload 内も Number） */
+    year: Number(record.year),
+  };
+}
+
+function readRawPostseason(): PostseasonSyncRecord[] {
   if (!canUseStorage()) return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as PostseasonSeason[];
-    return excludeDemoRecords(
-      Array.isArray(parsed) ? parsed.map(normalizeRecord) : [],
-    );
+    return Array.isArray(parsed) ? parsed.map(normalizeRecord) : [];
   } catch {
     return [];
   }
 }
 
-function writeAll(list: PostseasonSeason[]) {
+function writeRawPostseason(list: PostseasonSyncRecord[]): void {
+  if (!canUseStorage()) return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+
+export function listStoredPostseason(): PostseasonSeason[] {
+  return excludeDemoRecords(readRawPostseason());
 }
 
 /** シーズン画面用: identity（world + year）で厳密取得 */
@@ -96,11 +123,11 @@ export function upsertPostseasonSeason(
   const world = normalizeSeasonWorld(input.world);
   const year = String(input.year);
   const id = input.id || postseasonRecordId(year, world);
-  const list = listStoredPostseason();
+  const list = readRawPostseason();
   const existing = list.find((r) => r.id === id) ?? null;
 
   const base = placeholderSeason(year, world);
-  const record: PostseasonSeason = normalizeRecord({
+  const record = normalizeRecord({
     ...base,
     ...input,
     id,
@@ -128,8 +155,21 @@ export function upsertPostseasonSeason(
   const idx = list.findIndex((r) => r.id === id);
   if (idx >= 0) list[idx] = record;
   else list.push(record);
-  writeAll(list);
+  writeRawPostseason(list);
+  void putMuseumCollectionRecord(COLLECTION, toCloudPayload(record));
   return record;
+}
+
+export async function hydratePostseasonFromCloud(): Promise<PostseasonSeason[]> {
+  if (!canUseStorage()) return [];
+  return hydrateLocalArrayFromCloud({
+    collection: COLLECTION,
+    readRaw: readRawPostseason,
+    writeRaw: writeRawPostseason,
+    normalize: (r) => normalizeRecord(r as PostseasonSeason),
+    filterPublic: excludeDemoRecords,
+    serializeForCloud: (r) => toCloudPayload(r),
+  });
 }
 
 /** 保存済みポストシーズンから SeasonIdentity 一覧 */
