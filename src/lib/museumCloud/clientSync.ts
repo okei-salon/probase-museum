@@ -139,7 +139,7 @@ export async function hydrateLocalArrayFromCloud<T extends CloudRecordBase>(opti
   writeRaw(mergedList);
 
   if (pendingPush.length > 0) {
-    void Promise.all(
+    await Promise.all(
       pendingPush.map((r) =>
         putMuseumCollectionRecord(
           collection,

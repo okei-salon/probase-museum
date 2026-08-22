@@ -552,13 +552,46 @@ export function SeasonImportWorkspace() {
           ...leaguePatch,
         });
       } else {
-        await upsertStandingsHistoryAsync({
+        const histCloud = await upsertStandingsHistoryAsync({
           year,
           world,
           checkpoint: "final",
           source: "sync",
           ...leaguePatch,
         });
+        if (!histCloud.cloud.ok) {
+          setMessage(
+            `${label}の最終順位は共有DBへ保存しましたが、順位推移(final)の同期に失敗しました（${histCloud.cloud.error ?? "error"}）。ページ再読み込みで再送します。`,
+          );
+          const hist = {
+            id: `hist-${Date.now()}`,
+            at: new Date().toISOString(),
+            year,
+            fileName: "standings",
+            screenType: "standings" as const,
+            summary: `${label} チーム順位を登録（順位推移同期失敗 / ${updatedLeaguesLabel}）`,
+            recordIds: [id],
+          };
+          appendImportHistory(hist);
+          notifyImportStoreChanged();
+          setTouchedCentral(false);
+          setTouchedPacific(false);
+          setConfirmOpen(false);
+          const savedPartial = getStandingsForSeason(identity);
+          if (savedPartial) {
+            setCentral(
+              savedPartial.central.length
+                ? savedPartial.central
+                : defaultLeagueRows("central"),
+            );
+            setPacific(
+              savedPartial.pacific.length
+                ? savedPartial.pacific
+                : defaultLeagueRows("pacific"),
+            );
+          }
+          return;
+        }
       }
       const hist = {
         id: `hist-${Date.now()}`,
@@ -617,7 +650,7 @@ export function SeasonImportWorkspace() {
         setMessage(
           cloud.ok
             ? `${label}の順位推移を登録し共有DBへ同期しました（${updatedLeaguesLabel}）。`
-            : `${label}の順位推移をこの端末に保存しました（クラウド同期は後で再試行: ${cloud.error ?? "error"}）。`,
+            : `${label}の順位推移をこの端末に保存しましたが、共有DBへの同期に失敗しました（${cloud.error ?? "error"}）。ページを再読み込みすると再送を試みます。`,
         );
         return;
       }

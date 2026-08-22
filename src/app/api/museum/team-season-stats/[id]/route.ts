@@ -10,6 +10,7 @@ import {
 import type { TeamSeasonStatsRecord } from "@/data/teamSeasonStats";
 import { normalizeSeasonWorld } from "@/data/seasons";
 import type { TeamId } from "@/data/teams";
+import { preferNonNullish } from "@/lib/museumCloud/safeMerge";
 
 export const runtime = "nodejs";
 
@@ -106,6 +107,7 @@ export async function PUT(request: Request, { params }: Params) {
       ? incoming.competition
       : (existing?.competition ?? "regular");
 
+  // null / undefined で既存の非空 batting・pitching を消さない
   const record: TeamSeasonStatsRecord = {
     id,
     year,
@@ -116,14 +118,8 @@ export async function PUT(request: Request, { params }: Params) {
         ? incoming.teamName
         : (existing?.teamName ?? incoming.teamId),
     competition,
-    batting:
-      incoming.batting !== undefined
-        ? (incoming.batting ?? null)
-        : (existing?.batting ?? null),
-    pitching:
-      incoming.pitching !== undefined
-        ? (incoming.pitching ?? null)
-        : (existing?.pitching ?? null),
+    batting: preferNonNullish(incoming.batting, existing?.batting ?? null),
+    pitching: preferNonNullish(incoming.pitching, existing?.pitching ?? null),
     source:
       incoming.source === "manual" ||
       incoming.source === "ocr" ||

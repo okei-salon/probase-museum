@@ -23,6 +23,7 @@ export {
   listStandingsHistory,
   listStandingsHistoryForSeason,
   standingsHistoryKey,
+  syncStandingsHistoryWithCloud,
   upsertStandingsHistory,
   upsertStandingsHistoryAsync,
 } from "./store";

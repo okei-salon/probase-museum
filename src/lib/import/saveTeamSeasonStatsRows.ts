@@ -265,7 +265,7 @@ export async function saveTeamSeasonStatsRows(params: {
   if (useSandbox) {
     message = `${ids.length}球団分を分離デモ領域に登録しました。`;
   } else if (cloudFail > 0) {
-    message = `${ids.length}球団分をこの端末に保存しました（クラウド未同期 ${cloudFail}件。SEASONS画面を開くと再送を試みます）。`;
+    message = `${ids.length}球団分をこの端末に保存しましたが、共有DBへの同期に失敗しました（未同期 ${cloudFail}件）。ページを再読み込みすると再送を試みます。`;
   } else {
     message = `${ids.length}球団分を登録し共有DBへ同期しました。${competition === "interleague" ? "交流戦" : "SEASONS"}のチーム成績へ反映されます。`;
   }

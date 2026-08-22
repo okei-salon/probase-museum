@@ -10,6 +10,7 @@ import {
 import type { StandingsHistoryRecord } from "@/data/standingsHistory";
 import { isStandingsCheckpoint } from "@/data/standingsHistory";
 import { normalizeSeasonWorld } from "@/data/seasons";
+import { preferNonEmptyArray } from "@/lib/museumCloud/safeMerge";
 
 export const runtime = "nodejs";
 
@@ -105,17 +106,14 @@ export async function PUT(request: Request, { params }: Params) {
   const now = new Date().toISOString();
   const existing = await getStandingsHistoryFromDb(id);
 
+  // 空配列で既存の非空リーグを消さない（省略時も既存維持）
   const record: StandingsHistoryRecord = {
     id,
     year,
     world,
     checkpoint: checkpointRaw,
-    central: Array.isArray(incoming.central)
-      ? incoming.central
-      : (existing?.central ?? []),
-    pacific: Array.isArray(incoming.pacific)
-      ? incoming.pacific
-      : (existing?.pacific ?? []),
+    central: preferNonEmptyArray(incoming.central, existing?.central),
+    pacific: preferNonEmptyArray(incoming.pacific, existing?.pacific),
     source:
       incoming.source === "manual" ||
       incoming.source === "ocr" ||

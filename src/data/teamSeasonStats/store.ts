@@ -19,6 +19,10 @@ import {
   type SeasonWorld,
 } from "@/data/seasons";
 import {
+  preferNonNullish,
+  type CloudSyncResult,
+} from "@/lib/museumCloud/safeMerge";
+import {
   buildTeamSeasonBatting,
   buildTeamSeasonPitching,
   normalizeTeamPitchingCounting,
@@ -184,12 +188,25 @@ function mergeStatsRecords(
     id: cloud.id || local.id,
     year: primary.year || secondary.year,
     world: normalizeSeasonWorld(primary.world ?? secondary.world),
-    batting: primary.batting ?? secondary.batting,
-    pitching: primary.pitching ?? secondary.pitching,
+    batting: preferNonNullish(primary.batting, secondary.batting),
+    pitching: preferNonNullish(primary.pitching, secondary.pitching),
     createdAt: local.createdAt || cloud.createdAt,
     updatedAt: localNewer ? local.updatedAt : cloud.updatedAt,
     source: localNewer ? local.source : cloud.source,
   });
+}
+
+function statsNeedsCloudPush(
+  local: TeamSeasonStatsRecord,
+  cloud: TeamSeasonStatsRecord | undefined,
+): boolean {
+  if (!cloud) {
+    return local.batting != null || local.pitching != null;
+  }
+  if (isStrictlyNewer(local.updatedAt, cloud.updatedAt)) return true;
+  if (local.batting != null && cloud.batting == null) return true;
+  if (local.pitching != null && cloud.pitching == null) return true;
+  return false;
 }
 
 export function listTeamSeasonStats(): TeamSeasonStatsRecord[] {
@@ -296,65 +313,83 @@ async function pushStatsToCloud(
 }
 
 /**
- * クラウド一覧を取得し local と merge。
- * - クラウドに無いローカル行 → アップロード（他端末共有）
- * - 同一 id: updatedAt + batting/pitching 非破壊 merge
+ * Neon を正本として hydrateし、local のみ／補完できる行は await で PUT。
+ * localStorage は消さない。null で Neon の非空 batting/pitching を消さない。
  */
-export async function hydrateTeamSeasonStatsFromCloud(): Promise<
-  TeamSeasonStatsRecord[]
-> {
-  if (!canUseStorage()) return [];
+export async function syncTeamSeasonStatsWithCloud(): Promise<{
+  records: TeamSeasonStatsRecord[];
+  sync: CloudSyncResult;
+}> {
+  const emptySync: CloudSyncResult = { attempted: 0, ok: 0, failed: 0 };
+  if (!canUseStorage()) {
+    return { records: [], sync: emptySync };
+  }
   try {
     const res = await fetch("/api/museum/team-season-stats", {
       method: "GET",
       credentials: "include",
       cache: "no-store",
     });
-    if (!res.ok) return listTeamSeasonStats();
+    if (!res.ok) {
+      return { records: listTeamSeasonStats(), sync: emptySync };
+    }
     const data = (await res.json()) as {
       ok?: boolean;
       records?: TeamSeasonStatsRecord[];
     };
     if (!data.ok || !Array.isArray(data.records)) {
-      return listTeamSeasonStats();
+      return { records: listTeamSeasonStats(), sync: emptySync };
     }
 
     const localList = readRawTeamSeasonStats();
     const cloudList = data.records.map(normalizeRecord);
+    const cloudById = new Map(cloudList.map((r) => [r.id, r]));
     const map = new Map<string, TeamSeasonStatsRecord>();
     const pendingPush: TeamSeasonStatsRecord[] = [];
-    const cloudIds = new Set(cloudList.map((r) => r.id));
 
-    for (const local of localList) {
-      map.set(local.id, local);
-    }
     for (const cloud of cloudList) {
-      const local = map.get(cloud.id);
-      if (!local) {
-        map.set(cloud.id, cloud);
+      map.set(cloud.id, cloud);
+    }
+    for (const local of localList) {
+      const cloud = cloudById.get(local.id);
+      if (!cloud) {
+        map.set(local.id, local);
+        if (statsNeedsCloudPush(local, undefined)) pendingPush.push(local);
         continue;
       }
       const merged = mergeStatsRecords(local, cloud);
-      map.set(cloud.id, merged);
-      if (isStrictlyNewer(local.updatedAt, cloud.updatedAt)) {
-        pendingPush.push(merged);
-      }
-    }
-    for (const local of localList) {
-      if (!cloudIds.has(local.id)) pendingPush.push(local);
+      map.set(local.id, merged);
+      if (statsNeedsCloudPush(local, cloud)) pendingPush.push(merged);
     }
 
     const mergedList = [...map.values()];
     writeRawTeamSeasonStats(mergedList);
 
-    if (pendingPush.length > 0) {
-      void Promise.all(pendingPush.map((r) => pushStatsToCloud(r)));
+    let ok = 0;
+    let failed = 0;
+    for (const record of pendingPush) {
+      const result = await pushStatsToCloud(record);
+      if (result.ok) ok += 1;
+      else failed += 1;
     }
 
-    return excludeDemoRecords(mergedList);
+    return {
+      records: excludeDemoRecords(mergedList),
+      sync: { attempted: pendingPush.length, ok, failed },
+    };
   } catch {
-    return listTeamSeasonStats();
+    return { records: listTeamSeasonStats(), sync: emptySync };
   }
+}
+
+/**
+ * クラウド一覧を取得し local と merge。未同期は Neon へ再送（await）。
+ */
+export async function hydrateTeamSeasonStatsFromCloud(): Promise<
+  TeamSeasonStatsRecord[]
+> {
+  const { records } = await syncTeamSeasonStatsWithCloud();
+  return records;
 }
 
 export function upsertTeamSeasonStats(
@@ -378,23 +413,29 @@ export function upsertTeamSeasonStats(
 
   const batting =
     input.batting === undefined
-      ? existing?.batting ?? null
-      : input.batting
-        ? buildTeamSeasonBatting(
-            input.batting.counting,
-            input.batting.screenRates,
-          )
-        : null;
+      ? (existing?.batting ?? null)
+      : preferNonNullish(
+          input.batting
+            ? buildTeamSeasonBatting(
+                input.batting.counting,
+                input.batting.screenRates,
+              )
+            : null,
+          existing?.batting ?? null,
+        );
 
   const pitching =
     input.pitching === undefined
-      ? existing?.pitching ?? null
-      : input.pitching
-        ? buildTeamSeasonPitching(
-            input.pitching.counting,
-            input.pitching.screenRates,
-          )
-        : null;
+      ? (existing?.pitching ?? null)
+      : preferNonNullish(
+          input.pitching
+            ? buildTeamSeasonPitching(
+                input.pitching.counting,
+                input.pitching.screenRates,
+              )
+            : null,
+          existing?.pitching ?? null,
+        );
 
   const record: TeamSeasonStatsRecord = {
     id,

@@ -64,6 +64,7 @@ export {
   listTeamSeasonStatsByTeam,
   listTeamSeasonStatsByYear,
   listTeamSeasonStatsForSeason,
+  syncTeamSeasonStatsWithCloud,
   upsertTeamSeasonStats,
   upsertTeamSeasonStatsAsync,
 } from "./store";
