@@ -48,14 +48,14 @@ export const interleagueStandings = [
 
 /** 月末順位推移（1位=上）。値が小さいほど上位 */
 export const standingsTrend = {
-  months: ["4月", "5月", "6月", "7月", "8月", "9月", "最終"],
+  months: ["4月終了", "5月終了", "6月終了", "7月終了", "8月終了", "最終"],
   series: [
-    { team: "阪神", color: getTeamColorByShort("阪神"), ranks: [2, 1, 1, 1, 1, 1, 1] },
-    { team: "広島", color: getTeamColorByShort("広島"), ranks: [3, 3, 2, 2, 2, 2, 2] },
-    { team: "DeNA", color: getTeamColorByShort("DeNA"), ranks: [1, 2, 3, 3, 3, 3, 3] },
-    { team: "巨人", color: getTeamColorByShort("巨人"), ranks: [4, 4, 4, 4, 4, 4, 4] },
-    { team: "ヤクルト", color: getTeamColorByShort("ヤクルト"), ranks: [5, 5, 5, 5, 5, 5, 5] },
-    { team: "中日", color: getTeamColorByShort("中日"), ranks: [6, 6, 6, 6, 6, 6, 6] },
+    { team: "阪神", color: getTeamColorByShort("阪神"), ranks: [2, 1, 1, 1, 1, 1] },
+    { team: "広島", color: getTeamColorByShort("広島"), ranks: [3, 3, 2, 2, 2, 2] },
+    { team: "DeNA", color: getTeamColorByShort("DeNA"), ranks: [1, 2, 3, 3, 3, 3] },
+    { team: "巨人", color: getTeamColorByShort("巨人"), ranks: [4, 4, 4, 4, 4, 4] },
+    { team: "ヤクルト", color: getTeamColorByShort("ヤクルト"), ranks: [5, 5, 5, 5, 5, 5] },
+    { team: "中日", color: getTeamColorByShort("中日"), ranks: [6, 6, 6, 6, 6, 6] },
   ],
 };
 
@@ -185,14 +185,14 @@ export const pennantReview = {
 };
 
 export const pacificStandingsTrend = {
-  months: ["4月", "5月", "6月", "7月", "8月", "9月", "最終"],
+  months: ["4月終了", "5月終了", "6月終了", "7月終了", "8月終了", "最終"],
   series: [
-    { team: "オリックス", color: getTeamColorByShort("オリックス"), ranks: [1, 1, 1, 1, 1, 1, 1] },
-    { team: "ソフトバンク", color: getTeamColorByShort("ソフトバンク"), ranks: [2, 3, 2, 2, 2, 2, 2] },
-    { team: "ロッテ", color: getTeamColorByShort("ロッテ"), ranks: [3, 2, 3, 3, 3, 3, 3] },
-    { team: "楽天", color: getTeamColorByShort("楽天"), ranks: [4, 4, 4, 4, 4, 4, 4] },
-    { team: "西武", color: getTeamColorByShort("西武"), ranks: [5, 5, 5, 5, 5, 5, 5] },
-    { team: "日本ハム", color: getTeamColorByShort("日本ハム"), ranks: [6, 6, 6, 6, 6, 6, 6] },
+    { team: "オリックス", color: getTeamColorByShort("オリックス"), ranks: [1, 1, 1, 1, 1, 1] },
+    { team: "ソフトバンク", color: getTeamColorByShort("ソフトバンク"), ranks: [2, 3, 2, 2, 2, 2] },
+    { team: "ロッテ", color: getTeamColorByShort("ロッテ"), ranks: [3, 2, 3, 3, 3, 3] },
+    { team: "楽天", color: getTeamColorByShort("楽天"), ranks: [4, 4, 4, 4, 4, 4] },
+    { team: "西武", color: getTeamColorByShort("西武"), ranks: [5, 5, 5, 5, 5, 5] },
+    { team: "日本ハム", color: getTeamColorByShort("日本ハム"), ranks: [6, 6, 6, 6, 6, 6] },
   ],
 };
 

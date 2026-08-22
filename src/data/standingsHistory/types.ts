@@ -1,7 +1,10 @@
 import type { SeasonWorld } from "@/data/seasons";
 import type { StandingEntry } from "@/data/teamStandings";
 
-/** 月末チェックポイント（4〜9月終了時 + 最終） */
+/**
+ * 保存・読取で認識する checkpoint。
+ * "09" はレガシー互換のため型として残すが、順位推移表示・登録UIでは使わない。
+ */
 export const STANDINGS_CHECKPOINTS = [
   "04",
   "05",
@@ -14,14 +17,27 @@ export const STANDINGS_CHECKPOINTS = [
 
 export type StandingsCheckpoint = (typeof STANDINGS_CHECKPOINTS)[number];
 
+/** 順位推移グラフ／登録UIの時点（04〜08 + final。09 は出さない） */
+export const STANDINGS_TREND_CHECKPOINTS = [
+  "04",
+  "05",
+  "06",
+  "07",
+  "08",
+  "final",
+] as const;
+
+export type StandingsTrendCheckpoint =
+  (typeof STANDINGS_TREND_CHECKPOINTS)[number];
+
 export const STANDINGS_CHECKPOINT_LABELS: Record<StandingsCheckpoint, string> =
   {
-    "04": "4月終了時",
-    "05": "5月終了時",
-    "06": "6月終了時",
-    "07": "7月終了時",
-    "08": "8月終了時",
-    "09": "9月終了時",
+    "04": "4月終了",
+    "05": "5月終了",
+    "06": "6月終了",
+    "07": "7月終了",
+    "08": "8月終了",
+    "09": "9月終了",
     final: "最終",
   };
 

@@ -1,6 +1,9 @@
 /**
  * 順位推移グラフ用に履歴スナップショットを系列へ変換。
  * 正式データが無い場合は呼び出し側で静的ダミーへフォールバックする。
+ *
+ * 表示地点は常に 04→05→06→07→08→final（最大6）。
+ * checkpoint=09 はグラフに出さない（DB への作成・削除もしない）。
  */
 
 import type { SeasonIdentity } from "@/data/seasons";
@@ -12,9 +15,10 @@ import {
   getStandingsHistoryCheckpoint,
 } from "./store";
 import {
-  STANDINGS_CHECKPOINTS,
   STANDINGS_CHECKPOINT_LABELS,
+  STANDINGS_TREND_CHECKPOINTS,
   type StandingsCheckpoint,
+  type StandingsTrendCheckpoint,
 } from "./types";
 
 export type StandingsTrendSeries = {
@@ -40,8 +44,9 @@ function leagueEntries(
 
 /**
  * identity の順位推移を構築。
- * - 月次は standings-history
- * - final は history があればそれを使い、無ければ Step6 team-standings を参照（二重入力回避）
+ * - 月次は standings-history（04〜08）
+ * - final は history があればそれを使い、無ければ Step6 team-standings を参照
+ * - 09 は表示しない（final の複製表示もしない）
  * - 色は teamId（なければ short）固定。出現順では変わらない。
  */
 export function buildStandingsTrendBoard(
@@ -53,6 +58,8 @@ export function buildStandingsTrendBoard(
 
   const byCheckpoint = new Map<StandingsCheckpoint, StandingEntry[]>();
   for (const h of history) {
+    // グラフ対象外の 09 は読み飛ばす（データ自体は消さない）
+    if (h.checkpoint === "09") continue;
     byCheckpoint.set(h.checkpoint, leagueEntries(h, league));
   }
 
@@ -64,7 +71,7 @@ export function buildStandingsTrendBoard(
     }
   }
 
-  const activeCheckpoints = STANDINGS_CHECKPOINTS.filter(
+  const activeCheckpoints = STANDINGS_TREND_CHECKPOINTS.filter(
     (c) => (byCheckpoint.get(c)?.length ?? 0) > 0,
   );
 
@@ -95,7 +102,7 @@ export function buildStandingsTrendBoard(
       short: team,
       team,
     }),
-    ranks: activeCheckpoints.map((c) => {
+    ranks: activeCheckpoints.map((c: StandingsTrendCheckpoint) => {
       const rows = byCheckpoint.get(c) ?? [];
       const hit = rows.find((r) => r.team === team);
       return hit?.rank ?? 6;

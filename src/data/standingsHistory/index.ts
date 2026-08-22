@@ -12,9 +12,12 @@ export type {
 
 export {
   STANDINGS_CHECKPOINTS,
+  STANDINGS_TREND_CHECKPOINTS,
   STANDINGS_CHECKPOINT_LABELS,
   isStandingsCheckpoint,
 } from "./types";
+
+export type { StandingsTrendCheckpoint } from "./types";
 
 export {
   STANDINGS_HISTORY_STORAGE_KEY,

@@ -40,7 +40,7 @@ import {
   type StandingEntry,
 } from "@/data/teamStandings";
 import {
-  STANDINGS_CHECKPOINTS,
+  STANDINGS_TREND_CHECKPOINTS,
   STANDINGS_CHECKPOINT_LABELS,
   getCheckpointStandingsForEdit,
   upsertStandingsHistory,
@@ -779,7 +779,7 @@ export function SeasonImportWorkspace() {
               }}
               className="w-full rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-[13px] text-white"
             >
-              {STANDINGS_CHECKPOINTS.map((c) => (
+              {STANDINGS_TREND_CHECKPOINTS.map((c) => (
                 <option key={c} value={c}>
                   {STANDINGS_CHECKPOINT_LABELS[c]}
                   {c === "final" ? "（最終順位ストアと同期）" : ""}
