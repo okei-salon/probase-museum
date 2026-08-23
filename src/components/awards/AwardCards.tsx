@@ -96,9 +96,9 @@ export function CompactStats({
             : "gap-x-2.5 gap-y-1",
       )}
     >
-      {stats.map((s) => (
+      {stats.map((s, i) => (
         <span
-          key={s.label}
+          key={`${s.label}-${s.value}-${i}`}
           className={cn(
             "whitespace-nowrap leading-snug",
             prominent
@@ -108,11 +108,13 @@ export function CompactStats({
                 : "text-[11px] md:text-[12px]",
           )}
         >
-          <span className="text-white/55">{s.label}</span>
+          {s.label ? (
+            <span className="text-white/55">{s.label}</span>
+          ) : null}
           <span
             className={cn(
               "tabular-nums font-medium text-white",
-              prominent ? "ml-1.5" : "ml-1",
+              s.label ? (prominent ? "ml-1.5" : "ml-1") : undefined,
             )}
           >
             {s.value}

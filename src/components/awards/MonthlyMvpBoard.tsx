@@ -1,22 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import type {
   LeagueSide,
   MonthlyMvpLeagueBoard,
   ResolvedAwardCard,
 } from "@/data/awards";
-import {
-  listSavedMonthlyMvpForSeason,
-  listSavedMonthlyMvpRecords,
-} from "@/data/import/store";
+import { subscribeImportDemoMode } from "@/data/import/demoMode";
+import { listSavedMonthlyMvpRecords } from "@/data/import/store";
 import type { SavedMonthlyMvpRecord } from "@/data/import/types";
 import { MonthlyWinnerCell } from "@/components/awards/AwardCards";
 import { LeagueTabs } from "@/components/awards/LeagueTabs";
-import { formatMonthlyAwardHistory } from "@/lib/awardHistory";
+import { formatMonthlyMvpCareerLabel } from "@/lib/awardHistory";
 import {
   allowsLayoutSampleFallback,
+  normalizeSeasonWorld,
   parseSeasonKey,
+  type SeasonWorld,
 } from "@/data/seasons";
 
 const MONTHS = [4, 5, 6, 7, 8, 9] as const;
@@ -29,9 +29,18 @@ type MonthlyMvpBoardProps = {
   pacific: MonthlyMvpLeagueBoard;
 };
 
+type MvpRole = "pitcher" | "batter";
+
+type MvpOccurrence = {
+  year: number;
+  world: SeasonWorld | null;
+  league: LeagueSide;
+  month: number;
+};
+
 function emptyMonthlyCard(
   month: number,
-  role: "pitcher" | "batter",
+  role: MvpRole,
   league: LeagueSide,
 ): ResolvedAwardCard {
   return {
@@ -46,6 +55,112 @@ function emptyMonthlyCard(
   };
 }
 
+function normalizePlayerName(name: string): string {
+  return name.replace(/\s+/g, "").trim();
+}
+
+function isRealPlayerName(name: string): boolean {
+  const n = normalizePlayerName(name);
+  return Boolean(n) && n !== "未登録" && !n.includes("登録待ち");
+}
+
+function occurrenceKey(o: MvpOccurrence, role: MvpRole): string {
+  return `${o.year}|${o.world ?? ""}|${o.league}|${o.month}|${role}`;
+}
+
+function occurrenceSortKey(o: MvpOccurrence): number {
+  const w = o.world === "BLUE" ? 0 : o.world === "RED" ? 1 : 2;
+  const lg = o.league === "central" ? 0 : 1;
+  return o.year * 10000 + o.month * 100 + w * 10 + lg;
+}
+
+/**
+ * 選手名（空白無視）を基準に、部門別の通算何回目かを返す。
+ * セ/パ・BLUE/RED・年度をまたいで通算。YEAR×WORLD×LEAGUE×MONTH×部門は重複排除。
+ * その受賞（current）を含めた回数。
+ */
+export function countMonthlyMvpCareerTimes(
+  all: SavedMonthlyMvpRecord[],
+  role: MvpRole,
+  player: { playerId: string | null; playerName: string },
+  current: MvpOccurrence,
+): number {
+  if (!isRealPlayerName(player.playerName)) return 1;
+
+  const targetName = normalizePlayerName(player.playerName);
+  const targetId = player.playerId;
+  const seen = new Set<string>();
+  const list: MvpOccurrence[] = [];
+
+  for (const r of all) {
+    const side = role === "pitcher" ? r.pitcher : r.batter;
+    if (!isRealPlayerName(side.playerName)) continue;
+
+    const sameId =
+      Boolean(targetId) &&
+      Boolean(side.playerId) &&
+      targetId === side.playerId;
+    const sameName = normalizePlayerName(side.playerName) === targetName;
+    if (!sameId && !sameName) continue;
+
+    const occ: MvpOccurrence = {
+      year: r.year,
+      world: normalizeSeasonWorld(r.world),
+      league: r.league,
+      month: r.month,
+    };
+    const key = occurrenceKey(occ, role);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    list.push(occ);
+  }
+
+  const curKey = occurrenceKey(current, role);
+  if (!seen.has(curKey)) {
+    list.push(current);
+  }
+
+  list.sort((a, b) => occurrenceSortKey(a) - occurrenceSortKey(b));
+
+  const idx = list.findIndex(
+    (o) =>
+      o.year === current.year &&
+      o.month === current.month &&
+      o.league === current.league &&
+      normalizeSeasonWorld(o.world) === normalizeSeasonWorld(current.world),
+  );
+  return idx >= 0 ? idx + 1 : list.length;
+}
+
+function formatPitcherStats(era: number, wins: number, losses: number) {
+  return [
+    { label: "防御率", value: era.toFixed(2) },
+    { label: "", value: `${wins}勝${losses}敗` },
+  ];
+}
+
+function formatBatterStats(
+  avg: number,
+  hr: number,
+  rbi: number,
+  sb: number,
+) {
+  return [
+    { label: "打率", value: avg.toFixed(3).replace(/^0/, "") },
+    { label: "", value: `${hr}本` },
+    { label: "", value: `${rbi}打点` },
+    { label: "", value: `${sb}盗` },
+  ];
+}
+
+function getMonthlyMvpSnapshot(): SavedMonthlyMvpRecord[] {
+  return listSavedMonthlyMvpRecords();
+}
+
+function getMonthlyMvpServerSnapshot(): SavedMonthlyMvpRecord[] {
+  return [];
+}
+
 export function MonthlyMvpBoard({
   year,
   seasonKey,
@@ -53,27 +168,32 @@ export function MonthlyMvpBoard({
   pacific,
 }: MonthlyMvpBoardProps) {
   const [league, setLeague] = useState<LeagueSide>("central");
-  const [saved, setSaved] = useState<SavedMonthlyMvpRecord[]>([]);
 
   const identity = useMemo(
     () => (seasonKey ? parseSeasonKey(seasonKey) : null),
     [seasonKey],
   );
   const allowSample = allowsLayoutSampleFallback(identity);
+  const currentWorld = identity?.world ?? null;
 
-  useEffect(() => {
+  const allSaved = useSyncExternalStore(
+    subscribeImportDemoMode,
+    getMonthlyMvpSnapshot,
+    getMonthlyMvpServerSnapshot,
+  );
+
+  const saved = useMemo(() => {
     if (identity) {
-      setSaved(listSavedMonthlyMvpForSeason(identity));
-      return;
+      return allSaved.filter(
+        (r) =>
+          r.year === identity.year &&
+          normalizeSeasonWorld(r.world) ===
+            normalizeSeasonWorld(identity.world),
+      );
     }
-    // seasonKey 無し: レガシー互換（その年の world 無しのみ）
     const y = Number(year);
-    setSaved(
-      listSavedMonthlyMvpRecords().filter(
-        (r) => r.year === y && r.world == null,
-      ),
-    );
-  }, [year, league, identity]);
+    return allSaved.filter((r) => r.year === y && r.world == null);
+  }, [allSaved, identity, year]);
 
   const board = useMemo(() => {
     const base = league === "central" ? central : pacific;
@@ -87,7 +207,9 @@ export function MonthlyMvpBoard({
             ? base.pitchers[i]!
             : emptyMonthlyCard(month, "pitcher", league),
           saved,
+          allSaved,
           y,
+          currentWorld,
           month,
           league,
         ),
@@ -98,13 +220,24 @@ export function MonthlyMvpBoard({
             ? base.batters[i]!
             : emptyMonthlyCard(month, "batter", league),
           saved,
+          allSaved,
           y,
+          currentWorld,
           month,
           league,
         ),
       ),
     };
-  }, [central, pacific, saved, year, league, allowSample]);
+  }, [
+    central,
+    pacific,
+    saved,
+    allSaved,
+    year,
+    league,
+    allowSample,
+    currentWorld,
+  ]);
 
   const hasAnySaved = saved.some((r) => r.league === league);
   const allEmpty =
@@ -182,60 +315,76 @@ function findSaved(
 function mergePitcher(
   fallback: ResolvedAwardCard,
   saved: SavedMonthlyMvpRecord[],
+  allSaved: SavedMonthlyMvpRecord[],
   year: number,
+  world: SeasonWorld | null,
   month: number,
   league: LeagueSide,
 ): ResolvedAwardCard {
   const rec = findSaved(saved, year, month, league);
   if (!rec) return fallback;
+
+  const times = countMonthlyMvpCareerTimes(
+    allSaved,
+    "pitcher",
+    {
+      playerId: rec.pitcher.playerId,
+      playerName: rec.pitcher.playerName,
+    },
+    { year, world, league, month },
+  );
+
   return {
     playerId: rec.pitcher.playerId ?? fallback.playerId,
     playerName: rec.pitcher.playerName,
     teamName: rec.pitcher.teamName,
-    historyLabel: formatMonthlyAwardHistory(
-      [{ year, month }],
-      { year, month },
-    ),
+    historyLabel: formatMonthlyMvpCareerLabel(times),
     month,
     role: "pitcher",
     league,
-    stats: [
-      { label: "防御率", value: rec.pitcher.era.toFixed(2) },
-      { label: "勝", value: String(rec.pitcher.wins) },
-      { label: "敗", value: String(rec.pitcher.losses) },
-    ],
+    stats: formatPitcherStats(
+      rec.pitcher.era,
+      rec.pitcher.wins,
+      rec.pitcher.losses,
+    ),
   };
 }
 
 function mergeBatter(
   fallback: ResolvedAwardCard,
   saved: SavedMonthlyMvpRecord[],
+  allSaved: SavedMonthlyMvpRecord[],
   year: number,
+  world: SeasonWorld | null,
   month: number,
   league: LeagueSide,
 ): ResolvedAwardCard {
   const rec = findSaved(saved, year, month, league);
   if (!rec) return fallback;
-  const avg = rec.batter.avg;
+
+  const times = countMonthlyMvpCareerTimes(
+    allSaved,
+    "batter",
+    {
+      playerId: rec.batter.playerId,
+      playerName: rec.batter.playerName,
+    },
+    { year, world, league, month },
+  );
+
   return {
     playerId: rec.batter.playerId ?? fallback.playerId,
     playerName: rec.batter.playerName,
     teamName: rec.batter.teamName,
-    historyLabel: formatMonthlyAwardHistory(
-      [{ year, month }],
-      { year, month },
-    ),
+    historyLabel: formatMonthlyMvpCareerLabel(times),
     month,
     role: "batter",
     league,
-    stats: [
-      {
-        label: "打率",
-        value: avg.toFixed(3).replace(/^0/, ""),
-      },
-      { label: "本塁打", value: String(rec.batter.hr) },
-      { label: "打点", value: String(rec.batter.rbi) },
-      { label: "盗塁", value: String(rec.batter.sb) },
-    ],
+    stats: formatBatterStats(
+      rec.batter.avg,
+      rec.batter.hr,
+      rec.batter.rbi,
+      rec.batter.sb,
+    ),
   };
 }

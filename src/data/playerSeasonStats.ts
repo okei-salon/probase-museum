@@ -360,14 +360,13 @@ export function formatMonthlyMvpStats(
   if (stats.kind === "batter") {
     return [
       { label: "打率", value: stats.avg.toFixed(3).replace(/^0/, "") },
-      { label: "本塁打", value: String(stats.hr) },
-      { label: "打点", value: String(stats.rbi) },
-      { label: "盗塁", value: String(stats.sb) },
+      { label: "", value: `${stats.hr}本` },
+      { label: "", value: `${stats.rbi}打点` },
+      { label: "", value: `${stats.sb}盗` },
     ];
   }
   return [
     { label: "防御率", value: stats.era.toFixed(2) },
-    { label: "勝", value: String(stats.w) },
-    { label: "敗", value: String(stats.l) },
+    { label: "", value: `${stats.w}勝${stats.l}敗` },
   ];
 }

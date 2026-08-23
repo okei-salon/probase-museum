@@ -36,7 +36,7 @@ export function formatSeasonAwardHistory(
   return `${gap}年ぶり${times}回目`;
 }
 
-/** 月間MVP用 */
+/** 月間MVP用（連続・ぶり付き） */
 export function formatMonthlyAwardHistory(
   wins: YearMonth[],
   current: YearMonth,
@@ -75,4 +75,13 @@ export function formatMonthlyAwardHistory(
   }
   const monthGap = current.month - prev.month;
   return `${monthGap}か月ぶり${times}回目`;
+}
+
+/**
+ * 月間MVP通算回数ラベル（その受賞を含めた何回目か）。
+ * 1 → 初受賞 / 2 → 2回目 / …
+ */
+export function formatMonthlyMvpCareerLabel(times: number): string {
+  if (times <= 1) return "初受賞";
+  return `${times}回目`;
 }
