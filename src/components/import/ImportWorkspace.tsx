@@ -6,6 +6,7 @@ import { DemoModeToggle } from "@/components/import/DemoModeToggle";
 import { ImportCategoryTabs } from "@/components/import/ImportCategoryTabs";
 import { InterleagueImportWorkspace } from "@/components/import/InterleagueImportWorkspace";
 import { MonthlyMvpImportPanel } from "@/components/import/MonthlyMvpImportPanel";
+import { PostseasonImportWorkspace } from "@/components/import/PostseasonImportWorkspace";
 import { SeasonImportWorkspace } from "@/components/import/SeasonImportWorkspace";
 import { SpecialRecordsImportWorkspace } from "@/components/import/SpecialRecordsImportWorkspace";
 import { ManualEntryWorkspace } from "@/components/manualEntry";
@@ -68,6 +69,7 @@ export function ImportWorkspace() {
       {category === "monthly_mvp" ? <MonthlyMvpImportPanel /> : null}
       {category === "season" ? <SeasonImportWorkspace /> : null}
       {category === "interleague" ? <InterleagueImportWorkspace /> : null}
+      {category === "postseason" ? <PostseasonImportWorkspace /> : null}
       {category === "awards" ? <AwardsImportWorkspace /> : null}
       {category === "special" ? <SpecialRecordsImportWorkspace /> : null}
 

@@ -13,6 +13,15 @@ export function series(
   winsA: number,
   winsB: number,
   winner: { name: string; id: TeamId | null },
+  extras?: Partial<
+    Pick<
+      SeriesResult,
+      | "games"
+      | "advantageTeam"
+      | "advantageTeamId"
+      | "advantageWins"
+    >
+  >,
 ): SeriesResult {
   return {
     teamA: a.name,
@@ -23,6 +32,10 @@ export function series(
     winsB,
     winner: winner.name,
     winnerId: winner.id,
+    games: extras?.games,
+    advantageTeam: extras?.advantageTeam,
+    advantageTeamId: extras?.advantageTeamId ?? null,
+    advantageWins: extras?.advantageWins,
   };
 }
 
@@ -137,6 +150,10 @@ export function placeholderMvp(
     playerName: "登録待ち",
     teamId: null,
     teamName: "登録待ち",
+    avg: null,
+    hr: null,
+    rbi: null,
+    note: null,
   };
 }
 
@@ -162,6 +179,7 @@ export function placeholderSeason(
       winsLeft: 0,
       winsRight: 0,
       gameMarks: [],
+      games: [],
       champion: "登録待ち",
       championId: null,
       mvp: placeholderMvp(y, w),

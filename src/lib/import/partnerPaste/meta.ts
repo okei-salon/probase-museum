@@ -16,6 +16,8 @@ export type PartnerTypeId =
   | "TEAM_MATCHUPS"
   | "INTERLEAGUE_STANDINGS"
   | "INTERLEAGUE_MATRIX"
+  | "CLIMAX_SERIES"
+  | "JAPAN_SERIES"
   | "TITLE"
   | "AWARD"
   | "BEST_NINE"
@@ -36,6 +38,8 @@ const KNOWN = new Set<string>([
   "TEAM_MATCHUPS",
   "INTERLEAGUE_STANDINGS",
   "INTERLEAGUE_MATRIX",
+  "CLIMAX_SERIES",
+  "JAPAN_SERIES",
   "TITLE",
   "AWARD",
   "BEST_NINE",

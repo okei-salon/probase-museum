@@ -7,6 +7,7 @@ export type ImportCategoryId =
   | "monthly_mvp"
   | "season"
   | "interleague"
+  | "postseason"
   | "awards"
   | "special";
 
@@ -36,6 +37,11 @@ export const IMPORT_CATEGORIES: ImportCategory[] = [
     id: "interleague",
     label: "交流戦",
     description: "交流戦順位・対戦表・チーム／個人成績・優勝・MVP",
+  },
+  {
+    id: "postseason",
+    label: "ポストシーズン",
+    description: "クライマックスシリーズ・日本シリーズ・MVP",
   },
   {
     id: "awards",
@@ -104,4 +110,23 @@ export const INTERLEAGUE_IMPORT_SUBS: Array<{
   { id: "team_batting", label: "交流戦チーム打撃成績" },
   { id: "team_pitching", label: "交流戦チーム投手成績" },
   { id: "player", label: "交流戦個人成績" },
+];
+
+/** ポストシーズン内サブ種別 */
+export type PostseasonImportSubId =
+  | "cs_central"
+  | "cs_central_final"
+  | "cs_pacific"
+  | "cs_pacific_final"
+  | "japan_series";
+
+export const POSTSEASON_IMPORT_SUBS: Array<{
+  id: PostseasonImportSubId;
+  label: string;
+}> = [
+  { id: "cs_central", label: "セCSファースト" },
+  { id: "cs_central_final", label: "セCSファイナル" },
+  { id: "cs_pacific", label: "パCSファースト" },
+  { id: "cs_pacific_final", label: "パCSファイナル" },
+  { id: "japan_series", label: "日本シリーズ" },
 ];

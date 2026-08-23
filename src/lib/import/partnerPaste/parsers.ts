@@ -867,6 +867,252 @@ export function parseSpecialRecordPartner(
   };
 }
 
+function resolvePostseasonTeam(token: string): {
+  name: string;
+  id: TeamId | null;
+} {
+  const short = normalizeTeamShort(token);
+  const hit =
+    npbTeams.find((t) => t.short === short) ??
+    npbTeams.find((t) => t.name === token.trim()) ??
+    npbTeams.find((t) => t.id === token.trim());
+  return {
+    name: hit?.short ?? (short || token.trim()),
+    id: (hit?.id as TeamId | undefined) ?? null,
+  };
+}
+
+function parseGameScoreLines(
+  kv: Record<string, string>,
+): Array<{ game: number; scoreA: number; scoreB: number }> {
+  const games: Array<{ game: number; scoreA: number; scoreB: number }> = [];
+  for (let i = 1; i <= 7; i++) {
+    const raw =
+      kv[`GAME${i}`] ?? kv[`G${i}`] ?? kv[`第${i}戦`] ?? kv[`GAME_${i}`];
+    if (!raw) continue;
+    const m = String(raw)
+      .trim()
+      .match(/^(\d+)\s*[-－—:]\s*(\d+)$/);
+    if (!m) continue;
+    games.push({
+      game: i,
+      scoreA: Number(m[1]),
+      scoreB: Number(m[2]),
+    });
+  }
+  return games;
+}
+
+export type PartnerClimaxSeriesResult = {
+  kind: "climax_series";
+  type: "CLIMAX_SERIES";
+  year: number;
+  world: "BLUE" | "RED" | null;
+  league: "central" | "pacific";
+  stage: "first" | "final";
+  teamA: string;
+  teamAId: TeamId | null;
+  teamB: string;
+  teamBId: TeamId | null;
+  winsA: number;
+  winsB: number;
+  winner: string;
+  winnerId: TeamId | null;
+  games: Array<{ game: number; scoreA: number; scoreB: number }>;
+  advantageTeam: string | null;
+  advantageTeamId: TeamId | null;
+  advantageWins: number;
+  message: string;
+};
+
+export function parseClimaxSeriesPartner(
+  rawText: string,
+  fallbackYear: number,
+): PartnerClimaxSeriesResult {
+  const lines = splitPartnerLines(rawText);
+  const meta = parsePartnerMeta(lines);
+  const year = meta.year ?? fallbackYear;
+  const worldRaw = (meta.kv.WORLD ?? "").toUpperCase();
+  const world =
+    worldRaw === "BLUE" || worldRaw === "RED" ? worldRaw : null;
+  const leagueToken = (meta.kv.LEAGUE ?? "").toLowerCase();
+  const league: "central" | "pacific" =
+    parseLeagueToken(meta.kv.LEAGUE ?? "") ??
+    (leagueToken.includes("p") ||
+    leagueToken.includes("パ") ||
+    leagueToken.includes("pacific")
+      ? "pacific"
+      : "central");
+  const stageRaw = (meta.kv.STAGE ?? meta.kv.ROUND ?? "first").toLowerCase();
+  const stage: "first" | "final" =
+    stageRaw.includes("final") || stageRaw.includes("ファイナル")
+      ? "final"
+      : "first";
+
+  const teamA = resolvePostseasonTeam(
+    meta.kv.TEAM_A ?? meta.kv.TEAMA ?? meta.kv.HOME ?? "",
+  );
+  const teamB = resolvePostseasonTeam(
+    meta.kv.TEAM_B ?? meta.kv.TEAMB ?? meta.kv.AWAY ?? "",
+  );
+  if (!teamA.name || !teamB.name) {
+    throw new Error("CLIMAX_SERIES: TEAM_A / TEAM_B が必要です");
+  }
+
+  const games = parseGameScoreLines(meta.kv);
+  const winsA = Number(meta.kv.WINS_A ?? meta.kv.WIN_A ?? NaN);
+  const winsB = Number(meta.kv.WINS_B ?? meta.kv.WIN_B ?? NaN);
+  const derivedWinsA = Number.isFinite(winsA)
+    ? winsA
+    : games.filter((g) => g.scoreA > g.scoreB).length;
+  const derivedWinsB = Number.isFinite(winsB)
+    ? winsB
+    : games.filter((g) => g.scoreB > g.scoreA).length;
+
+  const winnerToken = meta.kv.WINNER ?? meta.kv.ADVANCE ?? "";
+  const winnerResolved = winnerToken
+    ? resolvePostseasonTeam(winnerToken)
+    : derivedWinsA >= derivedWinsB
+      ? teamA
+      : teamB;
+
+  const advToken =
+    meta.kv.ADVANTAGE_TEAM ?? meta.kv.ADV_TEAM ?? meta.kv.ADVANTAGE ?? "";
+  const adv = advToken ? resolvePostseasonTeam(advToken) : null;
+  const advantageWins = Number(
+    meta.kv.ADVANTAGE_WINS ?? meta.kv.ADV_WINS ?? (adv ? 1 : 0),
+  );
+
+  return {
+    kind: "climax_series",
+    type: "CLIMAX_SERIES",
+    year,
+    world,
+    league,
+    stage,
+    teamA: teamA.name,
+    teamAId: teamA.id,
+    teamB: teamB.name,
+    teamBId: teamB.id,
+    winsA: derivedWinsA,
+    winsB: derivedWinsB,
+    winner: winnerResolved.name,
+    winnerId: winnerResolved.id,
+    games,
+    advantageTeam: adv?.name ?? null,
+    advantageTeamId: adv?.id ?? null,
+    advantageWins: Number.isFinite(advantageWins) ? advantageWins : 0,
+    message: `クライマックスシリーズ ${year} ${league} ${stage}: ${teamA.name} vs ${teamB.name}`,
+  };
+}
+
+export type PartnerJapanSeriesResult = {
+  kind: "japan_series";
+  type: "JAPAN_SERIES";
+  year: number;
+  world: "BLUE" | "RED" | null;
+  teamLeft: string;
+  teamLeftId: TeamId | null;
+  teamRight: string;
+  teamRightId: TeamId | null;
+  winsLeft: number;
+  winsRight: number;
+  games: Array<{ game: number; scoreA: number; scoreB: number }>;
+  champion: string;
+  championId: TeamId | null;
+  mvpName: string;
+  mvpTeam: string;
+  mvpTeamId: TeamId | null;
+  mvpAvg: string | null;
+  mvpHr: number | null;
+  mvpRbi: number | null;
+  mvpNote: string | null;
+  message: string;
+};
+
+export function parseJapanSeriesPartner(
+  rawText: string,
+  fallbackYear: number,
+): PartnerJapanSeriesResult {
+  const lines = splitPartnerLines(rawText);
+  const meta = parsePartnerMeta(lines);
+  const year = meta.year ?? fallbackYear;
+  const worldRaw = (meta.kv.WORLD ?? "").toUpperCase();
+  const world =
+    worldRaw === "BLUE" || worldRaw === "RED" ? worldRaw : null;
+
+  const teamLeft = resolvePostseasonTeam(
+    meta.kv.TEAM_CENTRAL ??
+      meta.kv.CENTRAL ??
+      meta.kv.TEAM_LEFT ??
+      meta.kv.TEAM_A ??
+      "",
+  );
+  const teamRight = resolvePostseasonTeam(
+    meta.kv.TEAM_PACIFIC ??
+      meta.kv.PACIFIC ??
+      meta.kv.TEAM_RIGHT ??
+      meta.kv.TEAM_B ??
+      "",
+  );
+  if (!teamLeft.name || !teamRight.name) {
+    throw new Error(
+      "JAPAN_SERIES: TEAM_CENTRAL（セ代表）/ TEAM_PACIFIC（パ代表）が必要です",
+    );
+  }
+
+  const games = parseGameScoreLines(meta.kv);
+  const winsLeft = Number(
+    meta.kv.WINS_CENTRAL ?? meta.kv.WINS_LEFT ?? meta.kv.WINS_A ?? NaN,
+  );
+  const winsRight = Number(
+    meta.kv.WINS_PACIFIC ?? meta.kv.WINS_RIGHT ?? meta.kv.WINS_B ?? NaN,
+  );
+  const derivedLeft = Number.isFinite(winsLeft)
+    ? winsLeft
+    : games.filter((g) => g.scoreA > g.scoreB).length;
+  const derivedRight = Number.isFinite(winsRight)
+    ? winsRight
+    : games.filter((g) => g.scoreB > g.scoreA).length;
+
+  const champToken = meta.kv.CHAMPION ?? meta.kv.WINNER ?? "";
+  const champ = champToken
+    ? resolvePostseasonTeam(champToken)
+    : derivedLeft >= derivedRight
+      ? teamLeft
+      : teamRight;
+
+  const mvpTeam = resolvePostseasonTeam(
+    meta.kv.MVP_TEAM ?? meta.kv.MVP_TEAM_NAME ?? champ.name,
+  );
+  const mvpHr = Number(meta.kv.MVP_HR ?? meta.kv.HR ?? NaN);
+  const mvpRbi = Number(meta.kv.MVP_RBI ?? meta.kv.RBI ?? NaN);
+
+  return {
+    kind: "japan_series",
+    type: "JAPAN_SERIES",
+    year,
+    world,
+    teamLeft: teamLeft.name,
+    teamLeftId: teamLeft.id,
+    teamRight: teamRight.name,
+    teamRightId: teamRight.id,
+    winsLeft: derivedLeft,
+    winsRight: derivedRight,
+    games,
+    champion: champ.name,
+    championId: champ.id,
+    mvpName: meta.kv.MVP ?? meta.kv.MVP_NAME ?? "登録待ち",
+    mvpTeam: mvpTeam.name,
+    mvpTeamId: mvpTeam.id,
+    mvpAvg: meta.kv.MVP_AVG ?? meta.kv.AVG ?? null,
+    mvpHr: Number.isFinite(mvpHr) ? mvpHr : null,
+    mvpRbi: Number.isFinite(mvpRbi) ? mvpRbi : null,
+    mvpNote: meta.kv.MVP_NOTE ?? meta.kv.NOTE ?? null,
+    message: `日本シリーズ ${year}: ${teamLeft.name} vs ${teamRight.name}`,
+  };
+}
+
 export type PartnerNonSeasonResult =
   | PartnerMonthlyMvpResult
   | PartnerStandingsResult
@@ -878,6 +1124,8 @@ export type PartnerNonSeasonResult =
   | PartnerAwardResult
   | PartnerPositionAwardResult
   | PartnerSpecialResult
+  | PartnerClimaxSeriesResult
+  | PartnerJapanSeriesResult
   | PartnerUnsupportedResult;
 
 export function parseNonSeasonPartnerPaste(
@@ -921,6 +1169,10 @@ export function parseNonSeasonPartnerPaste(
       return parsePositionAwardPartner(rawText, fallbackYear, "GOLD_GLOVE");
     case "SPECIAL_RECORD":
       return parseSpecialRecordPartner(rawText, fallbackYear);
+    case "CLIMAX_SERIES":
+      return parseClimaxSeriesPartner(rawText, fallbackYear);
+    case "JAPAN_SERIES":
+      return parseJapanSeriesPartner(rawText, fallbackYear);
     default:
       if (
         type.includes("BATTER_SEASON") ||

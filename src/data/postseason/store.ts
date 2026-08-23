@@ -16,7 +16,11 @@ import {
   hydrateLocalArrayFromCloud,
   putMuseumCollectionRecord,
 } from "@/lib/museumCloud/clientSync";
-import type { PostseasonSeason } from "./types";
+import type {
+  LeagueCsRecord,
+  PostseasonSeason,
+  SeriesResult,
+} from "./types";
 import { placeholderSeason } from "./catalog";
 
 const STORAGE_KEY = "probase-museum.postseason.v1";
@@ -46,27 +50,75 @@ export function postseasonRecordId(
   return String(y);
 }
 
+function normalizeSeries(s: SeriesResult | undefined, fallback: SeriesResult): SeriesResult {
+  if (!s) return fallback;
+  return {
+    ...fallback,
+    ...s,
+    teamAId: s.teamAId ?? fallback.teamAId,
+    teamBId: s.teamBId ?? fallback.teamBId,
+    winnerId: s.winnerId ?? fallback.winnerId,
+    games: Array.isArray(s.games) ? s.games : fallback.games,
+    advantageTeam:
+      s.advantageTeam !== undefined ? s.advantageTeam : fallback.advantageTeam,
+    advantageTeamId:
+      s.advantageTeamId !== undefined
+        ? s.advantageTeamId
+        : fallback.advantageTeamId,
+    advantageWins:
+      s.advantageWins !== undefined ? s.advantageWins : fallback.advantageWins,
+  };
+}
+
+function normalizeLeague(
+  league: LeagueCsRecord | undefined,
+  fallback: LeagueCsRecord,
+): LeagueCsRecord {
+  if (!league) return fallback;
+  return {
+    ...fallback,
+    ...league,
+    first: normalizeSeries(league.first, fallback.first),
+    final: normalizeSeries(league.final, fallback.final),
+    representativeId:
+      league.representativeId ?? fallback.representativeId,
+  };
+}
+
 function normalizeRecord(r: PostseasonSeason): PostseasonSyncRecord {
   const world = normalizeSeasonWorld(r.world);
   const year = String(r.year);
   const id = r.id || postseasonRecordId(year, world);
   const updatedAt = r.updatedAt || new Date(0).toISOString();
+  const base = placeholderSeason(year, world);
+  const japanSeries = {
+    ...base.japanSeries,
+    ...r.japanSeries,
+    year,
+    world,
+    games: Array.isArray(r.japanSeries?.games)
+      ? r.japanSeries.games
+      : base.japanSeries.games,
+    gameMarks: Array.isArray(r.japanSeries?.gameMarks)
+      ? r.japanSeries.gameMarks
+      : base.japanSeries.gameMarks,
+    mvp: {
+      ...base.japanSeries.mvp,
+      ...r.japanSeries?.mvp,
+      year,
+      world,
+    },
+  };
   return {
+    ...base,
     ...r,
     id,
     year,
     world,
     updatedAt,
-    japanSeries: {
-      ...r.japanSeries,
-      year,
-      world,
-      mvp: {
-        ...r.japanSeries.mvp,
-        year,
-        world,
-      },
-    },
+    central: normalizeLeague(r.central, base.central),
+    pacific: normalizeLeague(r.pacific, base.pacific),
+    japanSeries,
   };
 }
 
@@ -126,28 +178,38 @@ export function upsertPostseasonSeason(
   const list = readRawPostseason();
   const existing = list.find((r) => r.id === id) ?? null;
 
-  const base = placeholderSeason(year, world);
+  const base = existing ?? placeholderSeason(year, world);
   const record = normalizeRecord({
     ...base,
     ...input,
     id,
     year,
     world,
-    central: input.central,
-    pacific: input.pacific,
+    central: input.central
+      ? normalizeLeague(input.central, base.central)
+      : base.central,
+    pacific: input.pacific
+      ? normalizeLeague(input.pacific, base.pacific)
+      : base.pacific,
     japanSeries: {
       ...base.japanSeries,
       ...input.japanSeries,
       year,
       world,
+      games: Array.isArray(input.japanSeries?.games)
+        ? input.japanSeries.games
+        : base.japanSeries.games,
+      gameMarks: Array.isArray(input.japanSeries?.gameMarks)
+        ? input.japanSeries.gameMarks
+        : base.japanSeries.gameMarks,
       mvp: {
         ...base.japanSeries.mvp,
-        ...input.japanSeries.mvp,
+        ...input.japanSeries?.mvp,
         year,
         world,
       },
     },
-    source: input.source ?? "manual",
+    source: input.source ?? existing?.source ?? "manual",
     createdAt: existing?.createdAt ?? input.createdAt ?? now,
     updatedAt: now,
   });
@@ -158,6 +220,29 @@ export function upsertPostseasonSeason(
   writeRawPostseason(list);
   void putMuseumCollectionRecord(COLLECTION, toCloudPayload(record));
   return record;
+}
+
+/**
+ * local 保存 → クラウド PUT を await。失敗しても local は残す。
+ */
+export async function upsertPostseasonSeasonAsync(
+  input: Omit<PostseasonSeason, "id" | "createdAt" | "updatedAt"> & {
+    id?: string;
+    createdAt?: string;
+  },
+): Promise<{
+  record: PostseasonSeason;
+  cloud: { ok: boolean; error?: string };
+}> {
+  const record = upsertPostseasonSeason(input);
+  const cloud = await putMuseumCollectionRecord(
+    COLLECTION,
+    toCloudPayload(normalizeRecord(record)),
+  );
+  return {
+    record,
+    cloud: { ok: cloud.ok, error: cloud.error },
+  };
 }
 
 export async function hydratePostseasonFromCloud(): Promise<PostseasonSeason[]> {

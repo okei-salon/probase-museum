@@ -35,6 +35,7 @@ export type {
   JapanSeriesResult,
   LeagueCsRecord,
   PostseasonSeason,
+  SeriesGameScore,
   SeriesResult,
   TeamPostseasonCareer,
   TeamPostseasonYearRecord,
@@ -56,6 +57,7 @@ export {
   listStoredPostseasonIdentities,
   postseasonRecordId,
   upsertPostseasonSeason,
+  upsertPostseasonSeasonAsync,
 } from "./store";
 
 function resolveIdentity(

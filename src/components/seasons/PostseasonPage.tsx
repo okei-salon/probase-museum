@@ -10,10 +10,12 @@ import { cn } from "@/lib/cn";
 import type { CategoryThemeId } from "@/config/categoryThemes";
 import {
   getPostseasonView,
+  hydratePostseasonFromCloud,
   placeholderSeason,
   type JapanSeriesGameMark,
   type LeagueCsRecord,
   type PostseasonSeason,
+  type SeriesGameScore,
   type SeriesResult,
 } from "@/data/postseason";
 import { parseSeasonKey } from "@/data/seasons";
@@ -43,7 +45,15 @@ export function PostseasonPage({
 
   useEffect(() => {
     if (!identity) return;
-    setData(getPostseasonView(identity));
+    let cancelled = false;
+    void (async () => {
+      await hydratePostseasonFromCloud();
+      if (cancelled) return;
+      setData(getPostseasonView(identity));
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [identity]);
 
   const js = data.japanSeries;
@@ -68,21 +78,21 @@ export function PostseasonPage({
       />
 
       <div className="space-y-10 md:space-y-12">
-        {/* ① CS */}
         <section>
-          <SectionLabel index="01" title="クライマックスシリーズ" />
-          <div className="grid gap-4 md:grid-cols-2 md:gap-5">
-            <LeagueCsPanel path={data.central} />
-            <LeagueCsPanel path={data.pacific} />
-          </div>
+          <SectionLabel index="01" title="クライマックスシリーズ（セ・リーグ）" />
+          <LeagueCsFlow path={data.central} />
         </section>
 
-        {/* ② 日本シリーズ */}
         <section>
-          <SectionLabel index="02" title={`${titleYear} 日本シリーズ`} />
+          <SectionLabel index="02" title="クライマックスシリーズ（パ・リーグ）" />
+          <LeagueCsFlow path={data.pacific} />
+        </section>
+
+        <section>
+          <SectionLabel index="03" title={`${titleYear} 日本シリーズ`} />
           <DataPanel className="border-[color:var(--museum-accent,#d4af37)]/55 bg-black/90">
-            <div className="mx-auto max-w-xl text-center">
-              <p className="font-display text-2xl text-white md:text-3xl">
+            <div className="mx-auto max-w-2xl">
+              <p className="text-center font-display text-2xl text-white md:text-3xl">
                 <span
                   className={
                     js.champion === js.teamLeft
@@ -105,23 +115,18 @@ export function PostseasonPage({
                   {js.teamRight}
                 </span>
               </p>
+              <p className="mt-2 text-center text-[12px] text-white/55">
+                セ代表 {js.teamLeft} ／ パ代表 {js.teamRight}
+              </p>
 
-              {js.gameMarks.length > 0 ? (
-                <div
-                  className="mt-6 flex flex-wrap items-center justify-center gap-2.5"
-                  aria-label="シリーズ勝敗推移"
-                >
-                  {js.gameMarks.map((mark, i) => (
-                    <GameMark key={`${mark}-${i}`} mark={mark} index={i + 1} />
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-5 text-[13px] text-white/60">
-                  試合結果は登録待ちです
-                </p>
-              )}
+              <GameScoreList
+                games={js.games}
+                teamA={js.teamLeft}
+                teamB={js.teamRight}
+                fallbackMarks={js.gameMarks}
+              />
 
-              <div className="mx-auto mt-8 max-w-sm border-t border-[color:var(--museum-accent,#d4af37)]/35 pt-5">
+              <div className="mx-auto mt-8 max-w-sm border-t border-[color:var(--museum-accent,#d4af37)]/35 pt-5 text-center">
                 <p className="text-[11px] tracking-[0.18em] text-white/70">
                   日本一
                 </p>
@@ -130,16 +135,15 @@ export function PostseasonPage({
                 </p>
               </div>
 
-              <div className="mx-auto mt-7 max-w-sm border-t border-white/10 pt-5">
+              <div className="mx-auto mt-7 max-w-md border-t border-white/10 pt-5 text-center">
                 <p className="text-[11px] tracking-[0.16em] text-white/70">
                   日本シリーズMVP
                 </p>
                 <p className="mt-2 font-display text-xl text-[color:var(--museum-accent,#d4af37)] md:text-2xl">
                   {js.mvp.playerName}
                 </p>
-                <p className="mt-1 text-[13px] text-white/80">
-                  {js.mvp.teamName}
-                </p>
+                <p className="mt-1 text-[13px] text-white/80">{js.mvp.teamName}</p>
+                <MvpStats mvp={js.mvp} />
               </div>
             </div>
           </DataPanel>
@@ -162,66 +166,145 @@ function SectionLabel({ index, title }: { index: string; title: string }) {
   );
 }
 
-function LeagueCsPanel({ path }: { path: LeagueCsRecord }) {
+function LeagueCsFlow({ path }: { path: LeagueCsRecord }) {
   return (
-    <DataPanel>
-      <p className="mb-4 text-[12px] tracking-[0.16em] text-[color:var(--museum-accent,#d4af37)]">
-        {path.leagueLabel}
-      </p>
-      <div className="space-y-4">
-        <SeriesCard stage="CS 1st" series={path.first} />
-        <SeriesCard stage="CS Final" series={path.final} />
+    <div className="space-y-4">
+      <SeriesCard stage="ファーストステージ" series={path.first} />
+      <div className="flex justify-center text-[11px] tracking-[0.16em] text-white/45">
+        ↓
       </div>
-      <p className="mt-4 border-t border-white/10 pt-3 text-[12px] text-white/70">
+      <SeriesCard stage="ファイナルステージ" series={path.final} showAdvantage />
+      <p className="border-t border-white/10 pt-3 text-[12px] text-white/70">
         日本シリーズ進出{" "}
         <span className="font-medium text-[color:var(--museum-accent,#d4af37)]">
           {path.representative}
         </span>
       </p>
-    </DataPanel>
+    </div>
   );
 }
 
 function SeriesCard({
   stage,
   series,
+  showAdvantage = false,
 }: {
   stage: string;
   series: SeriesResult;
+  showAdvantage?: boolean;
 }) {
   return (
-    <article className="rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-3">
-      <p className="text-[11px] tracking-[0.14em] text-white/75">{stage}</p>
-      <p className="mt-2 text-[15px] text-white md:text-[16px]">
-        <span
-          className={
-            series.winner === series.teamA
-              ? "font-semibold text-[color:var(--museum-accent,#d4af37)]"
-              : undefined
-          }
-        >
-          {series.teamA}
-        </span>
-        <span className="mx-2 text-[13px] text-white/65">
-          {series.winsA}勝{series.winsB}敗
-        </span>
-        <span
-          className={
-            series.winner === series.teamB
-              ? "font-semibold text-[color:var(--museum-accent,#d4af37)]"
-              : undefined
-          }
-        >
-          {series.teamB}
-        </span>
-      </p>
-      <p className="mt-1.5 text-[12px] text-white/70">
-        勝者{" "}
-        <span className="font-medium text-[color:var(--museum-accent,#d4af37)]">
-          {series.winner}
-        </span>
-      </p>
-    </article>
+    <DataPanel>
+      <article>
+        <p className="text-[11px] tracking-[0.14em] text-[color:var(--museum-accent,#d4af37)]">
+          {stage}
+        </p>
+        <p className="mt-2 text-[15px] text-white md:text-[16px]">
+          <span
+            className={
+              series.winner === series.teamA
+                ? "font-semibold text-[color:var(--museum-accent,#d4af37)]"
+                : undefined
+            }
+          >
+            {series.teamA}
+          </span>
+          <span className="mx-2 text-[13px] text-white/65">
+            {series.winsA}勝{series.winsB}敗
+          </span>
+          <span
+            className={
+              series.winner === series.teamB
+                ? "font-semibold text-[color:var(--museum-accent,#d4af37)]"
+                : undefined
+            }
+          >
+            {series.teamB}
+          </span>
+        </p>
+        {showAdvantage &&
+        series.advantageTeam &&
+        (series.advantageWins ?? 0) > 0 ? (
+          <p className="mt-2 text-[12px] text-white/70">
+            アドバンテージ{" "}
+            <span className="text-[color:var(--museum-accent,#d4af37)]">
+              {series.advantageTeam}
+            </span>{" "}
+            +{series.advantageWins}勝
+          </p>
+        ) : null}
+        <GameScoreList
+          games={series.games}
+          teamA={series.teamA}
+          teamB={series.teamB}
+        />
+        <p className="mt-3 text-[12px] text-white/70">
+          勝ち抜け{" "}
+          <span className="font-medium text-[color:var(--museum-accent,#d4af37)]">
+            {series.winner}
+          </span>
+        </p>
+      </article>
+    </DataPanel>
+  );
+}
+
+function GameScoreList({
+  games,
+  teamA,
+  teamB,
+  fallbackMarks,
+}: {
+  games?: SeriesGameScore[];
+  teamA: string;
+  teamB: string;
+  fallbackMarks?: JapanSeriesGameMark[];
+}) {
+  if (games && games.length > 0) {
+    return (
+      <ul className="mt-4 space-y-1.5 text-[13px] text-white/85">
+        {games.map((g) => (
+          <li key={g.game} className="flex flex-wrap items-center gap-x-2">
+            <span className="w-14 text-white/55">第{g.game}戦</span>
+            <span>
+              {teamA} {g.scoreA} - {g.scoreB} {teamB}
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  if (fallbackMarks && fallbackMarks.length > 0) {
+    return (
+      <div
+        className="mt-5 flex flex-wrap items-center justify-center gap-2.5"
+        aria-label="シリーズ勝敗推移"
+      >
+        {fallbackMarks.map((mark, i) => (
+          <GameMark key={`${mark}-${i}`} mark={mark} index={i + 1} />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <p className="mt-4 text-[13px] text-white/55">試合スコアは登録待ちです</p>
+  );
+}
+
+function MvpStats({
+  mvp,
+}: {
+  mvp: PostseasonSeason["japanSeries"]["mvp"];
+}) {
+  const parts: string[] = [];
+  if (mvp.avg) parts.push(`打率 ${mvp.avg}`);
+  if (mvp.hr != null && Number.isFinite(mvp.hr)) parts.push(`本塁打 ${mvp.hr}`);
+  if (mvp.rbi != null && Number.isFinite(mvp.rbi)) parts.push(`打点 ${mvp.rbi}`);
+  return (
+    <div className="mt-2 space-y-1 text-[12px] text-white/70">
+      {parts.length > 0 ? <p>{parts.join(" ／ ")}</p> : null}
+      {mvp.note ? <p className="whitespace-pre-wrap">{mvp.note}</p> : null}
+    </div>
   );
 }
 
