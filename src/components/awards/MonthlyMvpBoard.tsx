@@ -133,9 +133,12 @@ export function countMonthlyMvpCareerTimes(
 }
 
 function formatPitcherStats(era: number, wins: number, losses: number) {
+  const eraText = Number.isFinite(era) ? era.toFixed(2) : "—";
+  const w = Number.isFinite(wins) ? wins : 0;
+  const l = Number.isFinite(losses) ? losses : 0;
   return [
-    { label: "防御率", value: era.toFixed(2) },
-    { label: "", value: `${wins}勝${losses}敗` },
+    { label: "防御率", value: eraText },
+    { label: "", value: `${w}勝${l}敗` },
   ];
 }
 
@@ -145,20 +148,42 @@ function formatBatterStats(
   rbi: number,
   sb: number,
 ) {
+  const avgText = Number.isFinite(avg)
+    ? avg.toFixed(3).replace(/^0/, "")
+    : "—";
+  const h = Number.isFinite(hr) ? hr : 0;
+  const r = Number.isFinite(rbi) ? rbi : 0;
+  const s = Number.isFinite(sb) ? sb : 0;
   return [
-    { label: "打率", value: avg.toFixed(3).replace(/^0/, "") },
-    { label: "", value: `${hr}本` },
-    { label: "", value: `${rbi}打点` },
-    { label: "", value: `${sb}盗` },
+    { label: "打率", value: avgText },
+    { label: "", value: `${h}本` },
+    { label: "", value: `${r}打点` },
+    { label: "", value: `${s}盗` },
   ];
 }
 
+/**
+ * useSyncExternalStore の getSnapshot は Object.is で比較されるため、
+ * 毎回新しい配列を返すと無限再レンダーになる。キャッシュして参照を安定させる。
+ */
+const EMPTY_MONTHLY_MVP: SavedMonthlyMvpRecord[] = [];
+let monthlyMvpSnapshotCache: SavedMonthlyMvpRecord[] | null = null;
+
 function getMonthlyMvpSnapshot(): SavedMonthlyMvpRecord[] {
-  return listSavedMonthlyMvpRecords();
+  if (monthlyMvpSnapshotCache) return monthlyMvpSnapshotCache;
+  monthlyMvpSnapshotCache = listSavedMonthlyMvpRecords();
+  return monthlyMvpSnapshotCache;
 }
 
 function getMonthlyMvpServerSnapshot(): SavedMonthlyMvpRecord[] {
-  return [];
+  return EMPTY_MONTHLY_MVP;
+}
+
+function subscribeMonthlyMvpStore(onStoreChange: () => void): () => void {
+  return subscribeImportDemoMode(() => {
+    monthlyMvpSnapshotCache = null;
+    onStoreChange();
+  });
 }
 
 export function MonthlyMvpBoard({
@@ -177,7 +202,7 @@ export function MonthlyMvpBoard({
   const currentWorld = identity?.world ?? null;
 
   const allSaved = useSyncExternalStore(
-    subscribeImportDemoMode,
+    subscribeMonthlyMvpStore,
     getMonthlyMvpSnapshot,
     getMonthlyMvpServerSnapshot,
   );
