@@ -36,7 +36,8 @@ export type PartnerMonthlyMvpResult = {
   kind: "monthly_mvp";
   type: "MONTHLY_MVP";
   year: number;
-  month: number;
+  world: "BLUE" | "RED" | null;
+  /** 展開された YEAR×WORLD×LEAGUE×MONTH ドラフト（複数可） */
   drafts: MonthlyMvpImportDraft[];
   message: string;
 };
@@ -174,38 +175,103 @@ function teamIdOf(short: string): TeamId | undefined {
   return npbTeams.find((t) => t.short === normalizeTeamShort(short))?.id;
 }
 
-function buildMvpSide(
+function parsePartnerNumber(raw: string | undefined): number | null {
+  if (raw == null || !String(raw).trim()) return null;
+  const t = String(raw).trim().replace(/^\./, "0.");
+  const n = Number(t.replace(/,/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+type MvpMonthBucket = {
+  month: number | null;
+  league: LeagueSide | null;
+  pitcherName: string;
+  pitcherTeam: string;
+  pitcherEra: string;
+  pitcherWins: string;
+  pitcherLosses: string;
+  batterName: string;
+  batterTeam: string;
+  batterAvg: string;
+  batterHr: string;
+  batterRbi: string;
+  batterSb: string;
+};
+
+function emptyMvpBucket(
+  month: number | null,
+  league: LeagueSide | null,
+): MvpMonthBucket {
+  return {
+    month,
+    league,
+    pitcherName: "",
+    pitcherTeam: "",
+    pitcherEra: "",
+    pitcherWins: "",
+    pitcherLosses: "",
+    batterName: "",
+    batterTeam: "",
+    batterAvg: "",
+    batterHr: "",
+    batterRbi: "",
+    batterSb: "",
+  };
+}
+
+function bucketHasPlayerData(b: MvpMonthBucket): boolean {
+  return Boolean(b.pitcherName.trim() || b.batterName.trim());
+}
+
+function buildMvpDraftFromBucket(
   year: number,
-  month: number,
-  league: LeagueSide,
-  batterRaw: string,
-  pitcherRaw: string,
+  world: "BLUE" | "RED" | null,
+  bucket: MvpMonthBucket,
 ): MonthlyMvpImportDraft {
-  const draft = emptyMonthlyMvpDraft();
+  const month = bucket.month;
+  if (month == null || month < 4 || month > 9) {
+    throw new Error("MONTH=4〜9 を指定してください");
+  }
+  const league = bucket.league ?? "central";
+
+  let pitcherName = bucket.pitcherName.trim();
+  let pitcherTeam = normalizeTeamShort(bucket.pitcherTeam);
+  let batterName = bucket.batterName.trim();
+  let batterTeam = normalizeTeamShort(bucket.batterTeam);
+
+  // 旧形式: BATTER=氏名|球団 / PITCHER=氏名|球団
+  if (pitcherName.includes("|") && !pitcherTeam) {
+    const p = parseNameTeam(pitcherName);
+    pitcherName = p.name;
+    pitcherTeam = normalizeTeamShort(p.teamShort);
+  }
+  if (batterName.includes("|") && !batterTeam) {
+    const b = parseNameTeam(batterName);
+    batterName = b.name;
+    batterTeam = normalizeTeamShort(b.teamShort);
+  }
+
+  if (!pitcherName || !batterName) {
+    throw new Error(
+      `${month}月 ${league === "central" ? "セ" : "パ"}: PITCHER / BATTER が必要です`,
+    );
+  }
+
+  const draft = emptyMonthlyMvpDraft(year, month);
   draft.year = year;
+  draft.world = world;
   draft.month = month;
   draft.league = league;
   draft.rawText = `partner MONTHLY_MVP ${year}/${month} ${league}`;
   draft.confidence = "high";
 
-  const b = parseNameTeam(batterRaw);
-  const p = parseNameTeam(pitcherRaw);
-
-  draft.batter.gameDisplayName = b.name;
-  draft.batter.teamName = normalizeTeamShort(b.teamShort);
-  const br = resolveImportPlayer({
-    gameDisplayName: b.name,
-    team: draft.batter.teamName,
-    year,
-    role: "batter",
-  });
-  draft.batter.playerRef = br.playerRef;
-  draft.batter.resolvedName = br.displayName;
-
-  draft.pitcher.gameDisplayName = p.name;
-  draft.pitcher.teamName = normalizeTeamShort(p.teamShort);
+  draft.pitcher.gameDisplayName = pitcherName;
+  draft.pitcher.teamName = pitcherTeam || draft.pitcher.teamName;
+  draft.pitcher.era = parsePartnerNumber(bucket.pitcherEra);
+  draft.pitcher.wins = parsePartnerNumber(bucket.pitcherWins);
+  draft.pitcher.losses = parsePartnerNumber(bucket.pitcherLosses);
   const pr = resolveImportPlayer({
-    gameDisplayName: p.name,
+    gameDisplayName: pitcherName,
     team: draft.pitcher.teamName,
     year,
     role: "pitcher",
@@ -213,9 +279,29 @@ function buildMvpSide(
   draft.pitcher.playerRef = pr.playerRef;
   draft.pitcher.resolvedName = pr.displayName;
 
+  draft.batter.gameDisplayName = batterName;
+  draft.batter.teamName = batterTeam || draft.batter.teamName;
+  draft.batter.avg = parsePartnerNumber(bucket.batterAvg);
+  draft.batter.hr = parsePartnerNumber(bucket.batterHr);
+  draft.batter.rbi = parsePartnerNumber(bucket.batterRbi);
+  draft.batter.sb = parsePartnerNumber(bucket.batterSb);
+  const br = resolveImportPlayer({
+    gameDisplayName: batterName,
+    team: draft.batter.teamName,
+    year,
+    role: "batter",
+  });
+  draft.batter.playerRef = br.playerRef;
+  draft.batter.resolvedName = br.displayName;
+
   return draft;
 }
 
+/**
+ * TYPE=MONTHLY_MVP
+ * - 新形式: MONTH= ブロック + PITCHER_TEAM / BATTER_AVG 等（複数月・セパ一括可）
+ * - 旧形式: 単月 + LEAGUE=CL/PL + BATTER=氏名|球団
+ */
 export function parseMonthlyMvpPartner(
   rawText: string,
   fallbackYear: number,
@@ -223,66 +309,104 @@ export function parseMonthlyMvpPartner(
   const lines = splitPartnerLines(rawText);
   const meta = parsePartnerMeta(lines);
   const year = meta.year ?? fallbackYear;
-  const month = meta.month;
-  if (month == null || month < 4 || month > 9) {
-    throw new Error("MONTH=4〜9 を指定してください");
-  }
+  const worldRaw = (meta.kv.WORLD ?? "").toUpperCase();
+  const world =
+    worldRaw === "BLUE" || worldRaw === "RED" ? worldRaw : null;
 
-  // ブロック分割: LEAGUE= 行で区切る
-  const blocks: Array<{
-    league: LeagueSide;
-    batter?: string;
-    pitcher?: string;
-  }> = [];
-  let current: {
-    league: LeagueSide;
-    batter?: string;
-    pitcher?: string;
-  } | null = null;
+  const drafts: MonthlyMvpImportDraft[] = [];
+  let bucket = emptyMvpBucket(meta.month, meta.league);
+
+  const flush = () => {
+    if (!bucketHasPlayerData(bucket)) return;
+    drafts.push(buildMvpDraftFromBucket(year, world, bucket));
+  };
 
   for (const line of lines) {
-    const mLeague = line.match(/^LEAGUE\s*=\s*(.+)$/i);
-    if (mLeague) {
-      const league = parseLeagueToken(mLeague[1]!);
+    const mKey = line.match(/^([A-Z0-9_]+)\s*=\s*(.*)$/i);
+    if (!mKey) continue;
+    const key = mKey[1]!.toUpperCase();
+    const val = mKey[2]!.trim();
+
+    if (key === "YEAR" || key === "TYPE" || key === "WORLD") continue;
+
+    if (key === "MONTH") {
+      const n = Number(val);
+      if (!Number.isFinite(n)) continue;
+      if (bucketHasPlayerData(bucket)) flush();
+      bucket = emptyMvpBucket(n, bucket.league ?? meta.league);
+      continue;
+    }
+
+    if (key === "LEAGUE") {
+      const league = parseLeagueToken(val);
       if (!league) continue;
-      if (current) blocks.push(current);
-      current = { league };
+      if (bucketHasPlayerData(bucket)) flush();
+      bucket = emptyMvpBucket(bucket.month ?? meta.month, league);
       continue;
     }
-    const mBatter = line.match(/^BATTER\s*=\s*(.+)$/i);
-    if (mBatter && current) {
-      current.batter = mBatter[1]!.trim();
+
+    if (key === "PITCHER") {
+      bucket.pitcherName = val;
       continue;
     }
-    const mPitcher = line.match(/^PITCHER\s*=\s*(.+)$/i);
-    if (mPitcher && current) {
-      current.pitcher = mPitcher[1]!.trim();
+    if (key === "PITCHER_TEAM") {
+      bucket.pitcherTeam = val;
+      continue;
+    }
+    if (key === "PITCHER_ERA") {
+      bucket.pitcherEra = val;
+      continue;
+    }
+    if (key === "PITCHER_WINS") {
+      bucket.pitcherWins = val;
+      continue;
+    }
+    if (key === "PITCHER_LOSSES") {
+      bucket.pitcherLosses = val;
+      continue;
+    }
+    if (key === "BATTER") {
+      bucket.batterName = val;
+      continue;
+    }
+    if (key === "BATTER_TEAM") {
+      bucket.batterTeam = val;
+      continue;
+    }
+    if (key === "BATTER_AVG") {
+      bucket.batterAvg = val;
+      continue;
+    }
+    if (key === "BATTER_HR") {
+      bucket.batterHr = val;
+      continue;
+    }
+    if (key === "BATTER_RBI") {
+      bucket.batterRbi = val;
+      continue;
+    }
+    if (key === "BATTER_SB") {
+      bucket.batterSb = val;
       continue;
     }
   }
-  if (current) blocks.push(current);
+  flush();
 
-  if (blocks.length === 0) {
-    throw new Error("LEAGUE=CL / LEAGUE=PL ブロックが見つかりません");
+  if (drafts.length === 0) {
+    throw new Error(
+      "MONTHLY_MVP: MONTH=4〜9 と PITCHER / BATTER（必要なら LEAGUE=）を指定してください",
+    );
   }
 
-  const drafts = blocks.map((b) =>
-    buildMvpSide(
-      year,
-      month,
-      b.league,
-      b.batter ?? "",
-      b.pitcher ?? "",
-    ),
-  );
-
+  const leagues = new Set(drafts.map((d) => d.league)).size;
+  const months = new Set(drafts.map((d) => d.month)).size;
   return {
     kind: "monthly_mvp",
     type: "MONTHLY_MVP",
     year,
-    month,
+    world,
     drafts,
-    message: `月間MVP ${year}年${month}月: ${drafts.length}リーグ分を確認画面へ展開しました（未登録）`,
+    message: `月間MVP ${year}${world ? ` ${world}` : ""}: ${drafts.length}件（${months}ヶ月 × 最大${leagues}リーグ）を確認画面へ展開しました（未登録）`,
   };
 }
 

@@ -107,6 +107,24 @@ export function upsertSavedMonthlyMvpRecord(
   return next;
 }
 
+/**
+ * local upsert → クラウド PUT を await。失敗しても local は残す。
+ * YEAR×WORLD×LEAGUE×MONTH の該当行のみ置換（他月・他WORLDは消さない）。
+ */
+export async function upsertSavedMonthlyMvpRecordAsync(
+  record: SavedMonthlyMvpRecord,
+): Promise<{
+  record: SavedMonthlyMvpRecord;
+  cloud: { ok: boolean; error?: string };
+}> {
+  const saved = upsertSavedMonthlyMvpRecord(record);
+  const cloud = await putMuseumCollectionRecord(COLLECTION, saved);
+  return {
+    record: saved,
+    cloud: { ok: cloud.ok, error: cloud.error },
+  };
+}
+
 export async function hydrateMonthlyMvpFromCloud(): Promise<
   SavedMonthlyMvpRecord[]
 > {
