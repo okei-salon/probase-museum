@@ -45,8 +45,10 @@ function leagueEntries(
 /**
  * identity の順位推移を構築。
  * - 月次は standings-history（04〜08）
- * - final は history があればそれを使い、無ければ Step6 team-standings を参照
- * - 09 は表示しない（final の複製表示もしない）
+ * - final（「最終」地点）は team_standings を正本とする
+ *   （history の final が古くても表示は正式最終順位に合わせる）
+ * - team_standings が無い場合のみ history final を使う
+ * - 09 は表示しない
  * - 色は teamId（なければ short）固定。出現順では変わらない。
  */
 export function buildStandingsTrendBoard(
@@ -63,12 +65,12 @@ export function buildStandingsTrendBoard(
     byCheckpoint.set(h.checkpoint, leagueEntries(h, league));
   }
 
-  // final: history 優先、なければ最終順位ストア
-  if (!byCheckpoint.has("final") || (byCheckpoint.get("final")?.length ?? 0) === 0) {
-    const fromFinal = leagueEntries(finalFromStandings, league);
-    if (fromFinal.length > 0) {
-      byCheckpoint.set("final", fromFinal);
-    }
+  // final: 正式最終順位（team_standings）を常に優先。無いときだけ history final
+  const fromOfficialFinal = leagueEntries(finalFromStandings, league);
+  if (fromOfficialFinal.length > 0) {
+    byCheckpoint.set("final", fromOfficialFinal);
+  } else if ((byCheckpoint.get("final")?.length ?? 0) === 0) {
+    // history にも無ければ final 地点は出さない
   }
 
   const activeCheckpoints = STANDINGS_TREND_CHECKPOINTS.filter(
@@ -112,11 +114,20 @@ export function buildStandingsTrendBoard(
   return { months, series, official: true };
 }
 
-/** 入力UI用: 指定時点の既存データを取得（final は最終順位ストアへフォールバック） */
+/**
+ * 入力UI用: 指定時点の既存データを取得。
+ * final は team_standings を正本（history final より優先）。
+ */
 export function getCheckpointStandingsForEdit(
   identity: SeasonIdentity,
   checkpoint: StandingsCheckpoint,
 ): { central: StandingEntry[]; pacific: StandingEntry[] } | null {
+  if (checkpoint === "final") {
+    const final = getStandingsForSeason(identity);
+    if (final && (final.central.length || final.pacific.length)) {
+      return { central: final.central, pacific: final.pacific };
+    }
+  }
   const hist = getStandingsHistoryCheckpoint(
     identity.year,
     checkpoint,
@@ -124,12 +135,6 @@ export function getCheckpointStandingsForEdit(
   );
   if (hist && (hist.central.length || hist.pacific.length)) {
     return { central: hist.central, pacific: hist.pacific };
-  }
-  if (checkpoint === "final") {
-    const final = getStandingsForSeason(identity);
-    if (final && (final.central.length || final.pacific.length)) {
-      return { central: final.central, pacific: final.pacific };
-    }
   }
   return null;
 }
