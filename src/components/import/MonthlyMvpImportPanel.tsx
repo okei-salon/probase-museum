@@ -11,6 +11,7 @@ import {
 } from "@/components/import/ImportModeTabs";
 import { MonthlyMvpReview } from "@/components/import/MonthlyMvpReview";
 import { PartnerPastePanel } from "@/components/import/PartnerPastePanel";
+import { PlayerNameAutocomplete } from "@/components/manualEntry/PlayerNameAutocomplete";
 import {
   appendImportHistory,
   getSavedMonthlyMvpRecord,
@@ -47,6 +48,8 @@ import {
 } from "@/lib/import/parseMonthlyMvp";
 import { emptyPipelineDebug } from "@/lib/import/pipelineDebug";
 import { parseMonthlyMvpPartner } from "@/lib/import/partnerPaste";
+import { resolveImportPlayer } from "@/lib/import/resolveImportPlayer";
+import type { PlayerSearchHit } from "@/lib/manualEntry/searchPlayers";
 import { cn } from "@/lib/cn";
 
 /** 月間MVP：画像取込 ＋ 相棒データ貼り付け（複数月・セパ一括） */
@@ -222,6 +225,91 @@ export function MonthlyMvpImportPanel() {
       setPartnerDrafts([]);
       setPartnerError(e instanceof Error ? e.message : "解析に失敗しました");
     }
+  }
+
+  function patchPartnerPlayerName(
+    index: number,
+    role: "pitcher" | "batter",
+    name: string,
+    hit?: PlayerSearchHit | null,
+  ) {
+    setPartnerDrafts((prev) =>
+      prev.map((d, i) => {
+        if (i !== index) return d;
+        const year = normalizeImportYear(d.year);
+        const world = normalizeSeasonWorld(d.world);
+
+        if (hit) {
+          const formal = hit.player.fullName;
+          const teamFromHit =
+            hit.teamShort !== "—" ? hit.teamShort : undefined;
+          if (role === "pitcher") {
+            return {
+              ...d,
+              pitcher: {
+                ...d.pitcher,
+                gameDisplayName: formal,
+                resolvedName: formal,
+                playerRef: {
+                  status: "resolved" as const,
+                  playerId: hit.player.playerId,
+                },
+                teamName: teamFromHit || d.pitcher.teamName,
+              },
+            };
+          }
+          return {
+            ...d,
+            batter: {
+              ...d.batter,
+              gameDisplayName: formal,
+              resolvedName: formal,
+              playerRef: {
+                status: "resolved" as const,
+                playerId: hit.player.playerId,
+              },
+              teamName: teamFromHit || d.batter.teamName,
+            },
+          };
+        }
+
+        if (role === "pitcher") {
+          const resolved = resolveImportPlayer({
+            gameDisplayName: name,
+            team: d.pitcher.teamName,
+            year,
+            role: "pitcher",
+            world,
+          });
+          return {
+            ...d,
+            pitcher: {
+              ...d.pitcher,
+              gameDisplayName: name,
+              resolvedName: name,
+              playerRef: resolved.playerRef,
+            },
+          };
+        }
+
+        const resolved = resolveImportPlayer({
+          gameDisplayName: name,
+          team: d.batter.teamName,
+          year,
+          role: "batter",
+          world,
+        });
+        return {
+          ...d,
+          batter: {
+            ...d.batter,
+            gameDisplayName: name,
+            resolvedName: name,
+            playerRef: resolved.playerRef,
+          },
+        };
+      }),
+    );
   }
 
   function validatePartnerDraft(d: MonthlyMvpImportDraft): string | null {
@@ -477,8 +565,26 @@ export function MonthlyMvpImportPanel() {
                           {d.league === "central" ? "セ" : "パ"}
                         </td>
                         <td className="px-2 py-1.5">{d.month}</td>
-                        <td className="px-2 py-1.5">
-                          {d.pitcher.resolvedName || d.pitcher.gameDisplayName}
+                        <td className="px-2 py-1.5 align-top">
+                          <PlayerNameAutocomplete
+                            mode="freeText"
+                            compact
+                            hideLabel
+                            year={normalizeImportYear(d.year)}
+                            value={d.pitcher.gameDisplayName}
+                            onQueryChange={(q) =>
+                              patchPartnerPlayerName(i, "pitcher", q)
+                            }
+                            onSelect={(hit) =>
+                              patchPartnerPlayerName(
+                                i,
+                                "pitcher",
+                                hit.player.fullName,
+                                hit,
+                              )
+                            }
+                            placeholder="投手名"
+                          />
                         </td>
                         <td className="px-2 py-1.5">{d.pitcher.teamName}</td>
                         <td className="px-2 py-1.5 tabular-nums">
@@ -490,8 +596,26 @@ export function MonthlyMvpImportPanel() {
                         <td className="px-2 py-1.5 tabular-nums">
                           {d.pitcher.losses ?? "—"}
                         </td>
-                        <td className="px-2 py-1.5">
-                          {d.batter.resolvedName || d.batter.gameDisplayName}
+                        <td className="px-2 py-1.5 align-top">
+                          <PlayerNameAutocomplete
+                            mode="freeText"
+                            compact
+                            hideLabel
+                            year={normalizeImportYear(d.year)}
+                            value={d.batter.gameDisplayName}
+                            onQueryChange={(q) =>
+                              patchPartnerPlayerName(i, "batter", q)
+                            }
+                            onSelect={(hit) =>
+                              patchPartnerPlayerName(
+                                i,
+                                "batter",
+                                hit.player.fullName,
+                                hit,
+                              )
+                            }
+                            placeholder="野手名"
+                          />
                         </td>
                         <td className="px-2 py-1.5">{d.batter.teamName}</td>
                         <td className="px-2 py-1.5 tabular-nums">

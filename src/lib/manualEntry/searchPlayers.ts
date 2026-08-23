@@ -18,6 +18,19 @@ export type PlayerSearchHit = {
   teamShort: string;
 };
 
+/**
+ * 検索時のみ異体字を同一視（保存名は変換しない）。
+ * 崎/﨑・高/髙 など主要ペア。
+ */
+export function foldKanjiVariantsForSearch(input: string): string {
+  return input
+    .replace(/﨑/g, "崎")
+    .replace(/髙/g, "高")
+    .replace(/濵/g, "浜")
+    .replace(/邉/g, "辺")
+    .replace(/齋/g, "斎");
+}
+
 function shortTeamName(name: string | undefined | null): string {
   if (!name) return "—";
   const map: Record<string, string> = {
@@ -51,13 +64,13 @@ function affiliationForYear(
 }
 
 function matchesKanji(query: string, player: PlayerMaster): boolean {
-  const q = normalizePlayerToken(query);
+  const q = foldKanjiVariantsForSearch(normalizePlayerToken(query));
   if (!q) return false;
   const targets = [
     player.fullName,
     player.gameDisplayName,
     ...player.aliases,
-  ].map(normalizePlayerToken);
+  ].map((t) => foldKanjiVariantsForSearch(normalizePlayerToken(t)));
   return targets.some((t) => t.includes(q) || q.includes(t));
 }
 
@@ -69,6 +82,7 @@ function isKanaQuery(query: string): boolean {
 /**
  * 選手マスターから部分一致候補を返す。
  * 漢字・かな（主要名字辞書）に対応。同姓は「氏名＋球団」で区別。
+ * 検索時のみ 崎/﨑・高/髙 等を同一視。正式名はそのまま返す。
  */
 export function searchPlayerMasterCandidates(
   query: string,
@@ -83,28 +97,42 @@ export function searchPlayerMasterCandidates(
 
   if (isKanaQuery(q)) {
     const surnames = surnamesFromReading(q);
-    if (surnames.length === 0) return [];
-    matched = masters.filter((p) =>
-      surnames.some(
-        (s) =>
-          p.gameDisplayName === s ||
-          p.fullName.startsWith(s) ||
-          p.aliases.some((a) => a.includes(s)),
-      ),
-    );
+    if (surnames.length > 0) {
+      matched = masters.filter((p) =>
+        surnames.some((s) => {
+          const folded = foldKanjiVariantsForSearch(s);
+          return (
+            foldKanjiVariantsForSearch(p.gameDisplayName) === folded ||
+            foldKanjiVariantsForSearch(p.fullName).startsWith(folded) ||
+            p.aliases.some((a) =>
+              foldKanjiVariantsForSearch(a).includes(folded),
+            )
+          );
+        }),
+      );
+    }
+    // 名字辞書に無いカタカナ（レイ等）は氏名部分一致へフォールバック
+    if (matched.length === 0) {
+      matched = masters.filter((p) => matchesKanji(q, p));
+    }
   } else {
     matched = masters.filter((p) => matchesKanji(q, p));
   }
 
-  // 名字完全一致を優先、次いでフルネーム前方一致
-  const qNorm = normalizePlayerToken(q);
+  // 該当年所属を優先、名字完全一致 → フルネーム前方一致
+  const qNorm = foldKanjiVariantsForSearch(normalizePlayerToken(q));
   matched.sort((a, b) => {
     const score = (p: PlayerMaster) => {
+      const full = foldKanjiVariantsForSearch(normalizePlayerToken(p.fullName));
+      const game = foldKanjiVariantsForSearch(
+        normalizePlayerToken(p.gameDisplayName),
+      );
       let s = 0;
-      if (p.gameDisplayName === qNorm) s += 100;
-      if (p.fullName.startsWith(qNorm)) s += 50;
-      if (p.fullName.includes(qNorm)) s += 20;
-      if (p.gameDisplayName.includes(qNorm)) s += 10;
+      if (getPlayerAffiliation(p.playerId, year)) s += 80;
+      if (game === qNorm) s += 100;
+      if (full.startsWith(qNorm)) s += 50;
+      if (full.includes(qNorm)) s += 20;
+      if (game.includes(qNorm)) s += 10;
       return s;
     };
     return score(b) - score(a) || a.fullName.localeCompare(b.fullName, "ja");

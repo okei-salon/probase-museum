@@ -36,8 +36,10 @@ import {
   type SeasonWorld,
 } from "@/data/seasons";
 import { PlayerIdentityConfirm } from "@/components/playerMaster/PlayerIdentityConfirm";
+import { PlayerNameAutocomplete } from "@/components/manualEntry/PlayerNameAutocomplete";
 import { cn } from "@/lib/cn";
 import type { FieldCoverage } from "@/lib/import/pipelineDebug";
+import type { PlayerSearchHit } from "@/lib/manualEntry/searchPlayers";
 
 const MONTH_OPTIONS = [4, 5, 6, 7, 8, 9] as const;
 
@@ -146,6 +148,43 @@ export function MonthlyMvpReview({
       nextBatter.resolvedName = resolved.displayName;
     }
     onChange({ ...draft, batter: nextBatter });
+  }
+
+  function applyPlayerHit(
+    role: "pitcher" | "batter",
+    hit: PlayerSearchHit,
+  ) {
+    const formal = hit.player.fullName;
+    const teamFromHit = hit.teamShort !== "—" ? hit.teamShort : undefined;
+    if (role === "pitcher") {
+      onChange({
+        ...draft,
+        pitcher: {
+          ...draft.pitcher,
+          gameDisplayName: formal,
+          resolvedName: formal,
+          playerRef: {
+            status: "resolved",
+            playerId: hit.player.playerId,
+          },
+          teamName: teamFromHit || draft.pitcher.teamName,
+        },
+      });
+      return;
+    }
+    onChange({
+      ...draft,
+      batter: {
+        ...draft.batter,
+        gameDisplayName: formal,
+        resolvedName: formal,
+        playerRef: {
+          status: "resolved",
+          playerId: hit.player.playerId,
+        },
+        teamName: teamFromHit || draft.batter.teamName,
+      },
+    });
   }
 
   function validate(d: MonthlyMvpImportDraft): string | null {
@@ -405,11 +444,16 @@ export function MonthlyMvpReview({
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-white/10 bg-black/40 p-3">
           <p className="text-[11px] tracking-[0.12em] text-white/55">投手部門</p>
-          <Field label="ゲーム表示名" className="mt-2">
-            <input
-              className={inputClass}
+          <Field label="選手名" className="mt-2">
+            <PlayerNameAutocomplete
+              mode="freeText"
+              hideLabel
+              year={yearValue}
               value={draft.pitcher.gameDisplayName}
-              onChange={(e) => patchPitcher({ gameDisplayName: e.target.value })}
+              onQueryChange={(q) => patchPitcher({ gameDisplayName: q })}
+              onSelect={(hit) => applyPlayerHit("pitcher", hit)}
+              placeholder="例：村上（部分一致）"
+              inputClassName={inputClass}
             />
           </Field>
           <Field label="球団" className="mt-2">
@@ -474,11 +518,16 @@ export function MonthlyMvpReview({
 
         <div className="rounded-lg border border-white/10 bg-black/40 p-3">
           <p className="text-[11px] tracking-[0.12em] text-white/55">野手部門</p>
-          <Field label="ゲーム表示名" className="mt-2">
-            <input
-              className={inputClass}
+          <Field label="選手名" className="mt-2">
+            <PlayerNameAutocomplete
+              mode="freeText"
+              hideLabel
+              year={yearValue}
               value={draft.batter.gameDisplayName}
-              onChange={(e) => patchBatter({ gameDisplayName: e.target.value })}
+              onQueryChange={(q) => patchBatter({ gameDisplayName: q })}
+              onSelect={(hit) => applyPlayerHit("batter", hit)}
+              placeholder="例：佐藤（部分一致）"
+              inputClassName={inputClass}
             />
           </Field>
           <Field label="球団" className="mt-2">

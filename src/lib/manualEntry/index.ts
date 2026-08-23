@@ -37,5 +37,5 @@ export type {
   PitcherCountingInput,
   PitcherDerived,
 } from "./computeSeasonStats";
-export { searchPlayerMasterCandidates } from "./searchPlayers";
+export { searchPlayerMasterCandidates, foldKanjiVariantsForSearch } from "./searchPlayers";
 export type { PlayerSearchHit } from "./searchPlayers";
