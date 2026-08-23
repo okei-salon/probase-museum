@@ -20,6 +20,7 @@ import {
 import { postseasonByYear, placeholderSeason } from "./catalog";
 import {
   getStoredPostseasonForSeason,
+  listStoredPostseason,
   listStoredPostseasonIdentities,
 } from "./store";
 import type {
@@ -166,6 +167,26 @@ export function getPostseasonView(
   };
 }
 
+function isPlaceholderTeamName(name: string | null | undefined): boolean {
+  return !name || name === "登録待ち" || name.includes("登録待ち");
+}
+
+/** 表示名 / id から TeamId を解決（未登録・プレースホルダは null） */
+function resolveTeamId(
+  name: string | null | undefined,
+  id: TeamId | null | undefined,
+): TeamId | null {
+  if (id && npbTeams.some((t) => t.id === id)) return id;
+  if (isPlaceholderTeamName(name)) return null;
+  const token = String(name ?? "").trim();
+  if (!token) return null;
+  const hit =
+    npbTeams.find((t) => t.short === token) ??
+    npbTeams.find((t) => t.name === token) ??
+    npbTeams.find((t) => t.id === token);
+  return (hit?.id as TeamId | undefined) ?? null;
+}
+
 function addSeriesToTeam(
   map: Map<TeamId, TeamPostseasonYearRecord>,
   year: string,
@@ -204,6 +225,12 @@ function addSeriesToTeam(
   });
 }
 
+function isRealSeries(m: PostseasonSeason["central"]["first"]): boolean {
+  const aId = resolveTeamId(m.teamA, m.teamAId);
+  const bId = resolveTeamId(m.teamB, m.teamBId);
+  return aId != null || bId != null;
+}
+
 function ingestSeries(
   map: Map<TeamId, TeamPostseasonYearRecord>,
   year: string,
@@ -218,18 +245,55 @@ function ingestSeries(
     >;
   },
 ) {
-  addSeriesToTeam(map, year, world, m.teamAId, {
+  if (!isRealSeries(m)) return;
+  addSeriesToTeam(map, year, world, resolveTeamId(m.teamA, m.teamAId), {
     ...flags.a,
     wins: m.winsA,
     losses: m.winsB,
   });
-  addSeriesToTeam(map, year, world, m.teamBId, {
+  addSeriesToTeam(map, year, world, resolveTeamId(m.teamB, m.teamBId), {
     ...flags.b,
     wins: m.winsB,
     losses: m.winsA,
   });
 }
 
+/**
+ * 日本一判定。
+ * - championId と出場チーム id の一致
+ * - または champion 表示名と出場チーム名の一致
+ * - プレースホルダ / id 同士の null===null は優勝にしない
+ */
+function isJapanSeriesChampionForSide(
+  js: PostseasonSeason["japanSeries"],
+  side: "left" | "right",
+): boolean {
+  if (isPlaceholderTeamName(js.champion) && !js.championId) return false;
+
+  const sideName = side === "left" ? js.teamLeft : js.teamRight;
+  const sideId = resolveTeamId(
+    sideName,
+    side === "left" ? js.teamLeftId : js.teamRightId,
+  );
+  if (!sideId) return false;
+
+  const championId = resolveTeamId(js.champion, js.championId);
+  if (championId) return championId === sideId;
+
+  if (isPlaceholderTeamName(js.champion)) return false;
+  return (
+    js.champion === sideName ||
+    js.champion === npbTeams.find((t) => t.id === sideId)?.short ||
+    js.champion === npbTeams.find((t) => t.id === sideId)?.name
+  );
+}
+
+/**
+ * 1 SeasonIdentity あたりのチーム別ポストシーズン実績。
+ * CS進出は first/final の実出場のみ（同一 YEAR×WORLD で stage が複数でも1回）。
+ * 日本シリーズ出場だけでは CS進出にしない。
+ * 日本一は優勝チームのみ。
+ */
 export function getTeamPostseasonYearRecords(
   yearOrIdentity: string | number | SeasonIdentity,
 ): TeamPostseasonYearRecord[] {
@@ -251,29 +315,31 @@ export function getTeamPostseasonYearRecords(
   }
 
   const js = ps.japanSeries;
-  addSeriesToTeam(map, year, world, js.teamLeftId, {
-    reachedCs: true,
-    reachedCsFinal: true,
-    reachedJapanSeries: true,
-    japanSeriesChampion: js.championId === js.teamLeftId,
-    wins: js.winsLeft,
-    losses: js.winsRight,
-  });
-  addSeriesToTeam(map, year, world, js.teamRightId, {
-    reachedCs: true,
-    reachedCsFinal: true,
-    reachedJapanSeries: true,
-    japanSeriesChampion: js.championId === js.teamRightId,
-    wins: js.winsRight,
-    losses: js.winsLeft,
-  });
+  const leftId = resolveTeamId(js.teamLeft, js.teamLeftId);
+  const rightId = resolveTeamId(js.teamRight, js.teamRightId);
+  if (leftId || rightId) {
+    addSeriesToTeam(map, year, world, leftId, {
+      reachedJapanSeries: true,
+      japanSeriesChampion: isJapanSeriesChampionForSide(js, "left"),
+      wins: js.winsLeft,
+      losses: js.winsRight,
+    });
+    addSeriesToTeam(map, year, world, rightId, {
+      reachedJapanSeries: true,
+      japanSeriesChampion: isJapanSeriesChampionForSide(js, "right"),
+      wins: js.winsRight,
+      losses: js.winsLeft,
+    });
+  }
 
   return [...map.values()];
 }
 
 /**
- * ポストシーズン集計対象の SeasonIdentity。
+ * ポストシーズン集計対象の SeasonIdentity（画面・カタログ用）。
  * 保存済み + 静的カタログ（world 無し）を合算。BLUE/RED は別シーズンとして両方残す。
+ * ※球団基本情報の通算（CS/日本一）では listStoredPostseasonIdentities を使うこと。
+ *   静的サンプル（2023 阪神日本一など）を実成績に混ぜない。
  */
 export function listPostseasonSeasonIdentities(): SeasonIdentity[] {
   const map = new Map<string, SeasonIdentity>();
@@ -292,6 +358,23 @@ export function listPostseasonSeasonIdentities(): SeasonIdentity[] {
   });
 }
 
+/**
+ * 球団通算用: 保存済みポストシーズンのみ（静的カタログ除外）。
+ * source=static の行が local に残っていても集計しない。
+ */
+export function listAggregatablePostseasonIdentities(): SeasonIdentity[] {
+  const map = new Map<string, SeasonIdentity>();
+  for (const r of listStoredPostseason()) {
+    if (r.source === "static") continue;
+    const identity = identityFromWorldYear(Number(r.year), r.world);
+    map.set(identity.seasonKey, identity);
+  }
+  return [...map.values()].sort((a, b) => {
+    if (b.year !== a.year) return b.year - a.year;
+    return (a.world ?? "").localeCompare(b.world ?? "");
+  });
+}
+
 export function getTeamPostseasonCareer(
   teamId: TeamId,
   yearsOrIdentities?: Array<string | number | SeasonIdentity>,
@@ -299,7 +382,7 @@ export function getTeamPostseasonCareer(
   const identities =
     yearsOrIdentities && yearsOrIdentities.length > 0
       ? yearsOrIdentities.map(resolveIdentity)
-      : listPostseasonSeasonIdentities();
+      : listAggregatablePostseasonIdentities();
 
   const records = identities.flatMap((identity) =>
     getTeamPostseasonYearRecords(identity).filter((r) => r.teamId === teamId),

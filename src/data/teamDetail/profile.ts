@@ -1,11 +1,14 @@
 /**
  * 球団基本情報サマリー（既存データから導出）
  * Step14: SeasonIdentity 単位で集計（BLUE/RED を別シーズンとして数える）。
+ *
+ * CS進出 / 日本一は保存済み postseason（museum_documents collection=postseason）のみ。
+ * 静的カタログ（2023 サンプル等）は通算に混ぜない。
  */
 
 import {
   getTeamPostseasonYearRecords,
-  listPostseasonSeasonIdentities,
+  listAggregatablePostseasonIdentities,
 } from "@/data/postseason";
 import { getSeasonSummary } from "@/data/seasonSummary";
 import { getStandingsForSeason } from "@/data/teamStandings";
@@ -15,7 +18,6 @@ import {
   buildTeamYearlyBoard,
   listRegisteredTeamSeasonIdentities,
 } from "./seasonResults";
-import { listPennantSeasonIdentities } from "@/data/playerSeasonLines";
 import type { SeasonIdentity } from "@/data/seasons";
 
 export type TeamProfileSummary = {
@@ -52,23 +54,9 @@ function teamNameMatches(
   );
 }
 
-/** ポストシーズン集計用 identity（保存 + 静的 + ペナント登録シーズン） */
+/** ポストシーズン通算用: 保存済みのみ（静的サンプル除外） */
 function listTeamPostseasonIdentities(): SeasonIdentity[] {
-  const map = new Map<string, SeasonIdentity>();
-  for (const identity of listPostseasonSeasonIdentities()) {
-    map.set(identity.seasonKey, identity);
-  }
-  for (const identity of listPennantSeasonIdentities()) {
-    if (!map.has(identity.seasonKey)) {
-      map.set(identity.seasonKey, identity);
-    }
-  }
-  for (const identity of listRegisteredTeamSeasonIdentities()) {
-    if (!map.has(identity.seasonKey)) {
-      map.set(identity.seasonKey, identity);
-    }
-  }
-  return [...map.values()];
+  return listAggregatablePostseasonIdentities();
 }
 
 /** リーグ優勝回数（SeasonIdentity 単位。BLUE/RED を合算） */
@@ -100,7 +88,11 @@ export function countLeagueTitles(teamId: TeamId): number {
   return n;
 }
 
-/** 日本一回数（ポストシーズンの championId、SeasonIdentity 単位で合算） */
+/**
+ * 日本一回数。
+ * 保存済み JAPAN_SERIES の優勝チームのみ（出場だけでは加算しない）。
+ * YEAR × WORLD 単位で重複排除。
+ */
 export function countJapanTitles(teamId: TeamId): number {
   let n = 0;
   for (const identity of listTeamPostseasonIdentities()) {
@@ -112,6 +104,10 @@ export function countJapanTitles(teamId: TeamId): number {
   return n;
 }
 
+/**
+ * CS進出回数 = CSに進出した YEAR × WORLD の数。
+ * 同一シーズンで first/final 両方出場しても 1 回。
+ */
 export function countCsAppearances(teamId: TeamId): number {
   let n = 0;
   for (const identity of listTeamPostseasonIdentities()) {
