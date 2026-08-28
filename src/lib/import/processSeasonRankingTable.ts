@@ -44,8 +44,11 @@ export type SeasonRankingTableResult = SeasonBatchParseResult & {
   message?: string;
 };
 
-function modeForField(field: SeasonBatchFieldKey): FieldOcrMode {
-  const kind = fieldKind(field);
+function modeForField(
+  field: SeasonBatchFieldKey,
+  role: SeasonBatchRole,
+): FieldOcrMode {
+  const kind = fieldKind(field, role === "catcher" ? "batter" : role);
   if (kind === "avg" || kind === "rate") return "digits_decimal";
   if (kind === "era") return "digits_decimal";
   if (kind === "ip") return "digits_decimal";
@@ -175,10 +178,10 @@ export async function processSeasonRankingByTable(
           grayscale: true,
           contrast: 1.85,
         });
-        const mode = modeForField(field);
+        const mode = modeForField(field, role);
         const raw = await session.recognizeField(crop, mode, `${field}_${ri}`);
         const token = (raw.text || "").trim();
-        const parsed = parseStatToken(token || String(raw.text ?? ""), field);
+        const parsed = parseStatToken(token || String(raw.text ?? ""), field, role);
         const sanitized = sanitizeOcrStatCell(
           field,
           parsed.display || token,

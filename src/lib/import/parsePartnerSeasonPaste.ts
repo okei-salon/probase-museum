@@ -229,12 +229,13 @@ function typeToRoleAndMode(
 function cellFromRaw(
   field: SeasonBatchFieldKey,
   raw: string,
+  role: SeasonBatchRole,
 ): SeasonBatchPartialRow["fields"][SeasonBatchFieldKey] {
   const trimmed = raw.trim();
   if (trimmed === "" || trimmed === "—" || trimmed === "-" || trimmed === "－") {
     return { raw: "", value: null, status: "empty" };
   }
-  const parsed = parseStatToken(trimmed, field);
+  const parsed = parseStatToken(trimmed, field, role);
   const display =
     parsed.value === 0
       ? parsed.display || "0"
@@ -267,6 +268,7 @@ function enrichPartialIdentity(
   if (resolved.status === "matched" && resolved.playerId) {
     return {
       ...partial,
+      ocrName: partial.ocrName || partial.playerName,
       playerName: resolved.displayName,
       playerId: resolved.playerId,
       teamShort: resolved.teamShort || partial.teamShort,
@@ -283,7 +285,7 @@ function enrichPartialIdentity(
   }
   return {
     ...partial,
-    ocrName: partial.playerName,
+    ocrName: partial.ocrName || partial.playerName,
     nameStatus: "needs_confirm",
     teamStatus: partial.teamShort ? "ok" : "needs_confirm",
     nameCandidates: resolved.candidates.map((c) => ({
@@ -312,7 +314,7 @@ function parseBaseBatterLine(
     const field = BASE_BATTER_FIELDS[i]!;
     const raw = parts[3 + i];
     if (raw == null || raw === "") continue;
-    fields[field] = cellFromRaw(field, raw);
+    fields[field] = cellFromRaw(field, raw, "batter");
   }
 
   return {
@@ -354,7 +356,7 @@ function parseKeyedLine(
     const raw = token.slice(eq + 1).trim();
     const field = resolveFieldKey(label, role);
     if (!field) continue;
-    fields[field] = cellFromRaw(field, raw);
+    fields[field] = cellFromRaw(field, raw, role);
   }
 
   if (Object.keys(fields).length === 0) return null;

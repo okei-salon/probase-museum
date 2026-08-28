@@ -40,15 +40,16 @@ import {
 } from "@/data/seasons";
 import type { TeamId } from "@/data/teams";
 import {
-  enrichRowDerivedDisplays,
   rowToBatterCounting,
   rowToPitcherCounting,
   validateBatchRow,
 } from "@/lib/import/seasonBatchConvert";
+import { finalizeBatchRow } from "@/lib/import/seasonBatchRateCheck";
 import {
   createEmptySession,
   mergePartialRowsIntoSession,
   rowHasWarnings,
+  summarizeRowWarnings,
   teamIdFromShort,
   teamNameFromShort,
 } from "@/lib/import/seasonBatchMerge";
@@ -152,6 +153,10 @@ export function SeasonBatchWorkspace({
   );
 
   const warnCount = session.rows.filter(rowHasWarnings).length;
+  const unresolvedNameCount = session.rows.filter(
+    (r) => !r.playerId,
+  ).length;
+  const canOpenConfirm = session.rows.length > 0 && unresolvedNameCount === 0;
 
   function resetForRole(next: SeasonBatchRole) {
     setRole(next);
@@ -171,7 +176,7 @@ export function SeasonBatchWorkspace({
     matchBy: "rowIndex" | "player",
     meta?: { fileName: string; headers: string[]; confidence: number },
   ): SeasonBatchSession {
-    let next = {
+    const next = {
       ...mergePartialRowsIntoSession(base, sourceId, partials, y, { matchBy }),
       images: meta
         ? [
@@ -186,7 +191,7 @@ export function SeasonBatchWorkspace({
           ]
         : base.images,
     };
-    next.rows = next.rows.map((r) => enrichRowDerivedDisplays(r, next.role));
+    next.rows = next.rows.map((r) => finalizeBatchRow(r, next.role));
     return next;
   }
 
@@ -266,7 +271,7 @@ export function SeasonBatchWorkspace({
             },
           ],
         };
-        next.rows = next.rows.map((r) => enrichRowDerivedDisplays(r, role));
+        next.rows = next.rows.map((r) => finalizeBatchRow(r, role));
         // OCR照合済みを優先。未確定のみ候補を補完（誤自動確定しない）
         // YEAR=2000 は選手マスター所属が無いため照合だけ現行年度へフォールバック
         const affiliationYear = y === DEMO_SEASON_YEAR ? 2026 : y;
@@ -358,7 +363,7 @@ export function SeasonBatchWorkspace({
       ...s,
       rows: s.rows.map((r) =>
         r.rowId === updated.rowId
-          ? enrichRowDerivedDisplays(updated, role)
+          ? finalizeBatchRow(updated, role)
           : r,
       ),
     }));
@@ -784,24 +789,35 @@ export function SeasonBatchWorkspace({
             </h3>
             <p className="mt-0.5 text-[11px] text-white/45">
               画像OCR・相棒データのどちらからでも、ここで確認・修正してから一括登録します。
-              選手名が「要確認」のときは候補から選択できます。
-              {warnCount > 0 ? (
+              選手マスター未照合は選手名欄から検索・選択してください（選択後に未照合は解除されます）。
+              数値要確認はゲーム表示と再計算の差の補助表示です（登録値は入力のままです）。
+              {unresolvedNameCount > 0 ? (
+                <span className="ml-1 text-rose-200">
+                  未照合 {unresolvedNameCount}人
+                </span>
+              ) : null}
+              {warnCount > unresolvedNameCount ? (
                 <span className="ml-1 text-amber-200">
-                  要確認 {warnCount}人
+                  数値要確認あり
                 </span>
               ) : null}
             </p>
           </div>
           <button
             type="button"
-            disabled={session.rows.length === 0}
+            disabled={!canOpenConfirm}
             onClick={() => {
               setError(null);
+              const prep = prepareSave();
+              if (!prep.ok) {
+                setError(prep.blockers.slice(0, 5).join(" / "));
+                return;
+              }
               setConfirmOpen(true);
             }}
             className={cn(
               "rounded-md border px-3 py-2 text-[12px]",
-              session.rows.length === 0
+              !canOpenConfirm
                 ? "cursor-not-allowed border-white/10 text-white/30"
                 : "border-[color:var(--museum-accent,#d4af37)] bg-[color:var(--museum-accent,#d4af37)]/15 text-[color:var(--museum-accent,#d4af37)]",
             )}
@@ -812,6 +828,7 @@ export function SeasonBatchWorkspace({
 
         <SeasonBatchTable
           role={role}
+          year={year}
           rows={session.rows}
           onSelectRow={setEditRowId}
           onPatchCell={(rowId, patch) => {
@@ -820,11 +837,10 @@ export function SeasonBatchWorkspace({
               rows: s.rows.map((r) => {
                 if (r.rowId !== rowId) return r;
                 const next = { ...r, ...patch };
-                if (patch.playerName != null && patch.playerId == null) {
-                  next.nameStatus =
-                    patch.playerName.trim().length >= 2
-                      ? "needs_confirm"
-                      : "needs_confirm";
+                if (patch.playerId) {
+                  next.nameStatus = "ok";
+                } else if (patch.playerName != null && patch.playerId == null) {
+                  next.nameStatus = "needs_confirm";
                 }
                 if (patch.teamShort != null) {
                   const id = teamIdFromShort(patch.teamShort);
@@ -832,7 +848,7 @@ export function SeasonBatchWorkspace({
                   next.teamName = teamNameFromShort(patch.teamShort);
                   next.teamStatus = id ? "ok" : "needs_confirm";
                 }
-                return enrichRowDerivedDisplays(next, role);
+                return finalizeBatchRow(next, role);
               }),
             }));
           }}
@@ -859,23 +875,40 @@ export function SeasonBatchWorkspace({
               確認表の内容をそのまま自動保存しません。以下 {session.rows.length}{" "}
               人を {year} 年の年度成績として登録します。同じ選手・同じ年度は1件に統合（上書き）されます。
             </p>
-            {warnCount > 0 ? (
+            {unresolvedNameCount > 0 ? (
+              <p className="mt-2 text-[12px] text-rose-200">
+                選手マスター未照合が {unresolvedNameCount}{" "}
+                人います。選手名欄からマスターを選択するまで登録できません。
+              </p>
+            ) : null}
+            {warnCount > 0 && unresolvedNameCount === 0 ? (
               <p className="mt-2 text-[12px] text-amber-200">
-                要確認マークが {warnCount} 人分あります。問題なければ登録を続行できます。
+                数値要確認があります（ゲーム表示と再計算の差）。問題なければ入力値のまま登録を続行できます。
               </p>
             ) : null}
             <ul className="mt-3 max-h-48 space-y-1 overflow-y-auto text-[12px] text-white/75">
-              {session.rows.map((r) => (
-                <li key={r.rowId}>
-                  {r.playerName}（{r.teamShort || "球団未設定"}）
-                  {rowHasWarnings(r) ? (
-                    <span className="ml-1 text-amber-200">要確認</span>
-                  ) : null}
-                  {!r.playerId ? (
-                    <span className="ml-1 text-rose-300">未照合</span>
-                  ) : null}
-                </li>
-              ))}
+              {session.rows.map((r) => {
+                const summary = summarizeRowWarnings(
+                  finalizeBatchRow(r, role),
+                );
+                return (
+                  <li key={r.rowId}>
+                    {r.playerName}（{r.teamShort || "球団未設定"}）
+                    {summary.reasons.length > 0 ? (
+                      <span
+                        className={cn(
+                          "ml-1",
+                          summary.nameUnresolved
+                            ? "text-rose-300"
+                            : "text-amber-200",
+                        )}
+                      >
+                        {summary.reasons.join(" / ")}
+                      </span>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
             <div className="mt-4 flex flex-wrap justify-end gap-2">
               <button

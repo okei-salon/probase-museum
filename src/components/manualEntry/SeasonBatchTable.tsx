@@ -9,15 +9,26 @@ import type {
 } from "@/data/import/seasonBatchTypes";
 import {
   batchColumnsForRole,
-  enrichRowDerivedDisplays,
   type BatchColumnDef,
 } from "@/lib/import/seasonBatchConvert";
-import { cellNeedsAttention, rowHasWarnings } from "@/lib/import/seasonBatchMerge";
+import {
+  cellNeedsAttention,
+  rowHasStatWarnings,
+  rowNameNeedsAttention,
+  summarizeRowWarnings,
+} from "@/lib/import/seasonBatchMerge";
+import {
+  finalizeBatchRow,
+  listStatWarningLabels,
+} from "@/lib/import/seasonBatchRateCheck";
 import { parseStatToken } from "@/lib/import/parseSeasonRankingOcr";
+import { PlayerNameAutocomplete } from "@/components/manualEntry/PlayerNameAutocomplete";
+import { confirmExistingPlayer } from "@/lib/playerMaster/learn";
 import { cn } from "@/lib/cn";
 
 type SeasonBatchTableProps = {
   role: SeasonBatchRole;
+  year: number;
   rows: SeasonBatchPlayerRow[];
   onSelectRow: (rowId: string) => void;
   onPatchCell?: (
@@ -34,6 +45,7 @@ type SeasonBatchTableProps = {
         | "teamName"
         | "fields"
         | "nameCandidates"
+        | "ocrName"
       >
     >,
   ) => void;
@@ -55,6 +67,7 @@ function stickyLeftFor(
 
 export function SeasonBatchTable({
   role,
+  year,
   rows,
   onSelectRow,
   onPatchCell,
@@ -65,6 +78,9 @@ export function SeasonBatchTable({
     key: SeasonBatchFieldKey | "playerName" | "teamShort";
   } | null>(null);
   const [draft, setDraft] = useState("");
+  const [nameQueryByRow, setNameQueryByRow] = useState<Record<string, string>>(
+    {},
+  );
 
   function startEdit(
     row: SeasonBatchPlayerRow,
@@ -74,6 +90,10 @@ export function SeasonBatchTable({
     e.stopPropagation();
     if (!onPatchCell) {
       onSelectRow(row.rowId);
+      return;
+    }
+    // 未照合の選手名はオートコンプリートで選択（自由編集は候補選択後）
+    if (key === "playerName" && !row.playerId) {
       return;
     }
     const value =
@@ -101,14 +121,19 @@ export function SeasonBatchTable({
     } else if (key === "teamShort") {
       onPatchCell(row.rowId, { teamShort: draft.trim() });
     } else {
-      const parsed = parseStatToken(draft, key);
+      const parsed = parseStatToken(draft, key, role);
       onPatchCell(row.rowId, {
         fields: {
           ...row.fields,
           [key]: {
             value: parsed.value,
             display: parsed.display || draft,
-            status: parsed.status === "empty" ? "empty" : "ok",
+            status:
+              parsed.status === "empty"
+                ? "empty"
+                : parsed.status === "invalid"
+                  ? "needs_confirm"
+                  : parsed.status,
             note: parsed.note,
             sources: row.fields[key]?.sources ?? [],
           },
@@ -121,12 +146,72 @@ export function SeasonBatchTable({
   function applyCandidate(row: SeasonBatchPlayerRow, c: SeasonBatchNameCandidate) {
     if (!onPatchCell) return;
     const labelName = c.label.replace(/（.*）$/, "");
+    const ocrName = row.ocrName || row.playerName;
+    try {
+      confirmExistingPlayer({
+        playerId: c.playerId,
+        observation: {
+          gameDisplayName: ocrName,
+          team: c.teamShort || row.teamShort,
+          year,
+          position: role === "pitcher" ? "投手" : null,
+        },
+        learnOcrAsAlias: true,
+      });
+    } catch {
+      // マスター更新に失敗しても選択自体は反映
+    }
     onPatchCell(row.rowId, {
       playerId: c.playerId,
       playerName: labelName,
+      ocrName,
       teamShort: c.teamShort || row.teamShort,
       nameStatus: "ok",
       teamStatus: c.teamShort ? "ok" : row.teamStatus,
+      nameCandidates: undefined,
+    });
+    setNameQueryByRow((prev) => {
+      const next = { ...prev };
+      delete next[row.rowId];
+      return next;
+    });
+  }
+
+  function applyMasterHit(
+    row: SeasonBatchPlayerRow,
+    playerId: string,
+    fullName: string,
+    teamShort: string,
+  ) {
+    if (!onPatchCell) return;
+    const ocrName = row.ocrName || row.playerName;
+    try {
+      confirmExistingPlayer({
+        playerId,
+        observation: {
+          gameDisplayName: ocrName,
+          team: teamShort || row.teamShort,
+          year,
+          position: role === "pitcher" ? "投手" : null,
+        },
+        learnOcrAsAlias: true,
+      });
+    } catch {
+      // ignore
+    }
+    onPatchCell(row.rowId, {
+      playerId,
+      playerName: fullName,
+      ocrName,
+      teamShort: teamShort !== "—" ? teamShort : row.teamShort,
+      nameStatus: "ok",
+      teamStatus: teamShort && teamShort !== "—" ? "ok" : row.teamStatus,
+      nameCandidates: undefined,
+    });
+    setNameQueryByRow((prev) => {
+      const next = { ...prev };
+      delete next[row.rowId];
+      return next;
     });
   }
 
@@ -134,7 +219,7 @@ export function SeasonBatchTable({
     const style: CSSProperties = {
       minWidth: col.minWidth,
       width: col.minWidth,
-      maxWidth: col.key === "playerName" ? 160 : col.minWidth + 24,
+      maxWidth: col.key === "playerName" ? 200 : col.minWidth + 24,
     };
     if (col.sticky) {
       const left = stickyLeftFor(columns, col.key);
@@ -168,7 +253,7 @@ export function SeasonBatchTable({
             ))}
             <th
               className="border-b border-white/10 bg-[#0c0c0c] px-2 py-2"
-              style={{ minWidth: 64 }}
+              style={{ minWidth: 110 }}
             >
               状態
             </th>
@@ -176,18 +261,26 @@ export function SeasonBatchTable({
         </thead>
         <tbody>
           {rows.map((raw) => {
-            const row = enrichRowDerivedDisplays(raw, role);
-            const warn = rowHasWarnings(row);
+            const row = finalizeBatchRow(raw, role);
+            const nameWarn = rowNameNeedsAttention(row);
+            const statWarn = rowHasStatWarnings(row);
+            const statLabels = listStatWarningLabels(row, role);
+            const summary = summarizeRowWarnings(row, statLabels);
             const showCandidates =
-              row.nameStatus === "needs_confirm" &&
-              (row.nameCandidates?.length ?? 0) > 0;
+              !row.playerId && (row.nameCandidates?.length ?? 0) > 0;
+            const showMasterSearch = !row.playerId;
+            const nameQuery =
+              nameQueryByRow[row.rowId] ??
+              row.ocrName ??
+              row.playerName;
+
             return (
               <tr
                 key={row.rowId}
                 onClick={() => onSelectRow(row.rowId)}
                 className={cn(
                   "cursor-pointer transition-colors hover:bg-white/[0.04]",
-                  warn && "bg-amber-500/5",
+                  (nameWarn || statWarn) && "bg-amber-500/5",
                 )}
               >
                 <td
@@ -215,11 +308,73 @@ export function SeasonBatchTable({
                           col.sticky && "sticky z-10",
                           col.key === "playerName" && "font-medium text-white",
                           col.key === "teamShort" && "text-white/80",
-                          cellNeedsAttention(status) &&
+                          col.key === "playerName" &&
+                            nameWarn &&
+                            "bg-rose-500/15 text-rose-50",
+                          col.key === "teamShort" &&
+                            cellNeedsAttention(status) &&
                             "bg-amber-500/15 text-amber-100",
                         )}
                       >
-                        {isEditing ? (
+                        {col.key === "playerName" && showMasterSearch ? (
+                          <div
+                            className="space-y-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <p className="text-[10px] font-normal text-rose-200/90">
+                              選手マスター未照合
+                            </p>
+                            <PlayerNameAutocomplete
+                              mode="freeText"
+                              compact
+                              hideLabel
+                              year={year}
+                              value={nameQuery}
+                              onQueryChange={(q) =>
+                                setNameQueryByRow((prev) => ({
+                                  ...prev,
+                                  [row.rowId]: q,
+                                }))
+                              }
+                              onSelect={(hit) =>
+                                applyMasterHit(
+                                  row,
+                                  hit.player.playerId,
+                                  hit.player.fullName,
+                                  hit.teamShort,
+                                )
+                              }
+                              placeholder="選手マスターを検索"
+                            />
+                            {nameQuery.trim() &&
+                            (row.nameCandidates?.length ?? 0) === 0 ? (
+                              <p className="text-[10px] font-normal text-white/40">
+                                候補が無い場合は選手マスターへ追加後に再検索してください
+                              </p>
+                            ) : null}
+                            {showCandidates ? (
+                              <select
+                                value=""
+                                onChange={(e) => {
+                                  const id = e.target.value;
+                                  if (!id) return;
+                                  const c = row.nameCandidates?.find(
+                                    (x) => x.playerId === id,
+                                  );
+                                  if (c) applyCandidate(row, c);
+                                }}
+                                className="mt-0.5 w-full max-w-full rounded border border-rose-400/50 bg-black/90 px-1 py-0.5 text-[10px] text-rose-50"
+                              >
+                                <option value="">候補を選択…</option>
+                                {row.nameCandidates!.map((c) => (
+                                  <option key={c.playerId} value={c.playerId}>
+                                    {c.label}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : null}
+                          </div>
+                        ) : isEditing ? (
                           <input
                             autoFocus
                             value={draft}
@@ -241,31 +396,8 @@ export function SeasonBatchTable({
                             row.ocrName &&
                             row.ocrName !== row.playerName ? (
                               <div className="truncate text-[10px] font-normal text-white/35">
-                                OCR: {row.ocrName}
+                                入力: {row.ocrName}
                               </div>
-                            ) : null}
-                            {col.key === "playerName" && showCandidates ? (
-                              <select
-                                value={row.playerId ?? ""}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  const id = e.target.value;
-                                  if (!id) return;
-                                  const c = row.nameCandidates?.find(
-                                    (x) => x.playerId === id,
-                                  );
-                                  if (c) applyCandidate(row, c);
-                                }}
-                                className="mt-0.5 w-full max-w-full rounded border border-amber-400/50 bg-black/90 px-1 py-0.5 text-[10px] text-amber-50"
-                              >
-                                <option value="">候補を選択…</option>
-                                {row.nameCandidates!.map((c) => (
-                                  <option key={c.playerId} value={c.playerId}>
-                                    {c.label}
-                                  </option>
-                                ))}
-                              </select>
                             ) : null}
                           </div>
                         )}
@@ -319,12 +451,31 @@ export function SeasonBatchTable({
                   );
                 })}
                 <td className="border-b border-white/5 px-2 py-2 align-top">
-                  {warn ? (
-                    <span className="rounded bg-amber-500/25 px-1.5 py-0.5 text-[10px] text-amber-100">
-                      要確認
-                    </span>
-                  ) : (
+                  {summary.reasons.length === 0 ? (
                     <span className="text-[10px] text-white/35">OK</span>
+                  ) : (
+                    <div className="flex flex-col gap-0.5">
+                      {summary.nameUnresolved ? (
+                        <span className="rounded bg-rose-500/25 px-1.5 py-0.5 text-[10px] text-rose-100">
+                          未照合
+                        </span>
+                      ) : null}
+                      {summary.statLabels.length > 0 ? (
+                        <span
+                          className="rounded bg-amber-500/25 px-1.5 py-0.5 text-[10px] text-amber-100"
+                          title={summary.statLabels.join("・")}
+                        >
+                          数値要確認
+                        </span>
+                      ) : null}
+                      {!summary.nameUnresolved &&
+                      summary.statLabels.length === 0 &&
+                      summary.reasons.length > 0 ? (
+                        <span className="rounded bg-amber-500/25 px-1.5 py-0.5 text-[10px] text-amber-100">
+                          要確認
+                        </span>
+                      ) : null}
+                    </div>
                   )}
                 </td>
               </tr>

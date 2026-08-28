@@ -124,17 +124,22 @@ function detectHeaders(line: string): {
   };
 }
 
-function kindForField(field: SeasonBatchFieldKey): "int" | "avg" | "era" | "ip" | "rate" {
-  return fieldKind(field);
+function kindForField(
+  field: SeasonBatchFieldKey,
+  role?: SeasonBatchRole,
+): "int" | "avg" | "era" | "ip" | "rate" {
+  return fieldKind(field, role === "catcher" ? "batter" : role);
 }
 
 /**
  * OCRで小数点が落ちた率・投球回を要確認にする。
  * 例: .875→875, 1.000→1000, 54⅔→543
+ * role を渡すと投手の奪三振率などを K/9 として正しく読む。
  */
 export function parseStatToken(
   raw: string,
   field: SeasonBatchFieldKey,
+  role?: SeasonBatchRole,
 ): {
   value: number | string | null;
   display: string;
@@ -146,7 +151,7 @@ export function parseStatToken(
     return { value: null, display: "", status: "empty" };
   }
 
-  const kind = kindForField(field);
+  const kind = kindForField(field, role);
 
   // ⅔ 記号などが数字に潰れた投球回: 543 → 54.1 の疑い
   if (kind === "ip") {
@@ -389,7 +394,7 @@ export function parseSeasonRankingOcrText(
     for (let i = 0; i < Math.min(nums.length, useHeaders.length); i += 1) {
       const field = useHeaders[i]!;
       const token = nums[i]!;
-      const parsed = parseStatToken(token, field);
+      const parsed = parseStatToken(token, field, role);
       fields[field] = {
         raw: parsed.display || token,
         value: parsed.value,

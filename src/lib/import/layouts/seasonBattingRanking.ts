@@ -99,7 +99,31 @@ export function matchHeaderLabel(text: string): SeasonBatchFieldKey | null {
 
 export function fieldKind(
   field: SeasonBatchFieldKey,
+  role?: "batter" | "pitcher" | "catcher",
 ): "avg" | "int" | "rate" | "era" | "ip" {
+  // 投手の率系は K/9・四球率・被本率など ≥1 があり得る。打率パーサで弾かない。
+  if (role === "pitcher") {
+    switch (field) {
+      case "ip":
+        return "ip";
+      case "era":
+      case "soRate":
+      case "bbRate":
+      case "hrRate":
+      case "whip":
+      case "kbb":
+        return "era";
+      case "qsRate":
+      case "hqsRate":
+        return "rate";
+      case "winPct":
+      case "sbAllowedRate":
+        return "avg";
+      default:
+        break;
+    }
+  }
+
   const hit = HEADER_LABEL_TO_FIELD.find((h) => h.field === field);
   if (hit) return hit.kind;
   switch (field) {
