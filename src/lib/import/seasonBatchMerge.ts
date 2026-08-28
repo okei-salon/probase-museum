@@ -338,10 +338,11 @@ export function rowHasWarnings(row: SeasonBatchPlayerRow): boolean {
   return false;
 }
 
-/** 選手名が未照合／要選択（playerId 無し or nameStatus 要注意） */
+/** 選手名が未照合／要選択（playerId 無しかつ新規登録予定でもない） */
 export function rowNameNeedsAttention(row: SeasonBatchPlayerRow): boolean {
-  if (!row.playerId) return true;
-  return cellNeedsAttention(row.nameStatus);
+  if (row.playerId) return false;
+  if (row.pendingNewPlayer) return false;
+  return true;
 }
 
 /** 成績セルの数値要確認（選手名とは独立） */
@@ -354,6 +355,7 @@ export function rowHasStatWarnings(row: SeasonBatchPlayerRow): boolean {
 
 export type RowWarningSummary = {
   nameUnresolved: boolean;
+  pendingNewPlayer: boolean;
   statLabels: string[];
   /** 確認ダイアログ用の短い理由 */
   reasons: string[];
@@ -363,7 +365,8 @@ export function summarizeRowWarnings(
   row: SeasonBatchPlayerRow,
   statLabels: string[] = [],
 ): RowWarningSummary {
-  const nameUnresolved = !row.playerId;
+  const pendingNewPlayer = Boolean(row.pendingNewPlayer && !row.playerId);
+  const nameUnresolved = !row.playerId && !row.pendingNewPlayer;
   const labels =
     statLabels.length > 0
       ? statLabels
@@ -381,7 +384,12 @@ export function summarizeRowWarnings(
           });
   const reasons: string[] = [];
   if (nameUnresolved) reasons.push("選手マスター未照合");
-  else if (cellNeedsAttention(row.nameStatus)) reasons.push("選手名要確認");
+  if (pendingNewPlayer) reasons.push("新規選手登録予定");
   if (labels.length) reasons.push(`数値要確認: ${labels.join("・")}`);
-  return { nameUnresolved, statLabels: labels, reasons };
+  return {
+    nameUnresolved,
+    pendingNewPlayer,
+    statLabels: labels,
+    reasons,
+  };
 }

@@ -92,15 +92,30 @@ export function registerNewPlayer(input: {
 }): LearnPlayerResult {
   const nowIso = new Date().toISOString();
   const ocrName = normalizePlayerToken(input.observation.gameDisplayName);
-  const playerId =
+  let playerId =
     input.playerId || suggestPlayerId(input.fullName, input.observation);
 
   if (getPlayerMaster(playerId)) {
-    return confirmExistingPlayer({
-      playerId,
-      observation: input.observation,
-      learnOcrAsAlias: true,
-    });
+    const existing = getPlayerMaster(playerId)!;
+    const sameName =
+      normalizePlayerToken(existing.fullName) ===
+        normalizePlayerToken(input.fullName.trim()) ||
+      normalizePlayerToken(existing.gameDisplayName) ===
+        normalizePlayerToken(input.fullName.trim()) ||
+      existing.aliases.some(
+        (a) =>
+          normalizePlayerToken(a) ===
+          normalizePlayerToken(input.fullName.trim()),
+      );
+    if (sameName) {
+      return confirmExistingPlayer({
+        playerId,
+        observation: input.observation,
+        learnOcrAsAlias: true,
+      });
+    }
+    // 別選手との ID 衝突 → サフィックスで新規作成（既存は消さない）
+    playerId = `${playerId}_${Date.now().toString(36).slice(-5)}`;
   }
 
   const teamId = normalizeTeamId(input.observation.team ?? null);

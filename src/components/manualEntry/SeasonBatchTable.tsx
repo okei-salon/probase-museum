@@ -46,6 +46,7 @@ type SeasonBatchTableProps = {
         | "fields"
         | "nameCandidates"
         | "ocrName"
+        | "pendingNewPlayer"
       >
     >,
   ) => void;
@@ -169,6 +170,7 @@ export function SeasonBatchTable({
       nameStatus: "ok",
       teamStatus: c.teamShort ? "ok" : row.teamStatus,
       nameCandidates: undefined,
+      pendingNewPlayer: false,
     });
     setNameQueryByRow((prev) => {
       const next = { ...prev };
@@ -207,12 +209,42 @@ export function SeasonBatchTable({
       nameStatus: "ok",
       teamStatus: teamShort && teamShort !== "—" ? "ok" : row.teamStatus,
       nameCandidates: undefined,
+      pendingNewPlayer: false,
     });
     setNameQueryByRow((prev) => {
       const next = { ...prev };
       delete next[row.rowId];
       return next;
     });
+  }
+
+  function markAsNewPlayer(row: SeasonBatchPlayerRow) {
+    if (!onPatchCell) return;
+    const name = (row.playerName || row.ocrName || "").trim();
+    if (!name) return;
+    onPatchCell(row.rowId, {
+      playerId: undefined,
+      playerName: name,
+      ocrName: row.ocrName || name,
+      pendingNewPlayer: true,
+      nameStatus: "ok",
+      nameCandidates: undefined,
+    });
+  }
+
+  function cancelNewPlayer(row: SeasonBatchPlayerRow) {
+    if (!onPatchCell) return;
+    onPatchCell(row.rowId, {
+      pendingNewPlayer: false,
+      playerId: undefined,
+      nameStatus: "needs_confirm",
+    });
+  }
+
+  function roleLabel(r: SeasonBatchRole): string {
+    if (r === "pitcher") return "投手";
+    if (r === "catcher") return "捕手";
+    return "野手";
   }
 
   function cellStyle(col: BatchColumnDef): CSSProperties {
@@ -267,8 +299,11 @@ export function SeasonBatchTable({
             const statLabels = listStatWarningLabels(row, role);
             const summary = summarizeRowWarnings(row, statLabels);
             const showCandidates =
-              !row.playerId && (row.nameCandidates?.length ?? 0) > 0;
-            const showMasterSearch = !row.playerId;
+              !row.playerId &&
+              !row.pendingNewPlayer &&
+              (row.nameCandidates?.length ?? 0) > 0;
+            const showMasterSearch = !row.playerId && !row.pendingNewPlayer;
+            const showPendingNew = Boolean(row.pendingNewPlayer && !row.playerId);
             const nameQuery =
               nameQueryByRow[row.rowId] ??
               row.ocrName ??
@@ -281,6 +316,7 @@ export function SeasonBatchTable({
                 className={cn(
                   "cursor-pointer transition-colors hover:bg-white/[0.04]",
                   (nameWarn || statWarn) && "bg-amber-500/5",
+                  showPendingNew && "bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.06))]",
                 )}
               >
                 <td
@@ -311,12 +347,46 @@ export function SeasonBatchTable({
                           col.key === "playerName" &&
                             nameWarn &&
                             "bg-rose-500/15 text-rose-50",
+                          col.key === "playerName" &&
+                            showPendingNew &&
+                            "bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.12))] text-[color:var(--museum-accent,#d4af37)]",
                           col.key === "teamShort" &&
                             cellNeedsAttention(status) &&
                             "bg-amber-500/15 text-amber-100",
                         )}
                       >
-                        {col.key === "playerName" && showMasterSearch ? (
+                        {col.key === "playerName" && showPendingNew ? (
+                          <div
+                            className="space-y-1.5"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <p className="text-[10px] font-normal text-[color:var(--museum-accent,#d4af37)]">
+                              新規登録予定
+                            </p>
+                            <input
+                              value={row.playerName}
+                              onChange={(e) =>
+                                onPatchCell?.(row.rowId, {
+                                  playerName: e.target.value,
+                                  pendingNewPlayer: true,
+                                  nameStatus: "ok",
+                                })
+                              }
+                              className="w-full rounded border border-[color:var(--museum-accent-border,#d4af3773)] bg-black/80 px-1 py-0.5 text-[12px] text-white"
+                            />
+                            <p className="text-[10px] font-normal text-white/55">
+                              {row.playerName || "—"} / {row.teamShort || "球団未設定"} /{" "}
+                              {roleLabel(role)}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => cancelNewPlayer(row)}
+                              className="rounded border border-white/20 px-1.5 py-0.5 text-[10px] text-white/60 hover:border-white/40"
+                            >
+                              取消（未照合に戻す）
+                            </button>
+                          </div>
+                        ) : col.key === "playerName" && showMasterSearch ? (
                           <div
                             className="space-y-1"
                             onClick={(e) => e.stopPropagation()}
@@ -344,14 +414,8 @@ export function SeasonBatchTable({
                                   hit.teamShort,
                                 )
                               }
-                              placeholder="選手マスターを検索"
+                              placeholder="既存選手を検索・選択"
                             />
-                            {nameQuery.trim() &&
-                            (row.nameCandidates?.length ?? 0) === 0 ? (
-                              <p className="text-[10px] font-normal text-white/40">
-                                候補が無い場合は選手マスターへ追加後に再検索してください
-                              </p>
-                            ) : null}
                             {showCandidates ? (
                               <select
                                 value=""
@@ -365,7 +429,7 @@ export function SeasonBatchTable({
                                 }}
                                 className="mt-0.5 w-full max-w-full rounded border border-rose-400/50 bg-black/90 px-1 py-0.5 text-[10px] text-rose-50"
                               >
-                                <option value="">候補を選択…</option>
+                                <option value="">既存選手を選択…</option>
                                 {row.nameCandidates!.map((c) => (
                                   <option key={c.playerId} value={c.playerId}>
                                     {c.label}
@@ -373,6 +437,13 @@ export function SeasonBatchTable({
                                 ))}
                               </select>
                             ) : null}
+                            <button
+                              type="button"
+                              onClick={() => markAsNewPlayer(row)}
+                              className="mt-0.5 w-full rounded border border-[color:var(--museum-accent-border,#d4af3773)] bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.14))] px-1.5 py-1 text-[10px] text-[color:var(--museum-accent,#d4af37)] hover:bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.22))]"
+                            >
+                              ＋ 新規選手として登録
+                            </button>
                           </div>
                         ) : isEditing ? (
                           <input
@@ -460,19 +531,17 @@ export function SeasonBatchTable({
                           未照合
                         </span>
                       ) : null}
+                      {summary.pendingNewPlayer ? (
+                        <span className="rounded bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.22))] px-1.5 py-0.5 text-[10px] text-[color:var(--museum-accent,#d4af37)]">
+                          新規予定
+                        </span>
+                      ) : null}
                       {summary.statLabels.length > 0 ? (
                         <span
                           className="rounded bg-amber-500/25 px-1.5 py-0.5 text-[10px] text-amber-100"
                           title={summary.statLabels.join("・")}
                         >
                           数値要確認
-                        </span>
-                      ) : null}
-                      {!summary.nameUnresolved &&
-                      summary.statLabels.length === 0 &&
-                      summary.reasons.length > 0 ? (
-                        <span className="rounded bg-amber-500/25 px-1.5 py-0.5 text-[10px] text-amber-100">
-                          要確認
                         </span>
                       ) : null}
                     </div>

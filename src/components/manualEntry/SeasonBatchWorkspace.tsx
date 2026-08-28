@@ -65,6 +65,7 @@ import {
   computeBatterDerived,
   computePitcherDerived,
 } from "@/lib/manualEntry/computeSeasonStats";
+import { registerNewPlayer } from "@/lib/playerMaster/learn";
 import { cn } from "@/lib/cn";
 
 const ROLE_OPTIONS: Array<{ id: SeasonBatchRole; label: string }> = [
@@ -154,7 +155,10 @@ export function SeasonBatchWorkspace({
 
   const warnCount = session.rows.filter(rowHasWarnings).length;
   const unresolvedNameCount = session.rows.filter(
-    (r) => !r.playerId,
+    (r) => !r.playerId && !r.pendingNewPlayer,
+  ).length;
+  const pendingNewCount = session.rows.filter(
+    (r) => r.pendingNewPlayer && !r.playerId,
   ).length;
   const canOpenConfirm = session.rows.length > 0 && unresolvedNameCount === 0;
 
@@ -374,8 +378,14 @@ export function SeasonBatchWorkspace({
     const blockers: string[] = [];
     if (session.rows.length === 0) blockers.push("登録する選手がありません");
     for (const row of session.rows) {
-      if (!row.playerId) {
-        blockers.push(`${row.playerName || "（無名）"}: 選手マスターと照合してください`);
+      const resolvedOrPending = Boolean(row.playerId || row.pendingNewPlayer);
+      if (!resolvedOrPending) {
+        blockers.push(
+          `${row.playerName || "（無名）"}: 既存選手を選択するか「新規選手として登録」してください`,
+        );
+      }
+      if (row.pendingNewPlayer && !row.playerName.trim()) {
+        blockers.push(`新規選手: 選手名を入力してください`);
       }
       if (!row.teamId && !teamIdFromShort(row.teamShort)) {
         blockers.push(`${row.playerName}: 球団を確認してください`);
@@ -397,27 +407,110 @@ export function SeasonBatchWorkspace({
     }
 
     const useSandbox = shouldUseIsolatedDemoStore(year);
-    const existingNames: string[] = [];
-    for (const row of session.rows) {
-      if (!row.playerId) continue;
-      const lineRole = role === "pitcher" ? "pitcher" : "batter";
-      const id = seasonLineKey(row.playerId, year, lineRole, scope, world);
-      const existing = useSandbox
-        ? getDemoSeasonLine(id)
-        : getSeasonLine(row.playerId, year, lineRole, scope, world);
-      if (existing) existingNames.push(row.playerName);
+    const lineRole = role === "pitcher" ? "pitcher" : "batter";
+
+    // 既存 playerId の上書き確認を、新規マスター作成より先に行う
+    // （マスターだけ作成されて成績が未保存、の中途半端を減らす）
+    if (!forceOverwrite) {
+      const existingNames: string[] = [];
+      for (const row of session.rows) {
+        if (!row.playerId) continue;
+        const id = seasonLineKey(row.playerId, year, lineRole, scope, world);
+        const existing = useSandbox
+          ? getDemoSeasonLine(id)
+          : getSeasonLine(row.playerId, year, lineRole, scope, world);
+        if (existing) existingNames.push(row.playerName);
+      }
+      if (existingNames.length) {
+        setError(
+          `既存データあり: ${existingNames.join("、")}。上書きする場合は「上書きして一括登録」を選んでください。`,
+        );
+        return;
+      }
     }
-    if (existingNames.length && !forceOverwrite) {
-      setError(
-        `既存データあり: ${existingNames.join("、")}。上書きする場合は「上書きして一括登録」を選んでください。`,
-      );
-      return;
+
+    // 1) 新規選手予定を先にマスターへ作成（明示選択のみ）
+    // 2) 続けて同じループ後に成績保存（作成失敗時は成績を書かない）
+    const resolvedRows: SeasonBatchPlayerRow[] = [];
+    for (const row of session.rows) {
+      if (row.playerId) {
+        resolvedRows.push({ ...row, pendingNewPlayer: false });
+        continue;
+      }
+      if (!row.pendingNewPlayer) continue;
+      const teamId =
+        row.teamId ?? (teamIdFromShort(row.teamShort) as TeamId | undefined);
+      if (!teamId) {
+        setError(`${row.playerName}: 球団が未設定のため新規登録できません`);
+        setConfirmOpen(false);
+        return;
+      }
+      try {
+        const created = registerNewPlayer({
+          fullName: row.playerName.trim(),
+          observation: {
+            gameDisplayName: row.ocrName || row.playerName,
+            team: row.teamShort,
+            year,
+            world,
+            position:
+              role === "pitcher"
+                ? "投手"
+                : role === "catcher"
+                  ? "捕手"
+                  : "内野手",
+          },
+          isRealPlayer: true,
+        });
+        resolvedRows.push({
+          ...row,
+          playerId: created.player.playerId,
+          playerName: created.player.fullName,
+          teamId,
+          teamName:
+            row.teamName ?? teamNameFromShort(row.teamShort) ?? row.teamShort,
+          pendingNewPlayer: false,
+          nameStatus: "ok",
+        });
+      } catch (e) {
+        setError(
+          `${row.playerName}: 選手マスター登録に失敗しました（${e instanceof Error ? e.message : "不明"}）。成績は保存していません。`,
+        );
+        setConfirmOpen(false);
+        return;
+      }
+    }
+
+    // 新規作成で既存選手に解決された場合の上書き確認
+    if (!forceOverwrite) {
+      const existingNames: string[] = [];
+      for (const row of resolvedRows) {
+        if (!row.playerId) continue;
+        const id = seasonLineKey(row.playerId, year, lineRole, scope, world);
+        const existing = useSandbox
+          ? getDemoSeasonLine(id)
+          : getSeasonLine(row.playerId, year, lineRole, scope, world);
+        if (existing) existingNames.push(row.playerName);
+      }
+      if (existingNames.length) {
+        setSession((s) => ({
+          ...s,
+          rows: s.rows.map((r) => {
+            const hit = resolvedRows.find((x) => x.rowId === r.rowId);
+            return hit ?? r;
+          }),
+        }));
+        setError(
+          `既存データあり: ${existingNames.join("、")}。上書きする場合は「上書きして一括登録」を選んでください。`,
+        );
+        return;
+      }
     }
 
     const now = new Date().toISOString();
     const recordIds: string[] = [];
 
-    for (const row of session.rows) {
+    for (const row of resolvedRows) {
       if (!row.playerId) continue;
       const teamId =
         row.teamId ?? (teamIdFromShort(row.teamShort) as TeamId | undefined);
@@ -789,11 +882,16 @@ export function SeasonBatchWorkspace({
             </h3>
             <p className="mt-0.5 text-[11px] text-white/45">
               画像OCR・相棒データのどちらからでも、ここで確認・修正してから一括登録します。
-              選手マスター未照合は選手名欄から検索・選択してください（選択後に未照合は解除されます）。
+              選手マスター未照合は「既存選手を選択」または「＋ 新規選手として登録」で解消してください。
               数値要確認はゲーム表示と再計算の差の補助表示です（登録値は入力のままです）。
               {unresolvedNameCount > 0 ? (
                 <span className="ml-1 text-rose-200">
                   未照合 {unresolvedNameCount}人
+                </span>
+              ) : null}
+              {pendingNewCount > 0 ? (
+                <span className="ml-1 text-[color:var(--museum-accent,#d4af37)]">
+                  新規予定 {pendingNewCount}人
                 </span>
               ) : null}
               {warnCount > unresolvedNameCount ? (
@@ -839,7 +937,18 @@ export function SeasonBatchWorkspace({
                 const next = { ...r, ...patch };
                 if (patch.playerId) {
                   next.nameStatus = "ok";
-                } else if (patch.playerName != null && patch.playerId == null) {
+                  next.pendingNewPlayer = false;
+                } else if (patch.pendingNewPlayer === true) {
+                  next.playerId = undefined;
+                  next.nameStatus = "ok";
+                } else if (
+                  patch.playerName != null &&
+                  patch.playerId == null &&
+                  !r.pendingNewPlayer
+                ) {
+                  next.nameStatus = "needs_confirm";
+                }
+                if (patch.pendingNewPlayer === false && !patch.playerId) {
                   next.nameStatus = "needs_confirm";
                 }
                 if (patch.teamShort != null) {
@@ -878,7 +987,13 @@ export function SeasonBatchWorkspace({
             {unresolvedNameCount > 0 ? (
               <p className="mt-2 text-[12px] text-rose-200">
                 選手マスター未照合が {unresolvedNameCount}{" "}
-                人います。選手名欄からマスターを選択するまで登録できません。
+                人います。既存選手を選択するか「新規選手として登録」するまで登録できません。
+              </p>
+            ) : null}
+            {pendingNewCount > 0 ? (
+              <p className="mt-2 text-[12px] text-[color:var(--museum-accent,#d4af37)]">
+                新規選手 {pendingNewCount}{" "}
+                人は一括登録時に選手マスターへ追加してから成績を保存します。
               </p>
             ) : null}
             {warnCount > 0 && unresolvedNameCount === 0 ? (

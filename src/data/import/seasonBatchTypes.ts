@@ -128,6 +128,11 @@ export type SeasonBatchPlayerRow = {
   playerId?: string;
   nameStatus: FieldCellStatus;
   teamStatus: FieldCellStatus;
+  /**
+   * ユーザーが確認表で「新規選手としてマスター登録」を明示選択した行。
+   * 自動では立てない。一括登録時に player master へ作成してから成績を保存する。
+   */
+  pendingNewPlayer?: boolean;
   /** 選手マスタ候補（要確認時に選択） */
   nameCandidates?: SeasonBatchNameCandidate[];
   fields: Partial<Record<SeasonBatchFieldKey, SeasonBatchFieldCell>>;
