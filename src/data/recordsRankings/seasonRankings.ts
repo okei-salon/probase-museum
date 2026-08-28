@@ -15,6 +15,13 @@ import {
 import { getTeam } from "@/data/teams";
 import { classifyPitcherWorkload } from "@/lib/sop/helpers";
 import {
+  buildTeamGamesContext,
+  evaluateIpQualified,
+  evaluatePaQualified,
+  resolveTeamGamesForPlayer,
+  type TeamGamesContext,
+} from "@/lib/stats";
+import {
   formatRecordsValue,
   SEASON_CS_ATTEMPTED_MIN,
   SEASON_RELIEF_IP_MIN,
@@ -154,23 +161,42 @@ function pitcherValue(
 function eligibleSeason(
   line: PlayerSeasonLine,
   def: RecordsStatDef,
+  teamGamesCtx: TeamGamesContext,
 ): { ok: boolean; unknown: boolean } {
   switch (def.eligibility) {
     case "none":
       return { ok: true, unknown: false };
     case "pa_qualified": {
       if (line.role !== "batter") return { ok: false, unknown: false };
-      const q = line.counting.paQualified;
-      if (q === true) return { ok: true, unknown: false };
-      if (q === false) return { ok: false, unknown: false };
-      return { ok: false, unknown: true };
+      const c = line.counting;
+      const pa =
+        c.pa ??
+        c.ab + c.bb + (c.hbp ?? 0) + (c.sf ?? 0) + (c.sac ?? 0);
+      const teamGames = resolveTeamGamesForPlayer(
+        teamGamesCtx,
+        line.teamId,
+      );
+      const status = evaluatePaQualified({
+        pa,
+        teamGames,
+        flag: c.paQualified,
+      });
+      if (!status.known) return { ok: false, unknown: true };
+      return { ok: status.qualified, unknown: false };
     }
     case "ip_qualified": {
       if (line.role !== "pitcher") return { ok: false, unknown: false };
-      const q = line.counting.ipQualified;
-      if (q === true) return { ok: true, unknown: false };
-      if (q === false) return { ok: false, unknown: false };
-      return { ok: false, unknown: true };
+      const teamGames = resolveTeamGamesForPlayer(
+        teamGamesCtx,
+        line.teamId,
+      );
+      const status = evaluateIpQualified({
+        ipOuts: line.counting.ipOuts,
+        teamGames,
+        flag: line.counting.ipQualified,
+      });
+      if (!status.known) return { ok: false, unknown: true };
+      return { ok: status.qualified, unknown: false };
     }
     case "risp_50": {
       if (line.role !== "batter") return { ok: false, unknown: false };
@@ -279,8 +305,19 @@ export function buildSeasonRecordsBoard(
   }[] = [];
 
   let unknownCount = 0;
+  const ctxCache = new Map<string, TeamGamesContext>();
   for (const line of lines) {
-    const el = eligibleSeason(line, def);
+    const cacheKey = `${scope}:${line.world ?? ""}:${line.year}`;
+    let teamGamesCtx = ctxCache.get(cacheKey);
+    if (!teamGamesCtx) {
+      teamGamesCtx = buildTeamGamesContext({
+        scope: scope === "interleague" ? "interleague" : "pennant",
+        year: line.year,
+        world: line.world ?? null,
+      });
+      ctxCache.set(cacheKey, teamGamesCtx);
+    }
+    const el = eligibleSeason(line, def, teamGamesCtx);
     if (el.unknown) {
       unknownCount += 1;
       continue;

@@ -1,3 +1,5 @@
+import { requiredPlateAppearances } from "@/lib/stats/qualification";
+
 /**
  * RECORDS ランキング定義・規定定数
  */
@@ -8,8 +10,8 @@ export type RecordsStatFormat = "int" | "avg" | "era" | "ip" | "rate2" | "pct";
 
 export type RecordsEligibility =
   | "none"
-  | "pa_qualified" // 規定打席フラグ
-  | "ip_qualified" // 規定投球回フラグ
+  | "pa_qualified" // 規定打席（チーム試合数×3.1 または保存フラグ）
+  | "ip_qualified" // 規定投球回（チーム試合数×1.0 または保存フラグ）
   | "risp_50" // 得点圏打席50以上
   | "cs_30" // 被盗企30以上
   | "relief_30"; // 救援型かつ救援30回以上
@@ -23,9 +25,9 @@ export type RecordsStatDef = {
   eligibility: RecordsEligibility;
 };
 
-/** 通算規定の係数（1シーズンあたり） */
+/** 通算規定の係数（1シーズンあたり・標準143試合換算） */
 export const CAREER_QUALIFIERS = {
-  paPerSeason: 443,
+  paPerSeason: requiredPlateAppearances(143),
   ipPerSeason: 143,
   rispAbPerSeason: 50,
   csAttemptedPerSeason: 30,

@@ -1,4 +1,5 @@
 import type { TeamStatColumn } from "@/data/seasonViews";
+import type { TeamId } from "@/data/teams";
 
 /**
  * 個人成績（ペナント / 交流戦で共通UI、データはスコープ別に保持）。
@@ -16,6 +17,14 @@ export type PlayerStatRow = {
   league: LeagueSide;
   /** 選手詳細への導線用（登録データがある場合） */
   playerId?: string;
+  /** 規定到達判定用（登録行） */
+  teamId?: TeamId;
+  /** 打席数（野手）。values.pa と同値だが明示 */
+  paCount?: number | null;
+  /** 投球回 outs（投手）。野球表記比較用 */
+  ipOuts?: number | null;
+  paQualifiedFlag?: boolean | null;
+  ipQualifiedFlag?: boolean | null;
   /** null = データなし（0とは区別） */
   values: Record<string, number | null>;
 };
@@ -312,6 +321,12 @@ export function formatPlayerStatValue(
   ) {
     return value.toFixed(2);
   }
-  if (key === "ip") return value.toFixed(1);
+  if (key === "ip") {
+    // 登録データは outs/3 の実数。野球表記へ戻す。
+    const outs = Math.round(value * 3);
+    const whole = Math.floor(outs / 3);
+    const rem = outs % 3;
+    return rem === 0 ? String(whole) : `${whole}.${rem}`;
+  }
   return String(Math.round(value));
 }

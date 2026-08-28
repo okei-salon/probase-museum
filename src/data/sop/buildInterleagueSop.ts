@@ -23,6 +23,13 @@ import {
   type InterleagueSopTitleDef,
 } from "@/lib/sop/rules";
 import { rankSopResults } from "@/lib/sop/computeSeasonSop";
+import {
+  buildTeamGamesContext,
+  evaluateIpQualified,
+  evaluatePaQualified,
+  resolveTeamGamesForPlayer,
+  type TeamGamesContext,
+} from "@/lib/stats";
 import type {
   SopLineItem,
   SopRankEntry,
@@ -91,12 +98,28 @@ function pitcherValue(
   }
 }
 
-function eligible(line: PlayerSeasonLine, def: InterleagueSopTitleDef): boolean {
+function eligible(
+  line: PlayerSeasonLine,
+  def: InterleagueSopTitleDef,
+  teamGamesCtx: TeamGamesContext,
+): boolean {
   if (!def.requireQualified) return true;
   if (line.role === "batter") {
-    return line.counting.paQualified === true;
+    const c = line.counting;
+    const pa =
+      c.pa ??
+      c.ab + c.bb + (c.hbp ?? 0) + (c.sf ?? 0) + (c.sac ?? 0);
+    return evaluatePaQualified({
+      pa,
+      teamGames: resolveTeamGamesForPlayer(teamGamesCtx, line.teamId),
+      flag: c.paQualified,
+    }).qualified;
   }
-  return line.counting.ipQualified === true;
+  return evaluateIpQualified({
+    ipOuts: line.counting.ipOuts,
+    teamGames: resolveTeamGamesForPlayer(teamGamesCtx, line.teamId),
+    flag: line.counting.ipQualified,
+  }).qualified;
 }
 
 export type InterleagueTitleBoardEntry = {
@@ -121,6 +144,10 @@ export function buildInterleagueTitleBoard(
   const lines = listSeasonLinesForSeason(identity).filter(
     (l) => l.scope === "interleague" && l.role === def.role,
   );
+  const teamGamesCtx = buildTeamGamesContext({
+    scope: "interleague",
+    identity,
+  });
   const pool: {
     playerId: string;
     playerName: string;
@@ -129,7 +156,7 @@ export function buildInterleagueTitleBoard(
   }[] = [];
 
   for (const line of lines) {
-    if (!eligible(line, def)) continue;
+    if (!eligible(line, def, teamGamesCtx)) continue;
     const value =
       line.role === "batter"
         ? batterValue(line, def)

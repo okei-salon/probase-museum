@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import {
   BATTER_CATCHER_STAT_KEYS,
@@ -26,6 +26,18 @@ import {
 } from "@/data/seasons";
 import { getTeam } from "@/data/teams";
 import type { TeamStatColumn } from "@/data/seasonViews";
+import {
+  buildTeamGamesContext,
+  compareStatRowsForRanking,
+  evaluateCsRateQualified,
+  evaluateIpQualified,
+  evaluatePaQualified,
+  isRateStatKey,
+  rankingDisplayRank,
+  resolveTeamGamesForPlayer,
+  teamIdFromShortName,
+  type TeamGamesContext,
+} from "@/lib/stats";
 
 type LeagueFilter = "central" | "pacific" | "all";
 type ViewMode = "ranking" | "team";
@@ -41,6 +53,10 @@ type PlayerStatsExplorerProps = {
   seasonKey?: string;
   /** ペナント／SEASON個人成績はリーグ切替あり、交流戦は基本12球団 */
   enableLeagueFilter?: boolean;
+};
+
+type EnrichedStatRow = PlayerStatRow & {
+  qualified: boolean;
 };
 
 export function PlayerStatsExplorer({
@@ -59,7 +75,6 @@ export function PlayerStatsExplorer({
   const defaultSortKey = role === "batter" ? "avg" : "era";
   const [sortKey, setSortKey] = useState(defaultSortKey);
   const [dir, setDir] = useState<"asc" | "desc">("desc");
-  const [registered, setRegistered] = useState<PlayerSeasonLine[]>([]);
 
   /** 盗塁阻止率を選択中のみ捕手系4項目を表示（保存データは変更しない） */
   const showCatcherColumns =
@@ -77,15 +92,23 @@ export function PlayerStatsExplorer({
     [seasonKey],
   );
 
-  useEffect(() => {
-    if (seasonIdentity) {
-      setRegistered(listSeasonLinesForSeason(seasonIdentity));
-      return;
-    }
-    setRegistered(listSeasonLines());
-  }, [scope, role, year, seasonIdentity]);
+  const registered = useMemo(() => {
+    if (seasonIdentity) return listSeasonLinesForSeason(seasonIdentity);
+    return listSeasonLines();
+  }, [seasonIdentity]);
 
   const allowSample = allowsLayoutSampleFallback(seasonIdentity);
+
+  const teamGamesCtx: TeamGamesContext = useMemo(
+    () =>
+      buildTeamGamesContext({
+        scope,
+        identity: seasonIdentity,
+        year: seasonIdentity?.year ?? year ?? null,
+        world: seasonIdentity?.world ?? null,
+      }),
+    [scope, seasonIdentity, year],
+  );
 
   const rows = useMemo(() => {
     const extras = registered
@@ -110,26 +133,54 @@ export function PlayerStatsExplorer({
     return [...byId.values()];
   }, [registered, role, scope, year, seasonIdentity, allowSample]);
 
+  const enriched = useMemo((): EnrichedStatRow[] => {
+    return rows.map((row) => ({
+      ...row,
+      qualified: resolveRowQualified(row, role, sortKey, teamGamesCtx),
+    }));
+  }, [rows, role, sortKey, teamGamesCtx]);
+
   const filtered = useMemo(() => {
     if (view === "team") {
-      return rows.filter((r) => r.team === team);
+      return enriched.filter((r) => r.team === team);
     }
-    if (!enableLeagueFilter || league === "all") return rows;
-    return rows.filter((r) => r.league === league);
-  }, [enableLeagueFilter, league, rows, team, view]);
+    if (!enableLeagueFilter || league === "all") return enriched;
+    return enriched.filter((r) => r.league === league);
+  }, [enableLeagueFilter, enriched, league, team, view]);
+
+  const rateStat = isRateStatKey(role, sortKey);
 
   const sorted = useMemo(() => {
-    return [...filtered].sort((a, b) => {
-      const av = a.values[sortKey];
-      const bv = b.values[sortKey];
-      const aNull = av == null || !Number.isFinite(av);
-      const bNull = bv == null || !Number.isFinite(bv);
-      if (aNull && bNull) return 0;
-      if (aNull) return 1;
-      if (bNull) return -1;
-      return dir === "asc" ? av - bv : bv - av;
-    });
-  }, [dir, filtered, sortKey]);
+    const list = [...filtered];
+    if (view === "ranking") {
+      list.sort((a, b) =>
+        compareStatRowsForRanking(a, b, {
+          sortKey,
+          dir,
+          rateStat,
+        }),
+      );
+      return list;
+    }
+    // チーム別: 規定で並びを強制しない（選択列の数値順のみ）
+    list.sort((a, b) =>
+      compareStatRowsForRanking(a, b, {
+        sortKey,
+        dir,
+        rateStat: false,
+      }),
+    );
+    return list;
+  }, [dir, filtered, rateStat, sortKey, view]);
+
+  const scheduleNote = useMemo(() => {
+    const g = teamGamesCtx.scheduleGames;
+    if (g == null) return null;
+    if (role === "batter") {
+      return `規定打席: チーム試合数×3.1（代表 ${g}試合 → ${Math.floor(g * 3.1)}打席）`;
+    }
+    return `規定投球回: チーム試合数×1.0（代表 ${g}試合 → ${g}.0回）`;
+  }, [role, teamGamesCtx.scheduleGames]);
 
   function switchRole(next: PlayerRole) {
     setRole(next);
@@ -250,115 +301,197 @@ export function PlayerStatsExplorer({
       ) : null}
 
       {sorted.length > 0 ? (
-      <div className="overflow-x-auto rounded-lg border border-white/10">
-        <table
-          className={cn(
-            "w-max min-w-full border-collapse text-left text-[11px] md:text-[12px]",
-            role === "pitcher"
-              ? "min-w-[1100px]"
-              : showCatcherColumns
+        <div className="overflow-x-auto rounded-lg border border-white/10">
+          <table
+            className={cn(
+              "w-max min-w-full border-collapse text-left text-[11px] md:text-[12px]",
+              role === "pitcher"
                 ? "min-w-[1100px]"
-                : "min-w-[980px]",
-          )}
-        >
-          <thead>
-            <tr className="border-b border-[color:var(--museum-accent-border,#d4af3773)] bg-black/50">
-              <th className={cn(rankHeadClass, colDividerClass)}>
-                #
-              </th>
-              <th className={cn(playerHeadClass, colDividerClass)}>
-                選手
-              </th>
-              {view === "ranking" ? (
-                <th className={cn(teamHeadClass, colDividerClass)}>
-                  球団
-                </th>
-              ) : null}
-              {visibleColumns.map((col, colIndex) => {
-                const active = sortKey === col.key;
-                const last = colIndex === visibleColumns.length - 1;
-                return (
-                  <th
-                    key={col.key}
-                    className={cn(
-                      statHeadClass(col),
-                      !last && colDividerClass,
-                    )}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => handleSort(col)}
-                      className={cn(
-                        "inline-flex items-center gap-0.5 whitespace-nowrap font-medium",
-                        active
-                          ? "text-[color:var(--museum-accent,#d4af37)]"
-                          : "text-museum-ivory-soft hover:text-museum-ivory",
-                      )}
-                    >
-                      {col.label}
-                      <span className="text-[9px] opacity-80">
-                        {active ? (dir === "asc" ? "▲" : "▼") : "◇"}
-                      </span>
-                    </button>
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((row, index) => (
-              <tr
-                key={row.id}
-                className="border-b border-white/10 text-museum-ivory"
-              >
-                <td className={cn(rankCellClass, colDividerClass)}>
-                  {index + 1}
-                </td>
-                <td className={cn(playerCellClass, colDividerClass)}>
-                  {row.playerId ? (
-                    <Link
-                      href={`/players/${row.playerId}/yearly`}
-                      className="block whitespace-nowrap text-museum-ivory underline-offset-2 hover:text-[color:var(--museum-accent,#d4af37)] hover:underline"
-                    >
-                      {row.name}
-                    </Link>
-                  ) : (
-                    <span className="whitespace-nowrap">{row.name}</span>
-                  )}
-                </td>
+                : showCatcherColumns
+                  ? "min-w-[1100px]"
+                  : "min-w-[980px]",
+            )}
+          >
+            <thead>
+              <tr className="border-b border-[color:var(--museum-accent-border,#d4af3773)] bg-black/50">
+                <th className={cn(rankHeadClass, colDividerClass)}>#</th>
+                <th className={cn(playerHeadClass, colDividerClass)}>選手</th>
                 {view === "ranking" ? (
-                  <td className={cn(teamCellClass, colDividerClass)}>
-                    {row.team}
-                  </td>
+                  <th className={cn(teamHeadClass, colDividerClass)}>球団</th>
                 ) : null}
                 {visibleColumns.map((col, colIndex) => {
+                  const active = sortKey === col.key;
                   const last = colIndex === visibleColumns.length - 1;
                   return (
-                    <td
+                    <th
                       key={col.key}
                       className={cn(
-                        statCellClass(col),
+                        statHeadClass(col),
                         !last && colDividerClass,
                       )}
                     >
-                      {formatPlayerStatValue(col.key, row.values[col.key] ?? null)}
-                    </td>
+                      <button
+                        type="button"
+                        onClick={() => handleSort(col)}
+                        className={cn(
+                          "inline-flex items-center gap-0.5 whitespace-nowrap font-medium",
+                          active
+                            ? "text-[color:var(--museum-accent,#d4af37)]"
+                            : "text-museum-ivory-soft hover:text-museum-ivory",
+                        )}
+                      >
+                        {col.label}
+                        <span className="text-[9px] opacity-80">
+                          {active ? (dir === "asc" ? "▲" : "▼") : "◇"}
+                        </span>
+                      </button>
+                    </th>
                   );
                 })}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {sorted.map((row, index) => {
+                const displayRank =
+                  view === "ranking"
+                    ? rankingDisplayRank(index, row, sorted, rateStat)
+                    : index + 1;
+                const highlight = row.qualified && rateStat;
+                const muted =
+                  view === "ranking" && rateStat && !row.qualified;
+                return (
+                  <tr
+                    key={row.id}
+                    className={cn(
+                      "border-b border-white/10",
+                      muted
+                        ? "text-museum-ivory-soft/80"
+                        : "text-museum-ivory",
+                      highlight &&
+                        "bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.06))]",
+                    )}
+                  >
+                    <td className={cn(rankCellClass, colDividerClass)}>
+                      {displayRank == null ? "―" : displayRank}
+                    </td>
+                    <td className={cn(playerCellClass, colDividerClass)}>
+                      <span className="inline-flex items-center gap-1.5">
+                        {row.playerId ? (
+                          <Link
+                            href={`/players/${row.playerId}/yearly`}
+                            className={cn(
+                              "block whitespace-nowrap underline-offset-2 hover:underline",
+                              highlight
+                                ? "text-[color:var(--museum-accent,#d4af37)] hover:text-[color:var(--museum-accent,#d4af37)]"
+                                : "text-museum-ivory hover:text-[color:var(--museum-accent,#d4af37)]",
+                            )}
+                          >
+                            {row.name}
+                          </Link>
+                        ) : (
+                          <span
+                            className={cn(
+                              "whitespace-nowrap",
+                              highlight &&
+                                "text-[color:var(--museum-accent,#d4af37)]",
+                            )}
+                          >
+                            {row.name}
+                          </span>
+                        )}
+                        {highlight ? (
+                          <span
+                            className="shrink-0 rounded border border-[color:var(--museum-accent-border,#d4af3773)] bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.14))] px-1 py-px text-[9px] tracking-[0.06em] text-[color:var(--museum-accent,#d4af37)]"
+                            title="規定到達"
+                          >
+                            規定
+                          </span>
+                        ) : null}
+                      </span>
+                    </td>
+                    {view === "ranking" ? (
+                      <td className={cn(teamCellClass, colDividerClass)}>
+                        {row.team}
+                      </td>
+                    ) : null}
+                    {visibleColumns.map((col, colIndex) => {
+                      const last = colIndex === visibleColumns.length - 1;
+                      const activeCol = sortKey === col.key;
+                      return (
+                        <td
+                          key={col.key}
+                          className={cn(
+                            statCellClass(col),
+                            !last && colDividerClass,
+                            highlight &&
+                              activeCol &&
+                              "font-medium text-[color:var(--museum-accent,#d4af37)]",
+                          )}
+                        >
+                          {formatPlayerStatValue(
+                            col.key,
+                            row.values[col.key] ?? null,
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       ) : null}
 
       <p className="text-[10px] text-museum-ivory-soft">
         {scope === "pennant" ? "シーズン全体" : "交流戦期間"}の個人成績。
         手入力・画像取込で登録した年度成績はランキングに反映されます。
         選手名をクリックすると詳細成績へ移動できます。
+        {view === "ranking" && rateStat
+          ? " 率系は規定到達者を正式順位とし、未到達者は一覧下部に残します。"
+          : null}
+        {scheduleNote ? ` ${scheduleNote}` : null}
       </p>
     </div>
   );
+}
+
+function resolveRowQualified(
+  row: PlayerStatRow,
+  role: PlayerRole,
+  sortKey: string,
+  ctx: TeamGamesContext,
+): boolean {
+  const teamId =
+    row.teamId ?? teamIdFromShortName(row.team) ?? null;
+  const teamGames = resolveTeamGamesForPlayer(ctx, teamId);
+
+  if (role === "batter") {
+    if (sortKey === "csRate") {
+      return evaluateCsRateQualified(row.values.csAttempted);
+    }
+    const pa =
+      row.paCount ??
+      (row.values.pa != null && Number.isFinite(row.values.pa)
+        ? row.values.pa
+        : null);
+    return evaluatePaQualified({
+      pa,
+      teamGames,
+      flag: row.paQualifiedFlag,
+    }).qualified;
+  }
+
+  const ipOuts =
+    row.ipOuts ??
+    (row.values.ip != null && Number.isFinite(row.values.ip)
+      ? Math.round(row.values.ip * 3)
+      : null);
+  return evaluateIpQualified({
+    ipOuts,
+    teamGames,
+    flag: row.ipQualifiedFlag,
+  }).qualified;
 }
 
 function toggleClass(active: boolean) {
@@ -452,7 +585,10 @@ function seasonLineToStatRow(line: PlayerSeasonLine): PlayerStatRow {
       playerId: line.playerId,
       name: line.playerName,
       team: teamShort,
+      teamId: line.teamId,
       league,
+      paCount: pa,
+      paQualifiedFlag: c.paQualified ?? null,
       values: {
         avg: d.avg,
         g: c.g ?? null,
@@ -496,7 +632,10 @@ function seasonLineToStatRow(line: PlayerSeasonLine): PlayerStatRow {
     playerId: line.playerId,
     name: line.playerName,
     team: teamShort,
+    teamId: line.teamId,
     league,
+    ipOuts: c.ipOuts,
+    ipQualifiedFlag: c.ipQualified ?? null,
     values: {
       era: d.era ?? 0,
       ip,

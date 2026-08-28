@@ -17,6 +17,13 @@ import {
   type TitleRole,
 } from "./defs";
 import { formatTitleValue } from "./format";
+import {
+  buildTeamGamesContext,
+  evaluateIpQualified,
+  evaluatePaQualified,
+  resolveTeamGamesForPlayer,
+  type TeamGamesContext,
+} from "@/lib/stats";
 
 export type TitleRankEntry = {
   rank: number;
@@ -52,22 +59,47 @@ export type TitleRankingsResult = {
 function passesEligibility(
   def: TitleDef,
   c: TitleCandidate,
+  teamGamesCtx: TeamGamesContext,
 ): { ok: boolean; unknown: boolean } {
   switch (def.eligibility as TitleEligibility) {
     case "none":
       return { ok: true, unknown: false };
     case "pa_qualify": {
-      // 1=到達, 0=未到達, -1/未設定=判定不可 → タイトル対象外
-      const flag = c.values.paQualified;
-      if (flag === 1) return { ok: true, unknown: false };
-      if (flag === 0) return { ok: false, unknown: false };
-      return { ok: false, unknown: true };
+      const teamGames = resolveTeamGamesForPlayer(teamGamesCtx, c.teamId);
+      const flag =
+        c.values.paQualified === 1
+          ? true
+          : c.values.paQualified === 0
+            ? false
+            : null;
+      const status = evaluatePaQualified({
+        pa: c.values.pa,
+        teamGames,
+        flag,
+      });
+      if (!status.known) return { ok: false, unknown: true };
+      return { ok: status.qualified, unknown: false };
     }
     case "ip_qualify": {
-      const flag = c.values.ipQualified;
-      if (flag === 1) return { ok: true, unknown: false };
-      if (flag === 0) return { ok: false, unknown: false };
-      return { ok: false, unknown: true };
+      const teamGames = resolveTeamGamesForPlayer(teamGamesCtx, c.teamId);
+      const flag =
+        c.values.ipQualified === 1
+          ? true
+          : c.values.ipQualified === 0
+            ? false
+            : null;
+      const ipOuts =
+        c.values.ipOuts ??
+        (c.values.ip != null && Number.isFinite(c.values.ip)
+          ? Math.round(c.values.ip * 3)
+          : null);
+      const status = evaluateIpQualified({
+        ipOuts,
+        teamGames,
+        flag,
+      });
+      if (!status.known) return { ok: false, unknown: true };
+      return { ok: status.qualified, unknown: false };
     }
     case "relief_ip_30": {
       if (!c.available[def.valueKey]) return { ok: false, unknown: false };
@@ -102,7 +134,8 @@ function top5(
   league: LeagueSide,
   year: number,
   persistHistory: boolean,
-  world?: SeasonWorld | null,
+  world: SeasonWorld | null | undefined,
+  teamGamesCtx: TeamGamesContext,
 ): TitleRankEntry[] {
   const pool = candidates.filter((c) => {
     if (c.league !== league) return false;
@@ -119,7 +152,7 @@ function top5(
     if (!c.available[def.valueKey] && ["risp", "csRate", "reliefEra", "reliefSoRate"].includes(def.valueKey)) {
       return false;
     }
-    const el = passesEligibility(def, c);
+    const el = passesEligibility(def, c, teamGamesCtx);
     return el.ok;
   });
 
@@ -160,11 +193,21 @@ function top5(
   });
 }
 
-function collectGaps(role: TitleRole, usingSample: boolean): string[] {
-  const gaps: string[] = [
-    "規定打席：打席数およびチーム試合数（公式の規定打席算出）が年度個人成績に不足しています。",
-    "規定投球回：公式の規定投球回閾値判定用のデータが不足しています。",
-  ];
+function collectGaps(
+  role: TitleRole,
+  usingSample: boolean,
+  hasScheduleGames: boolean,
+): string[] {
+  const gaps: string[] = [];
+  if (!hasScheduleGames) {
+    gaps.push(
+      "規定打席・規定投球回：順位表またはチーム成績の試合数が未登録の場合、保存フラグが無い選手は率系タイトル対象外になります。",
+    );
+  } else {
+    gaps.push(
+      "規定打席 = チーム試合数×3.1（端数切捨て）／規定投球回 = チーム試合数×1.0回（outs比較）。",
+    );
+  }
   if (role === "batter") {
     gaps.push(
       "得点圏打率：圏打数・圏安打が未登録の選手は対象外です。",
@@ -226,6 +269,12 @@ export function buildTitleRankings(
   );
   const defs = titlesForRole(role);
   const history = identity ? listTitleWinsForSeason(identity) : [];
+  const teamGamesCtx = buildTeamGamesContext({
+    scope: "pennant",
+    identity,
+    year,
+    world,
+  });
 
   const sections: TitleSection[] = defs.map((def) => {
     const hardMissing =
@@ -250,6 +299,7 @@ export function buildTitleRankings(
       year,
       persistHistory && history.filter((h) => h.titleId === def.id && h.league === "central").length === 0,
       world,
+      teamGamesCtx,
     );
     const computedPacific = top5(
       def,
@@ -258,6 +308,7 @@ export function buildTitleRankings(
       year,
       persistHistory && history.filter((h) => h.titleId === def.id && h.league === "pacific").length === 0,
       world,
+      teamGamesCtx,
     );
 
     const histCentral = entriesFromHistory(
@@ -299,6 +350,10 @@ export function buildTitleRankings(
     year,
     usingSample,
     sections,
-    dataGaps: collectGaps(role, usingSample),
+    dataGaps: collectGaps(
+      role,
+      usingSample,
+      teamGamesCtx.scheduleGames != null,
+    ),
   };
 }
