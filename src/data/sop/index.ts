@@ -9,6 +9,8 @@ export {
   buildInterleagueSopRankings,
   buildInterleagueTitleBoard,
   collectAllInterleagueSopResults,
+  interleagueSopPointDetailsFromResult,
+  type InterleagueSopPointDetail,
   type InterleagueTitleBoard,
   type InterleagueTitleBoardEntry,
 } from "./buildInterleagueSop";

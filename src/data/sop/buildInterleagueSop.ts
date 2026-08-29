@@ -225,11 +225,56 @@ export function buildInterleagueSopItemsForSeason(
         label: `${board.def.label}${entry.rank}位`,
         points: entry.points,
         detail: formatSeasonLineLabel(identity),
+        rank: entry.rank,
+        value: entry.value,
       });
       byPlayer.set(entry.playerId, list);
     }
   }
   return byPlayer;
+}
+
+/**
+ * 交流戦SOP結果の獲得ポイント内訳。
+ * buildInterleagueSopRankings が載せた items をそのまま分解する（別計算しない）。
+ */
+export type InterleagueSopPointDetail = {
+  titleId: string;
+  category: string;
+  rank: number;
+  points: number;
+  value: number;
+};
+
+export function interleagueSopPointDetailsFromResult(
+  result: SopSeasonResult,
+): InterleagueSopPointDetail[] {
+  const details: InterleagueSopPointDetail[] = [];
+  for (const it of result.items) {
+    if (it.category !== "interleague_titles" || it.points <= 0) continue;
+    const m = /^interleague:([^:]+):(\d+)$/.exec(it.id);
+    const titleId = m?.[1] ?? "";
+    const def = INTERLEAGUE_SOP_TITLES.find((t) => t.id === titleId);
+    const rank = it.rank ?? (m ? Number(m[2]) : 0);
+    if (it.value == null || !Number.isFinite(it.value) || !rank) continue;
+    details.push({
+      titleId,
+      category: def?.label ?? it.label.replace(/\d+位$/, ""),
+      rank,
+      points: it.points,
+      value: it.value,
+    });
+  }
+  // 部門定義順（SOP対象10部門）で安定表示
+  const order = new Map<string, number>(
+    INTERLEAGUE_SOP_TITLES.map((t, i) => [t.id, i]),
+  );
+  details.sort(
+    (a, b) =>
+      (order.get(a.titleId) ?? 99) - (order.get(b.titleId) ?? 99) ||
+      a.rank - b.rank,
+  );
+  return details;
 }
 
 function emptyInterleagueResult(

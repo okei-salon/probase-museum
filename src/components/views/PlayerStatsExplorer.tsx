@@ -306,7 +306,10 @@ export function PlayerStatsExplorer({
       ) : null}
 
       {sorted.length > 0 ? (
-        <div className="overflow-x-auto rounded-lg border border-white/10">
+        <div
+          className="w-full max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-white/10"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
           <table
             className={cn(
               "w-max min-w-full border-collapse text-left text-[11px] md:text-[12px]",
@@ -319,8 +322,30 @@ export function PlayerStatsExplorer({
           >
             <thead>
               <tr className="border-b border-[color:var(--museum-accent-border,#d4af3773)] bg-black/50">
-                <th className={cn(rankHeadClass, colDividerClass)}>#</th>
-                <th className={cn(playerHeadClass, colDividerClass)}>選手</th>
+                <th
+                  className={cn(
+                    rankHeadClass,
+                    colDividerClass,
+                    stickyRankHeadClass,
+                  )}
+                  style={{ left: 0, width: STICKY_RANK_W, minWidth: STICKY_RANK_W }}
+                >
+                  #
+                </th>
+                <th
+                  className={cn(
+                    playerHeadClass,
+                    colDividerClass,
+                    stickyPlayerHeadClass,
+                  )}
+                  style={{
+                    left: STICKY_RANK_W,
+                    width: STICKY_PLAYER_W,
+                    minWidth: STICKY_PLAYER_W,
+                  }}
+                >
+                  選手
+                </th>
                 {view === "ranking" ? (
                   <th className={cn(teamHeadClass, colDividerClass)}>球団</th>
                 ) : null}
@@ -364,6 +389,9 @@ export function PlayerStatsExplorer({
                 const highlight = row.qualified && rateStat;
                 const muted =
                   view === "ranking" && rateStat && !row.qualified;
+                const stickyBg = highlight
+                  ? STICKY_BG_HIGHLIGHT
+                  : STICKY_BG_BODY;
                 return (
                   <tr
                     key={row.id}
@@ -376,10 +404,34 @@ export function PlayerStatsExplorer({
                         "bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.06))]",
                     )}
                   >
-                    <td className={cn(rankCellClass, colDividerClass)}>
+                    <td
+                      className={cn(
+                        rankCellClass,
+                        colDividerClass,
+                        "sticky z-10",
+                        stickyBg,
+                      )}
+                      style={{
+                        left: 0,
+                        width: STICKY_RANK_W,
+                        minWidth: STICKY_RANK_W,
+                      }}
+                    >
                       {displayRank == null ? "―" : displayRank}
                     </td>
-                    <td className={cn(playerCellClass, colDividerClass)}>
+                    <td
+                      className={cn(
+                        playerCellClass,
+                        colDividerClass,
+                        "sticky z-10 shadow-[2px_0_6px_rgba(0,0,0,0.35)]",
+                        stickyBg,
+                      )}
+                      style={{
+                        left: STICKY_RANK_W,
+                        width: STICKY_PLAYER_W,
+                        minWidth: STICKY_PLAYER_W,
+                      }}
+                    >
                       <span className="inline-flex items-center gap-1.5">
                         {row.playerId ? (
                           <Link
@@ -511,15 +563,31 @@ function toggleClass(active: boolean) {
 /** 横罫線（white/10）より弱い縦区切り */
 const colDividerClass = "border-r border-[color:rgba(212,175,55,0.12)]";
 
+/** 横スクロール時に順位・選手名を固定（opaque bg で数値の透け防止） */
+const STICKY_RANK_W = "2.75rem";
+const STICKY_PLAYER_W = "8.5rem";
+const STICKY_BG_HEAD = "bg-[#0d1118]";
+const STICKY_BG_BODY = "bg-[#0a0a0a]";
+const STICKY_BG_HIGHLIGHT = "bg-[#14110c]";
+
+const stickyRankHeadClass = cn(
+  "sticky z-30",
+  STICKY_BG_HEAD,
+);
+const stickyPlayerHeadClass = cn(
+  "sticky z-30 shadow-[2px_0_6px_rgba(0,0,0,0.35)]",
+  STICKY_BG_HEAD,
+);
+
 const rankHeadClass =
   "whitespace-nowrap px-2 py-2 font-medium text-[color:var(--museum-accent,#d4af37)]";
 const rankCellClass =
   "whitespace-nowrap px-2 py-2 tabular-nums text-[color:var(--museum-accent,#d4af37)]";
 
 const playerHeadClass =
-  "min-w-[8.5rem] whitespace-nowrap px-3 py-2 font-medium text-[color:var(--museum-accent,#d4af37)]";
+  "whitespace-nowrap px-3 py-2 font-medium text-[color:var(--museum-accent,#d4af37)]";
 const playerCellClass =
-  "min-w-[8.5rem] whitespace-nowrap px-3 py-2 font-medium [word-break:keep-all]";
+  "whitespace-nowrap px-3 py-2 font-medium [word-break:keep-all]";
 
 const teamHeadClass =
   "min-w-[4.5rem] whitespace-nowrap px-2.5 py-2 font-medium text-[color:var(--museum-accent,#d4af37)]";

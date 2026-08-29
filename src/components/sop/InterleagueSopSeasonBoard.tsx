@@ -12,7 +12,9 @@ import {
   parseSeasonKey,
   type SeasonIdentity,
 } from "@/data/seasons";
+import type { SopSeasonResult } from "@/lib/sop/types";
 import { cn } from "@/lib/cn";
+import { InterleagueSopDetailPanel } from "@/components/sop/InterleagueSopDetailPanel";
 
 function listInterleagueSopIdentities(): SeasonIdentity[] {
   const map = new Map<string, SeasonIdentity>();
@@ -27,6 +29,11 @@ function listInterleagueSopIdentities(): SeasonIdentity[] {
     return (a.world ?? "").localeCompare(b.world ?? "");
   });
 }
+
+type SelectedSop = {
+  result: SopSeasonResult;
+  rank: number | null;
+};
 
 type InterleagueSopSeasonViewProps = {
   identity: SeasonIdentity;
@@ -50,6 +57,16 @@ export function InterleagueSopSeasonView({
     };
   }, [ready, identity]);
 
+  const [selected, setSelected] = useState<SelectedSop | null>(null);
+
+  useEffect(() => {
+    setSelected(null);
+  }, [identity.seasonKey]);
+
+  function openDetail(result: SopSeasonResult, rank: number | null) {
+    setSelected({ result, rank });
+  }
+
   if (!ready) {
     return <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>;
   }
@@ -62,29 +79,54 @@ export function InterleagueSopSeasonView({
         </h3>
         <p className="text-[12px] text-museum-ivory-soft">
           {formatSeasonLineLabel(identity)}{" "}
-          の交流戦SOP上位4名（野手・投手混合）。
+          の交流戦SOP上位4名（野手・投手混合）。カードをタップすると獲得ポイント内訳を表示します。
         </p>
         {data && data.kings.length > 0 ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {data.kings.map((k, i) => (
-              <article
-                key={`${k.playerId}-${k.role}`}
-                className="rounded-xl border border-[color:var(--museum-accent,#d4af37)]/35 bg-black/50 p-4"
-              >
-                <p className="text-[10px] tracking-[0.16em] text-[color:var(--museum-accent,#d4af37)]">
-                  第{i + 1}席
-                </p>
-                <p className="mt-1 text-[16px] text-museum-ivory">
-                  {k.playerName}
-                </p>
-                <p className="text-[11px] text-museum-ivory-soft">
-                  {k.teamShort} · {k.role === "batter" ? "野手" : "投手"}
-                </p>
-                <p className="mt-2 font-display text-[22px] text-[color:var(--museum-accent,#d4af37)]">
-                  {k.total}pt
-                </p>
-              </article>
-            ))}
+            {data.kings.map((k, i) => {
+              const active =
+                selected?.result.playerId === k.playerId &&
+                selected?.result.role === k.role;
+              const rankingRank =
+                data.rankings.rankings.find(
+                  (r) =>
+                    r.result.playerId === k.playerId &&
+                    r.result.role === k.role,
+                )?.rank ?? i + 1;
+              return (
+                <button
+                  key={`${k.playerId}-${k.role}`}
+                  type="button"
+                  onClick={() => openDetail(k, rankingRank)}
+                  className={cn(
+                    "rounded-xl border bg-black/50 p-4 text-left transition-colors",
+                    "min-h-[7.5rem] cursor-pointer",
+                    active
+                      ? "border-[color:var(--museum-accent,#d4af37)] bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.12))]"
+                      : "border-[color:var(--museum-accent,#d4af37)]/35 hover:border-[color:var(--museum-accent,#d4af37)]/70",
+                  )}
+                >
+                  <p className="text-[10px] tracking-[0.16em] text-[color:var(--museum-accent,#d4af37)]">
+                    第{i + 1}席
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-1 text-[16px] text-museum-ivory underline-offset-2",
+                      "group-hover:underline",
+                      active && "text-[color:var(--museum-accent,#d4af37)]",
+                    )}
+                  >
+                    {k.playerName}
+                  </p>
+                  <p className="text-[11px] text-museum-ivory-soft">
+                    {k.teamShort} · {k.role === "batter" ? "野手" : "投手"}
+                  </p>
+                  <p className="mt-2 font-display text-[22px] text-[color:var(--museum-accent,#d4af37)]">
+                    {k.total}pt
+                  </p>
+                </button>
+              );
+            })}
           </div>
         ) : (
           <p className="text-[12px] text-white/45">
@@ -92,6 +134,14 @@ export function InterleagueSopSeasonView({
           </p>
         )}
       </section>
+
+      {selected ? (
+        <InterleagueSopDetailPanel
+          result={selected.result}
+          rank={selected.rank}
+          onClose={() => setSelected(null)}
+        />
+      ) : null}
 
       <section className="space-y-3">
         <h3 className="text-[12px] tracking-[0.14em] text-[color:var(--museum-accent,#d4af37)]">
@@ -114,28 +164,50 @@ export function InterleagueSopSeasonView({
               </tr>
             </thead>
             <tbody>
-              {(data?.rankings.rankings ?? []).map((row) => (
-                <tr
-                  key={`${row.result.playerId}-${row.result.role}`}
-                  className="border-t border-white/5"
-                >
-                  <td className="px-3 py-2 tabular-nums">{row.rank}</td>
-                  <td className="px-3 py-2 text-museum-ivory">
-                    {row.result.playerName}
-                  </td>
-                  <td className="px-3 py-2 text-museum-ivory-soft">
-                    {row.result.role === "batter" ? "野手" : "投手"}
-                  </td>
-                  <td className="px-3 py-2">{row.result.teamShort}</td>
-                  <td
+              {(data?.rankings.rankings ?? []).map((row) => {
+                const active =
+                  selected?.result.playerId === row.result.playerId &&
+                  selected?.result.role === row.result.role;
+                return (
+                  <tr
+                    key={`${row.result.playerId}-${row.result.role}`}
                     className={cn(
-                      "px-3 py-2 tabular-nums text-[color:var(--museum-accent,#d4af37)]",
+                      "border-t border-white/5",
+                      active &&
+                        "bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.1))]",
                     )}
                   >
-                    {row.result.total}pt
-                  </td>
-                </tr>
-              ))}
+                    <td className="px-3 py-2 tabular-nums">{row.rank}</td>
+                    <td className="px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openDetail(row.result, row.rank)
+                        }
+                        className={cn(
+                          "min-h-9 cursor-pointer text-left text-museum-ivory underline-offset-2",
+                          "hover:text-[color:var(--museum-accent,#d4af37)] hover:underline",
+                          active &&
+                            "text-[color:var(--museum-accent,#d4af37)] underline",
+                        )}
+                      >
+                        {row.result.playerName}
+                      </button>
+                    </td>
+                    <td className="px-3 py-2 text-museum-ivory-soft">
+                      {row.result.role === "batter" ? "野手" : "投手"}
+                    </td>
+                    <td className="px-3 py-2">{row.result.teamShort}</td>
+                    <td
+                      className={cn(
+                        "px-3 py-2 tabular-nums text-[color:var(--museum-accent,#d4af37)]",
+                      )}
+                    >
+                      {row.result.total}pt
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {(data?.rankings.rankings.length ?? 0) === 0 ? (
@@ -144,6 +216,11 @@ export function InterleagueSopSeasonView({
             </p>
           ) : null}
         </div>
+        {!selected ? (
+          <p className="text-[11px] text-museum-ivory-soft">
+            選手名または四天王カードをタップすると、獲得ポイント内訳を表示します。
+          </p>
+        ) : null}
       </section>
     </div>
   );
@@ -203,24 +280,25 @@ export function InterleagueSopSeasonBoard({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {!fixedIdentity ? (
         <label className="block max-w-xs">
-          <span className="mb-1 block text-[11px] text-white/55">シーズン</span>
+          <span className="mb-1 block text-[11px] tracking-[0.1em] text-white/55">
+            シーズン
+          </span>
           <select
             value={identity.seasonKey}
             onChange={(e) => setSeasonKey(e.target.value)}
             className="w-full rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-[13px] text-white"
           >
-            {identities.map((s) => (
-              <option key={s.seasonKey} value={s.seasonKey}>
-                {formatSeasonLineLabel(s)}
+            {identities.map((id) => (
+              <option key={id.seasonKey} value={id.seasonKey}>
+                {formatSeasonLineLabel(id)}
               </option>
             ))}
           </select>
         </label>
       ) : null}
-
       <InterleagueSopSeasonView identity={identity} ready={ready} />
     </div>
   );

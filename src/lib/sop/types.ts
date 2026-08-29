@@ -41,6 +41,10 @@ export type SopLineItem = {
   detail?: string;
   /** データ不足で判定できなかった場合 */
   unresolved?: boolean;
+  /** 交流戦SOPなど順位付き項目の順位 */
+  rank?: number;
+  /** 交流戦SOPなど、その部門の実成績値 */
+  value?: number;
 };
 
 export type PitcherWorkloadClass = "starter" | "reliever" | "hybrid" | "unknown";
