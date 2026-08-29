@@ -162,16 +162,21 @@ export function PlayerStatsExplorer({
       );
       return list;
     }
-    // チーム別: 規定で並びを強制しない（選択列の数値順のみ）
+    // 交流戦・投手・チーム別のみ: ランキングの率系と同じく規定到達 → 未到達
+    // （判定は「規定」バッジと同じ row.qualified / evaluateIpQualified）
+    // グループ内は選択列（既定は防御率・昇順）で並べる
+    // 野手・シーズン成績・他ビューは従来どおり規定で強制しない
+    const interleaguePitcherTeam =
+      scope === "interleague" && role === "pitcher";
     list.sort((a, b) =>
       compareStatRowsForRanking(a, b, {
-        sortKey,
-        dir,
-        rateStat: false,
+        sortKey: interleaguePitcherTeam ? "era" : sortKey,
+        dir: interleaguePitcherTeam ? "asc" : dir,
+        rateStat: interleaguePitcherTeam,
       }),
     );
     return list;
-  }, [dir, filtered, rateStat, sortKey, view]);
+  }, [dir, filtered, rateStat, role, scope, sortKey, view]);
 
   const scheduleNote = useMemo(() => {
     const g = teamGamesCtx.scheduleGames;
