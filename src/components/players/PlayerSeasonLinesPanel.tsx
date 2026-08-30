@@ -10,16 +10,19 @@ import {
 import { formatSeasonLineLabel } from "@/data/seasons";
 import { getTeam } from "@/data/teams";
 import {
+  formatPlayerStatValue,
+  pitcherColumns,
+} from "@/data/playerStats";
+import {
   aggregateBatterCounting,
   aggregatePitcherCounting,
   computeBatterDerived,
   computePitcherDerived,
+  type PitcherCountingInput,
+  type PitcherDerived,
 } from "@/lib/manualEntry/computeSeasonStats";
 import {
   formatAvgDisplay,
-  formatEraDisplay,
-  formatWinPctDisplay,
-  outsToIpDisplay,
 } from "@/lib/manualEntry/normalizeInput";
 import { cn } from "@/lib/cn";
 
@@ -437,120 +440,124 @@ function PitcherYearTable({
 }) {
   const sum = aggregatePitcherCounting(lines.map((l) => l.counting));
   const derived = computePitcherDerived(sum);
-  const hp = sum.hld ?? sum.hp ?? null;
+  /** 個人成績ランキング投手列と同じ27項目（年度・球団は別） */
+  const statCols = pitcherColumns;
+  const colDivider =
+    "border-r border-[color:rgba(212,175,55,0.12)]";
+
+  function cellsFor(
+    counting: PitcherCountingInput,
+    d: PitcherDerived,
+  ): string[] {
+    return statCols.map((col) =>
+      formatPlayerStatValue(col.key, pitcherStatValue(counting, d, col.key)),
+    );
+  }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-white/10">
-      <table className="w-full min-w-[960px] border-collapse text-left text-[12px] md:text-[13px]">
+    <div
+      className="w-full max-w-full overflow-x-auto overscroll-x-contain rounded-xl border border-white/10"
+      style={{ WebkitOverflowScrolling: "touch" }}
+    >
+      <table className="w-max min-w-[1200px] border-collapse text-left text-[11px] md:text-[12px]">
         <thead>
           <tr className="border-b border-white/10 text-[11px] text-white/55">
-            <th className="px-2.5 py-2 font-medium">年度</th>
-            <th className="px-2.5 py-2 font-medium">球団</th>
-            <th className="px-2.5 py-2 font-medium">防御率</th>
-            <th className="px-2.5 py-2 font-medium">勝利</th>
-            <th className="px-2.5 py-2 font-medium">勝率</th>
-            <th className="px-2.5 py-2 font-medium">投球回</th>
-            <th className="px-2.5 py-2 font-medium">奪三振</th>
-            <th className="px-2.5 py-2 font-medium">奪三振率</th>
-            <th className="px-2.5 py-2 font-medium">WHIP</th>
-            <th className="px-2.5 py-2 font-medium">セーブ</th>
-            <th className="px-2.5 py-2 font-medium">HP</th>
-            <th className="px-2.5 py-2 font-medium">登板</th>
-            <th className="px-2.5 py-2 font-medium">完投</th>
-            <th className="px-2.5 py-2 font-medium">完封</th>
-            <th className="px-2.5 py-2 font-medium">QS</th>
-            <th className="px-2.5 py-2 font-medium">QS率</th>
+            <th
+              className={cn(
+                "whitespace-nowrap px-2 py-2 font-medium min-w-[4.5rem]",
+                colDivider,
+              )}
+            >
+              年度
+            </th>
+            <th
+              className={cn(
+                "whitespace-nowrap px-2 py-2 font-medium min-w-[3.5rem]",
+                colDivider,
+              )}
+            >
+              球団
+            </th>
+            {statCols.map((col, i) => (
+              <th
+                key={col.key}
+                className={cn(
+                  "whitespace-nowrap px-2 py-2 font-medium min-w-[2.75rem]",
+                  i < statCols.length - 1 && colDivider,
+                )}
+              >
+                {col.label}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
           {lines.map((row) => {
-            const rowHp = row.counting.hld ?? row.counting.hp ?? null;
+            const vals = cellsFor(row.counting, row.derived);
             return (
               <tr key={row.id} className="border-b border-white/8">
-                <td className="px-2.5 py-2 text-white/85">
+                <td
+                  className={cn(
+                    "whitespace-nowrap px-2 py-2 text-white/85",
+                    colDivider,
+                  )}
+                >
                   {formatSeasonLineLabel(row)}
                 </td>
-                <td className="px-2.5 py-2 text-white/70">{teamShort(row)}</td>
-                <td className="px-2.5 py-2 tabular-nums font-medium text-white">
-                  {fmtEra(row.derived.era)}
+                <td
+                  className={cn(
+                    "whitespace-nowrap px-2 py-2 text-white/70",
+                    colDivider,
+                  )}
+                >
+                  {teamShort(row)}
                 </td>
-                <td className="px-2.5 py-2 tabular-nums">{row.counting.w}</td>
-                <td className="px-2.5 py-2 tabular-nums">
-                  {row.derived.winPct != null
-                    ? formatWinPctDisplay(row.derived.winPct)
-                    : "—"}
-                </td>
-                <td className="px-2.5 py-2 tabular-nums">
-                  {row.derived.ipDisplay ?? "—"}
-                </td>
-                <td className="px-2.5 py-2 tabular-nums">{row.counting.so}</td>
-                <td className="px-2.5 py-2 tabular-nums">
-                  {row.derived.soRate != null
-                    ? row.derived.soRate.toFixed(2)
-                    : "—"}
-                </td>
-                <td className="px-2.5 py-2 tabular-nums">
-                  {row.derived.whip != null
-                    ? row.derived.whip.toFixed(2)
-                    : "—"}
-                </td>
-                <td className="px-2.5 py-2 tabular-nums">
-                  {row.counting.sv ?? "—"}
-                </td>
-                <td className="px-2.5 py-2 tabular-nums">{rowHp ?? "—"}</td>
-                <td className="px-2.5 py-2 tabular-nums">{row.counting.g}</td>
-                <td className="px-2.5 py-2 tabular-nums">
-                  {row.counting.cg ?? "—"}
-                </td>
-                <td className="px-2.5 py-2 tabular-nums">
-                  {row.counting.sho ?? "—"}
-                </td>
-                <td className="px-2.5 py-2 tabular-nums">
-                  {row.counting.qs ?? "—"}
-                </td>
-                <td className="px-2.5 py-2 tabular-nums">
-                  {row.derived.qsRate != null
-                    ? formatWinPctDisplay(row.derived.qsRate)
-                    : "—"}
-                </td>
+                {vals.map((v, i) => (
+                  <td
+                    key={`${row.id}-${statCols[i]!.key}`}
+                    className={cn(
+                      "whitespace-nowrap px-2 py-2 tabular-nums",
+                      i === 0 ? "font-medium text-white" : "text-museum-ivory",
+                      i < vals.length - 1 && colDivider,
+                    )}
+                  >
+                    {v}
+                  </td>
+                ))}
               </tr>
             );
           })}
           <tr className="border-t border-[color:var(--museum-accent,#d4af37)]/35 bg-black/30">
-            <td className="px-2.5 py-2.5 font-medium text-[color:var(--museum-accent,#d4af37)]">
+            <td
+              className={cn(
+                "whitespace-nowrap px-2 py-2.5 font-medium text-[color:var(--museum-accent,#d4af37)]",
+                colDivider,
+              )}
+            >
               {totalLabel}
             </td>
-            <td className="px-2.5 py-2.5 text-white/50">—</td>
-            <td className="px-2.5 py-2.5 tabular-nums font-medium text-white">
-              {fmtEra(derived.era)}
+            <td
+              className={cn(
+                "whitespace-nowrap px-2 py-2.5 text-white/50",
+                colDivider,
+              )}
+            >
+              —
             </td>
-            <td className="px-2.5 py-2.5 tabular-nums">{sum.w}</td>
-            <td className="px-2.5 py-2.5 tabular-nums">
-              {derived.winPct != null
-                ? formatWinPctDisplay(derived.winPct)
-                : "—"}
-            </td>
-            <td className="px-2.5 py-2.5 tabular-nums">
-              {outsToIpDisplay(sum.ipOuts)}
-            </td>
-            <td className="px-2.5 py-2.5 tabular-nums">{sum.so}</td>
-            <td className="px-2.5 py-2.5 tabular-nums">
-              {derived.soRate != null ? derived.soRate.toFixed(2) : "—"}
-            </td>
-            <td className="px-2.5 py-2.5 tabular-nums">
-              {derived.whip != null ? derived.whip.toFixed(2) : "—"}
-            </td>
-            <td className="px-2.5 py-2.5 tabular-nums">{sum.sv ?? "—"}</td>
-            <td className="px-2.5 py-2.5 tabular-nums">{hp ?? "—"}</td>
-            <td className="px-2.5 py-2.5 tabular-nums">{sum.g}</td>
-            <td className="px-2.5 py-2.5 tabular-nums">{sum.cg ?? "—"}</td>
-            <td className="px-2.5 py-2.5 tabular-nums">{sum.sho ?? "—"}</td>
-            <td className="px-2.5 py-2.5 tabular-nums">{sum.qs ?? "—"}</td>
-            <td className="px-2.5 py-2.5 tabular-nums">
-              {derived.qsRate != null
-                ? formatWinPctDisplay(derived.qsRate)
-                : "—"}
-            </td>
+            {cellsFor(sum, derived).map((v, i) => (
+              <td
+                key={`sum-${statCols[i]!.key}`}
+                className={cn(
+                  "whitespace-nowrap px-2 py-2.5 tabular-nums",
+                  i === 0
+                    ? "font-medium text-white"
+                    : "text-museum-ivory",
+                  i < statCols.length - 1 && colDivider,
+                )}
+              >
+                {v}
+              </td>
+            ))}
           </tr>
         </tbody>
       </table>
@@ -558,12 +565,77 @@ function PitcherYearTable({
   );
 }
 
-function fmtAvg(v: number | null | undefined) {
-  return v != null ? formatAvgDisplay(v) : "---";
+/**
+ * 個人成績ランキングと同じキー順で値を取り出す。
+ * null/未設定は null（表示は —）、記録された 0 はそのまま返す。
+ */
+function pitcherStatValue(
+  c: PitcherCountingInput,
+  d: PitcherDerived,
+  key: string,
+): number | null {
+  switch (key) {
+    case "era":
+      return d.era;
+    case "ip":
+      return c.ipOuts != null && c.ipOuts >= 0 ? c.ipOuts / 3 : null;
+    case "winPct":
+      return d.winPct;
+    case "w":
+      return c.w;
+    case "l":
+      return c.l;
+    case "sv":
+      return c.sv ?? null;
+    case "hp":
+      return c.hp ?? null;
+    case "hld":
+      return c.hld ?? null;
+    case "g":
+      return c.g;
+    case "gs":
+      return c.gs ?? null;
+    case "sho":
+      return c.sho ?? null;
+    case "cg":
+      return c.cg ?? null;
+    case "qs":
+      return c.qs ?? null;
+    case "qsRate":
+      return d.qsRate;
+    case "hqs":
+      return c.hqs ?? null;
+    case "hqsRate":
+      return d.hqsRate;
+    case "so":
+      return c.so;
+    case "soRate":
+      return d.soRate;
+    case "bb":
+      return c.bb ?? null;
+    case "bbRate":
+      return d.bbRate;
+    case "hbp":
+      return c.hbp ?? null;
+    case "h":
+      return c.h ?? null;
+    case "hr":
+      return c.hr ?? null;
+    case "kbb":
+      return d.kbb;
+    case "whip":
+      return d.whip;
+    case "r":
+      return c.r ?? null;
+    case "er":
+      return c.er;
+    default:
+      return null;
+  }
 }
 
-function fmtEra(v: number | null | undefined) {
-  return v != null ? formatEraDisplay(v) : "---";
+function fmtAvg(v: number | null | undefined) {
+  return v != null ? formatAvgDisplay(v) : "---";
 }
 
 function shortTeamName(name: string): string {
