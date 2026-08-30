@@ -163,8 +163,7 @@ export function PlayerStatsExplorer({
       return list;
     }
     // 交流戦・投手・チーム別のみ: ランキングの率系と同じく規定到達 → 未到達
-    // （判定は「規定」バッジと同じ row.qualified / evaluateIpQualified）
-    // グループ内は選択列（既定は防御率・昇順）で並べる
+    // （判定は row.qualified / evaluateIpQualified。ハイライト色で区別）
     // 野手・シーズン成績・他ビューは従来どおり規定で強制しない
     const interleaguePitcherTeam =
       scope === "interleague" && role === "pitcher";
@@ -314,10 +313,10 @@ export function PlayerStatsExplorer({
             className={cn(
               "w-max min-w-full border-collapse text-left text-[11px] md:text-[12px]",
               role === "pitcher"
-                ? "min-w-[1100px]"
+                ? "min-w-[820px] md:min-w-[1100px]"
                 : showCatcherColumns
-                  ? "min-w-[1100px]"
-                  : "min-w-[980px]",
+                  ? "min-w-[820px] md:min-w-[1100px]"
+                  : "min-w-[720px] md:min-w-[980px]",
             )}
           >
             <thead>
@@ -328,7 +327,6 @@ export function PlayerStatsExplorer({
                     colDividerClass,
                     stickyRankHeadClass,
                   )}
-                  style={{ left: 0, width: STICKY_RANK_W, minWidth: STICKY_RANK_W }}
                 >
                   #
                 </th>
@@ -337,17 +335,23 @@ export function PlayerStatsExplorer({
                     playerHeadClass,
                     colDividerClass,
                     stickyPlayerHeadClass,
+                    view === "ranking"
+                      ? "max-md:shadow-none md:shadow-[2px_0_6px_rgba(0,0,0,0.35)]"
+                      : "shadow-[2px_0_6px_rgba(0,0,0,0.35)]",
                   )}
-                  style={{
-                    left: STICKY_RANK_W,
-                    width: STICKY_PLAYER_W,
-                    minWidth: STICKY_PLAYER_W,
-                  }}
                 >
                   選手
                 </th>
                 {view === "ranking" ? (
-                  <th className={cn(teamHeadClass, colDividerClass)}>球団</th>
+                  <th
+                    className={cn(
+                      teamHeadClass,
+                      colDividerClass,
+                      stickyTeamHeadClass,
+                    )}
+                  >
+                    球団
+                  </th>
                 ) : null}
                 {visibleColumns.map((col, colIndex) => {
                   const active = sortKey === col.key;
@@ -411,11 +415,6 @@ export function PlayerStatsExplorer({
                         "sticky z-10",
                         stickyBg,
                       )}
-                      style={{
-                        left: 0,
-                        width: STICKY_RANK_W,
-                        minWidth: STICKY_RANK_W,
-                      }}
                     >
                       {displayRank == null ? "―" : displayRank}
                     </td>
@@ -423,52 +422,53 @@ export function PlayerStatsExplorer({
                       className={cn(
                         playerCellClass,
                         colDividerClass,
-                        "sticky z-10 shadow-[2px_0_6px_rgba(0,0,0,0.35)]",
+                        "sticky z-10",
                         stickyBg,
+                        view === "ranking"
+                          ? "max-md:shadow-none md:shadow-[2px_0_6px_rgba(0,0,0,0.35)]"
+                          : "shadow-[2px_0_6px_rgba(0,0,0,0.35)]",
                       )}
-                      style={{
-                        left: STICKY_RANK_W,
-                        width: STICKY_PLAYER_W,
-                        minWidth: STICKY_PLAYER_W,
-                      }}
                     >
-                      <span className="inline-flex items-center gap-1.5">
-                        {row.playerId ? (
-                          <Link
-                            href={`/players/${row.playerId}/yearly`}
-                            className={cn(
-                              "block whitespace-nowrap underline-offset-2 hover:underline",
-                              highlight
-                                ? "text-[color:var(--museum-accent,#d4af37)] hover:text-[color:var(--museum-accent,#d4af37)]"
-                                : "text-museum-ivory hover:text-[color:var(--museum-accent,#d4af37)]",
-                            )}
-                          >
-                            {row.name}
-                          </Link>
-                        ) : (
-                          <span
-                            className={cn(
-                              "whitespace-nowrap",
-                              highlight &&
-                                "text-[color:var(--museum-accent,#d4af37)]",
-                            )}
-                          >
-                            {row.name}
-                          </span>
-                        )}
-                        {highlight ? (
-                          <span
-                            className="shrink-0 rounded border border-[color:var(--museum-accent-border,#d4af3773)] bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.14))] px-1 py-px text-[9px] tracking-[0.06em] text-[color:var(--museum-accent,#d4af37)]"
-                            title="規定到達"
-                          >
-                            規定
-                          </span>
-                        ) : null}
-                      </span>
+                      {row.playerId ? (
+                        <Link
+                          href={`/players/${row.playerId}/yearly`}
+                          className={cn(
+                            "block truncate whitespace-nowrap underline-offset-2 hover:underline",
+                            highlight
+                              ? "text-[color:var(--museum-accent,#d4af37)] hover:text-[color:var(--museum-accent,#d4af37)]"
+                              : "text-museum-ivory hover:text-[color:var(--museum-accent,#d4af37)]",
+                          )}
+                          title={row.name}
+                        >
+                          {row.name}
+                        </Link>
+                      ) : (
+                        <span
+                          className={cn(
+                            "block truncate whitespace-nowrap",
+                            highlight &&
+                              "text-[color:var(--museum-accent,#d4af37)]",
+                          )}
+                          title={row.name}
+                        >
+                          {row.name}
+                        </span>
+                      )}
                     </td>
                     {view === "ranking" ? (
-                      <td className={cn(teamCellClass, colDividerClass)}>
-                        {row.team}
+                      <td
+                        className={cn(
+                          teamCellClass,
+                          colDividerClass,
+                          "sticky z-10 max-md:shadow-[2px_0_6px_rgba(0,0,0,0.35)] md:static md:shadow-none",
+                          stickyBg,
+                          "md:bg-transparent",
+                        )}
+                      >
+                        <span className="md:hidden" title={row.team}>
+                          {teamMobileChar(row.team)}
+                        </span>
+                        <span className="hidden md:inline">{row.team}</span>
                       </td>
                     ) : null}
                     {visibleColumns.map((col, colIndex) => {
@@ -563,36 +563,78 @@ function toggleClass(active: boolean) {
 /** 横罫線（white/10）より弱い縦区切り */
 const colDividerClass = "border-r border-[color:rgba(212,175,55,0.12)]";
 
-/** 横スクロール時に順位・選手名を固定（opaque bg で数値の透け防止） */
-const STICKY_RANK_W = "2.75rem";
-const STICKY_PLAYER_W = "8.5rem";
+/**
+ * Sticky 列幅（モバイル / md以上）。
+ * モバイル: # 36px + 選手 100px (+ 球団 38px) → left をそれに合わせる
+ * PC: # 2.75rem + 選手 8.5rem（球団は sticky しない）
+ */
 const STICKY_BG_HEAD = "bg-[#0d1118]";
 const STICKY_BG_BODY = "bg-[#0a0a0a]";
 const STICKY_BG_HIGHLIGHT = "bg-[#14110c]";
 
-const stickyRankHeadClass = cn(
-  "sticky z-30",
-  STICKY_BG_HEAD,
-);
+const stickyRankHeadClass = cn("sticky left-0 z-30", STICKY_BG_HEAD);
 const stickyPlayerHeadClass = cn(
-  "sticky z-30 shadow-[2px_0_6px_rgba(0,0,0,0.35)]",
+  "sticky z-30 left-9 md:left-[2.75rem]",
   STICKY_BG_HEAD,
 );
+const stickyTeamHeadClass = cn(
+  "sticky z-30 left-[8.5rem] shadow-[2px_0_6px_rgba(0,0,0,0.35)] md:static md:left-auto md:shadow-none",
+  STICKY_BG_HEAD,
+  "md:bg-transparent",
+);
 
-const rankHeadClass =
-  "whitespace-nowrap px-2 py-2 font-medium text-[color:var(--museum-accent,#d4af37)]";
-const rankCellClass =
-  "whitespace-nowrap px-2 py-2 tabular-nums text-[color:var(--museum-accent,#d4af37)]";
+const rankHeadClass = cn(
+  "whitespace-nowrap py-2 font-medium text-[color:var(--museum-accent,#d4af37)]",
+  "w-9 min-w-9 max-w-9 px-1 text-center",
+  "md:w-[2.75rem] md:min-w-[2.75rem] md:max-w-none md:px-2 md:text-left",
+);
+const rankCellClass = cn(
+  "whitespace-nowrap py-2 tabular-nums text-[color:var(--museum-accent,#d4af37)]",
+  "left-0 w-9 min-w-9 max-w-9 px-1 text-center",
+  "md:w-[2.75rem] md:min-w-[2.75rem] md:max-w-none md:px-2 md:text-left",
+);
 
-const playerHeadClass =
-  "whitespace-nowrap px-3 py-2 font-medium text-[color:var(--museum-accent,#d4af37)]";
-const playerCellClass =
-  "whitespace-nowrap px-3 py-2 font-medium [word-break:keep-all]";
+const playerHeadClass = cn(
+  "whitespace-nowrap py-2 font-medium text-[color:var(--museum-accent,#d4af37)]",
+  "w-[6.25rem] min-w-[6.25rem] max-w-[6.25rem] px-1.5",
+  "md:w-[8.5rem] md:min-w-[8.5rem] md:max-w-none md:px-3",
+);
+const playerCellClass = cn(
+  "whitespace-nowrap py-2 font-medium [word-break:keep-all]",
+  "left-9 w-[6.25rem] min-w-[6.25rem] max-w-[6.25rem] px-1.5",
+  "md:left-[2.75rem] md:w-[8.5rem] md:min-w-[8.5rem] md:max-w-none md:px-3",
+);
 
-const teamHeadClass =
-  "min-w-[4.5rem] whitespace-nowrap px-2.5 py-2 font-medium text-[color:var(--museum-accent,#d4af37)]";
-const teamCellClass =
-  "min-w-[4.5rem] whitespace-nowrap px-2.5 py-2 text-museum-ivory-soft";
+const teamHeadClass = cn(
+  "whitespace-nowrap py-2 font-medium text-[color:var(--museum-accent,#d4af37)]",
+  "w-[2.375rem] min-w-[2.375rem] max-w-[2.375rem] px-0.5 text-center",
+  "md:w-auto md:min-w-[4.5rem] md:max-w-none md:px-2.5 md:text-left",
+);
+const teamCellClass = cn(
+  "whitespace-nowrap py-2 text-museum-ivory-soft",
+  "left-[8.5rem] w-[2.375rem] min-w-[2.375rem] max-w-[2.375rem] px-0.5 text-center",
+  "md:left-auto md:w-auto md:min-w-[4.5rem] md:max-w-none md:px-2.5 md:text-left",
+);
+
+/** スマホ表示用・球団1文字 */
+const TEAM_MOBILE_CHAR: Record<string, string> = {
+  阪神: "阪",
+  巨人: "巨",
+  DeNA: "横",
+  広島: "広",
+  ヤクルト: "ヤ",
+  中日: "中",
+  ソフトバンク: "ソ",
+  日本ハム: "日",
+  楽天: "楽",
+  ロッテ: "ロ",
+  オリックス: "オ",
+  西武: "西",
+};
+
+function teamMobileChar(teamShort: string): string {
+  return TEAM_MOBILE_CHAR[teamShort] ?? teamShort.slice(0, 1);
+}
 
 const COMPACT_STAT_KEYS = new Set([
   "w",
@@ -630,7 +672,9 @@ function statHeadClass(col: TeamStatColumn) {
   const compact = COMPACT_STAT_KEYS.has(col.key) || col.label.length <= 2;
   return cn(
     "whitespace-nowrap py-2 font-medium",
-    compact ? "min-w-[2.5rem] px-1.5" : "min-w-[3.25rem] px-2",
+    compact
+      ? "min-w-[2rem] px-1 md:min-w-[2.5rem] md:px-1.5"
+      : "min-w-[2.5rem] px-1 md:min-w-[3.25rem] md:px-2",
   );
 }
 
@@ -638,7 +682,9 @@ function statCellClass(col: TeamStatColumn) {
   const compact = COMPACT_STAT_KEYS.has(col.key) || col.label.length <= 2;
   return cn(
     "whitespace-nowrap tabular-nums",
-    compact ? "min-w-[2.5rem] px-1.5 py-2" : "min-w-[3.25rem] px-2 py-2",
+    compact
+      ? "min-w-[2rem] px-1 py-2 md:min-w-[2.5rem] md:px-1.5"
+      : "min-w-[2.5rem] px-1 py-2 md:min-w-[3.25rem] md:px-2",
   );
 }
 
