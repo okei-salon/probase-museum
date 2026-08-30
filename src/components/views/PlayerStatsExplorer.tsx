@@ -153,6 +153,7 @@ export function PlayerStatsExplorer({
   const sorted = useMemo(() => {
     const list = [...filtered];
     if (view === "ranking") {
+      // 率系（打率等）は規定到達 → 未到達、各グループ内は選択列
       list.sort((a, b) =>
         compareStatRowsForRanking(a, b, {
           sortKey,
@@ -162,16 +163,18 @@ export function PlayerStatsExplorer({
       );
       return list;
     }
-    // 交流戦・投手・チーム別のみ: ランキングの率系と同じく規定到達 → 未到達
-    // （判定は row.qualified / evaluateIpQualified。ハイライト色で区別）
-    // 野手・シーズン成績・他ビューは従来どおり規定で強制しない
+    // チーム別
+    // 野手・率系: 規定打席到達を優先（初期の打率降順を含む）
+    // 交流戦・投手: 従来どおり防御率＋規定投球回優先
+    // 累計系などユーザーが明示ソートした非率系: 規定で強制しない
     const interleaguePitcherTeam =
       scope === "interleague" && role === "pitcher";
+    const batterRateTeam = role === "batter" && rateStat;
     list.sort((a, b) =>
       compareStatRowsForRanking(a, b, {
         sortKey: interleaguePitcherTeam ? "era" : sortKey,
         dir: interleaguePitcherTeam ? "asc" : dir,
-        rateStat: interleaguePitcherTeam,
+        rateStat: interleaguePitcherTeam || batterRateTeam,
       }),
     );
     return list;
