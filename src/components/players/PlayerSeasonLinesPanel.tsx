@@ -29,15 +29,41 @@ type PlayerSeasonLinesPanelProps = {
   playerId: string;
   /** @deprecated career は PlayerCareerStatsBoard を使用 */
   mode?: "yearly" | "career";
+  /** 親からスコープを制御（通算ページ埋め込み用） */
+  scope?: "pennant" | "interleague";
+  onScopeChange?: (scope: "pennant" | "interleague") => void;
+  role?: Role;
+  onRoleChange?: (role: Role) => void;
+  /** true のときスコープ／野手投手トグルを出さない */
+  hideControls?: boolean;
 };
 
 export function PlayerSeasonLinesPanel({
   playerId,
+  scope: scopeProp,
+  onScopeChange,
+  role: roleProp,
+  onRoleChange,
+  hideControls = false,
 }: PlayerSeasonLinesPanelProps) {
   const [lines, setLines] = useState<PlayerSeasonLine[]>([]);
-  const [role, setRole] = useState<Role>("batter");
-  const [scope, setScope] = useState<"pennant" | "interleague">("pennant");
+  const [roleState, setRoleState] = useState<Role>("batter");
+  const [scopeState, setScopeState] = useState<"pennant" | "interleague">(
+    "pennant",
+  );
 
+  const scope = scopeProp ?? scopeState;
+  const role = roleProp ?? roleState;
+
+  function setScope(next: "pennant" | "interleague") {
+    onScopeChange?.(next);
+    if (scopeProp == null) setScopeState(next);
+  }
+
+  function setRole(next: Role) {
+    onRoleChange?.(next);
+    if (roleProp == null) setRoleState(next);
+  }
   useEffect(() => {
     setLines(listSeasonLinesByPlayer(playerId));
   }, [playerId]);
@@ -111,45 +137,49 @@ export function PlayerSeasonLinesPanel({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        {hasPennant ? (
-          <RoleTab
-            active={scope === "pennant"}
-            label="通常シーズン"
-            onClick={() => setScope("pennant")}
-          />
-        ) : null}
-        {hasInterleague ? (
-          <RoleTab
-            active={scope === "interleague"}
-            label="交流戦"
-            onClick={() => setScope("interleague")}
-          />
-        ) : null}
-      </div>
+      {!hideControls ? (
+        <div className="flex flex-wrap gap-2">
+          {hasPennant ? (
+            <RoleTab
+              active={scope === "pennant"}
+              label="通常シーズン"
+              onClick={() => setScope("pennant")}
+            />
+          ) : null}
+          {hasInterleague ? (
+            <RoleTab
+              active={scope === "interleague"}
+              label="交流戦"
+              onClick={() => setScope("interleague")}
+            />
+          ) : null}
+        </div>
+      ) : null}
 
-      {scope === "interleague" ? (
+      {scope === "interleague" && !hideControls ? (
         <p className="text-[12px] text-museum-ivory-soft">
           交流戦個人成績のみ。通算行は各年度の元数字を合算し、率を再計算します（BLUE＋RED合算）。
         </p>
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
-        {batters.length > 0 ? (
-          <RoleTab
-            active={role === "batter"}
-            label="野手"
-            onClick={() => setRole("batter")}
-          />
-        ) : null}
-        {pitchers.length > 0 ? (
-          <RoleTab
-            active={role === "pitcher"}
-            label="投手"
-            onClick={() => setRole("pitcher")}
-          />
-        ) : null}
-      </div>
+      {!hideControls ? (
+        <div className="flex flex-wrap gap-2">
+          {batters.length > 0 ? (
+            <RoleTab
+              active={role === "batter"}
+              label="野手"
+              onClick={() => setRole("batter")}
+            />
+          ) : null}
+          {pitchers.length > 0 ? (
+            <RoleTab
+              active={role === "pitcher"}
+              label="投手"
+              onClick={() => setRole("pitcher")}
+            />
+          ) : null}
+        </div>
+      ) : null}
 
       {role === "batter" && batters.length > 0 ? (
         <BatterYearTable

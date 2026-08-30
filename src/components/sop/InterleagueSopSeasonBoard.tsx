@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { listSeasonLines } from "@/data/playerSeasonLines";
 import {
   buildInterleagueSopFourKings,
@@ -63,8 +63,17 @@ export function InterleagueSopSeasonView({
     setSelected(null);
   }, [identity.seasonKey]);
 
-  function openDetail(result: SopSeasonResult, rank: number | null) {
-    setSelected({ result, rank });
+  function toggleDetail(result: SopSeasonResult, rank: number | null) {
+    setSelected((prev) => {
+      if (
+        prev &&
+        prev.result.playerId === result.playerId &&
+        prev.result.role === result.role
+      ) {
+        return null;
+      }
+      return { result, rank };
+    });
   }
 
   if (!ready) {
@@ -97,7 +106,7 @@ export function InterleagueSopSeasonView({
                 <button
                   key={`${k.playerId}-${k.role}`}
                   type="button"
-                  onClick={() => openDetail(k, rankingRank)}
+                  onClick={() => toggleDetail(k, rankingRank)}
                   className={cn(
                     "rounded-xl border bg-black/50 p-4 text-left transition-colors",
                     "min-h-[7.5rem] cursor-pointer",
@@ -135,7 +144,12 @@ export function InterleagueSopSeasonView({
         )}
       </section>
 
-      {selected ? (
+      {selected &&
+      !(data?.rankings.rankings ?? []).some(
+        (r) =>
+          r.result.playerId === selected.result.playerId &&
+          r.result.role === selected.result.role,
+      ) ? (
         <InterleagueSopDetailPanel
           result={selected.result}
           rank={selected.rank}
@@ -169,43 +183,58 @@ export function InterleagueSopSeasonView({
                   selected?.result.playerId === row.result.playerId &&
                   selected?.result.role === row.result.role;
                 return (
-                  <tr
+                  <Fragment
                     key={`${row.result.playerId}-${row.result.role}`}
-                    className={cn(
-                      "border-t border-white/5",
-                      active &&
-                        "bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.1))]",
-                    )}
                   >
-                    <td className="px-3 py-2 tabular-nums">{row.rank}</td>
-                    <td className="px-3 py-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          openDetail(row.result, row.rank)
-                        }
-                        className={cn(
-                          "min-h-9 cursor-pointer text-left text-museum-ivory underline-offset-2",
-                          "hover:text-[color:var(--museum-accent,#d4af37)] hover:underline",
-                          active &&
-                            "text-[color:var(--museum-accent,#d4af37)] underline",
-                        )}
-                      >
-                        {row.result.playerName}
-                      </button>
-                    </td>
-                    <td className="px-3 py-2 text-museum-ivory-soft">
-                      {row.result.role === "batter" ? "野手" : "投手"}
-                    </td>
-                    <td className="px-3 py-2">{row.result.teamShort}</td>
-                    <td
+                    <tr
                       className={cn(
-                        "px-3 py-2 tabular-nums text-[color:var(--museum-accent,#d4af37)]",
+                        "border-t border-white/5",
+                        active &&
+                          "bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.1))]",
                       )}
                     >
-                      {row.result.total}pt
-                    </td>
-                  </tr>
+                      <td className="px-3 py-2 tabular-nums">{row.rank}</td>
+                      <td className="px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            toggleDetail(row.result, row.rank)
+                          }
+                          className={cn(
+                            "min-h-9 cursor-pointer text-left text-museum-ivory underline-offset-2",
+                            "hover:text-[color:var(--museum-accent,#d4af37)] hover:underline",
+                            active &&
+                              "text-[color:var(--museum-accent,#d4af37)] underline",
+                          )}
+                        >
+                          {row.result.playerName}
+                        </button>
+                      </td>
+                      <td className="px-3 py-2 text-museum-ivory-soft">
+                        {row.result.role === "batter" ? "野手" : "投手"}
+                      </td>
+                      <td className="px-3 py-2">{row.result.teamShort}</td>
+                      <td
+                        className={cn(
+                          "px-3 py-2 tabular-nums text-[color:var(--museum-accent,#d4af37)]",
+                        )}
+                      >
+                        {row.result.total}pt
+                      </td>
+                    </tr>
+                    {active ? (
+                      <tr className="border-t border-white/5 bg-black/55">
+                        <td colSpan={5} className="px-2 py-3 sm:px-3">
+                          <InterleagueSopDetailPanel
+                            result={selected!.result}
+                            rank={selected!.rank}
+                            onClose={() => setSelected(null)}
+                            className="border-0 bg-transparent p-2 shadow-none sm:p-3"
+                          />
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 );
               })}
             </tbody>

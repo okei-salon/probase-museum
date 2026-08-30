@@ -717,6 +717,9 @@ export function aggregatePitcherCounting(
     qs: 0,
     hqs: 0,
     gs: 0,
+    wp: null,
+    sbAtt: null,
+    sbAllowed: null,
     reliefIpOuts: 0,
     reliefEr: 0,
     reliefSo: 0,
@@ -743,6 +746,9 @@ export function aggregatePitcherCounting(
     sum.qs = (sum.qs ?? 0) + (r.qs ?? 0);
     sum.hqs = (sum.hqs ?? 0) + (r.hqs ?? 0);
     sum.gs = (sum.gs ?? 0) + (r.gs ?? 0);
+    sum.wp = addNullable(sum.wp, r.wp);
+    sum.sbAtt = addNullable(sum.sbAtt, r.sbAtt);
+    sum.sbAllowed = addNullable(sum.sbAllowed, r.sbAllowed);
     sum.reliefIpOuts = (sum.reliefIpOuts ?? 0) + (r.reliefIpOuts ?? 0);
     sum.reliefEr = (sum.reliefEr ?? 0) + (r.reliefEr ?? 0);
     sum.reliefSo = (sum.reliefSo ?? 0) + (r.reliefSo ?? 0);

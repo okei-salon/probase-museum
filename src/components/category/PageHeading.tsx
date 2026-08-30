@@ -41,12 +41,12 @@ export function PageHeading({
         />
       ) : null}
       <div className="min-w-0">
-        <h1
+          <h1
           className={cn(
             "font-display tracking-[0.04em] text-museum-ivory",
             dense
               ? "text-[clamp(1.45rem,3vw,2rem)]"
-              : "text-[clamp(1.75rem,4vw,2.5rem)]",
+              : "text-[clamp(1.85rem,5vw,2.75rem)]",
           )}
         >
           {title}

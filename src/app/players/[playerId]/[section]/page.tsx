@@ -29,14 +29,20 @@ export default async function PlayerSectionPage({ params }: Props) {
   const meta = playerDetailSections.find((s) => s.id === section);
   if (!meta) notFound();
 
+  const isCareer = section === "career";
+
   return (
     <DetailPage
       theme="players"
       back={{ href: `/players/${playerId}`, label: player.name }}
-      title={meta.title}
-      subtitle={`${player.name} / ${player.team}`}
+      title={isCareer ? player.name : meta.title}
+      subtitle={
+        isCareer
+          ? `${player.team} / ${player.position}`
+          : `${player.name} / ${player.team}`
+      }
       icon={meta.icon}
-      panelTitle={meta.title}
+      panelTitle={isCareer ? "通算成績" : meta.title}
       panelDescription={meta.description}
     >
       {section === "profile" ? (

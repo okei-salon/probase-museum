@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { PlayerSeasonLinesPanel } from "@/components/players/PlayerSeasonLinesPanel";
+import { getPlayerCareerDisplay } from "@/data/playerDetail/careerDisplay";
 import { listSeasonLinesByPlayer } from "@/data/playerSeasonLines";
-import {
-  getPlayerCareerStatCards,
-  type RecordsRole,
-} from "@/data/recordsRankings";
 import type { SeasonLineScope } from "@/data/playerSeasonLines";
+import type { RecordsRole } from "@/data/recordsRankings";
 import { cn } from "@/lib/cn";
 
 type PlayerCareerStatsBoardProps = {
@@ -84,8 +83,8 @@ export function PlayerCareerStatsBoard({
     }
   }, [ready, roleAvailable, role]);
 
-  const cards = useMemo(
-    () => (ready ? getPlayerCareerStatCards(playerId, role, scope) : []),
+  const display = useMemo(
+    () => (ready ? getPlayerCareerDisplay(playerId, role, scope) : null),
     [ready, playerId, role, scope],
   );
 
@@ -104,7 +103,23 @@ export function PlayerCareerStatsBoard({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
+      <header className="space-y-1">
+        <p className="text-[10px] tracking-[0.18em] text-museum-ivory-soft">
+          {scope === "interleague" ? "INTERLEAGUE CAREER" : "CAREER STATS"}
+        </p>
+        {display ? (
+          <p className="text-sm text-museum-ivory-soft md:text-base">
+            {display.teamShort}
+            <span className="mx-2 opacity-40">/</span>
+            {display.positionLabel}
+            <span className="ml-2 text-[12px] opacity-70">
+              · {display.seasonCount}シーズン合算
+            </span>
+          </p>
+        ) : null}
+      </header>
+
       <div className="flex flex-wrap gap-2">
         {hasPennant ? (
           <RoleBtn
@@ -124,8 +139,7 @@ export function PlayerCareerStatsBoard({
 
       {scope === "interleague" ? (
         <p className="text-[12px] text-museum-ivory-soft">
-          交流戦成績のみ合算（BLUE＋RED）。率は元数字から再計算。年度別は「年度別成績 →
-          交流戦」を参照。
+          交流戦成績のみ合算（BLUE＋RED）。率は元数字から再計算します。
         </p>
       ) : null}
 
@@ -146,31 +160,92 @@ export function PlayerCareerStatsBoard({
         ) : null}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {cards
-          .filter((c) => c.value != null)
-          .map((card) => (
-            <article
-              key={card.def.id}
-              className="rounded-xl border border-white/12 bg-black/50 p-4"
-            >
-              <p className="text-[10px] tracking-[0.14em] text-museum-ivory-soft">
-                {scope === "interleague" ? "交流戦通算" : "通算"}
-                {card.def.label}
-              </p>
-              <p className="mt-2 font-display text-[26px] text-[color:var(--museum-accent,#d4af37)]">
-                {card.valueText}
-                {unitSuffix(card.def.id, card.def.format)}
-              </p>
-              <p className="mt-2 text-[12px] text-museum-ivory-soft">
-                {card.ranked && card.rank != null
-                  ? `歴代${card.rank}位`
-                  : card.note ?? "順位対象外"}
-              </p>
-            </article>
+      {display ? (
+        <section className="space-y-3">
+          <h3 className="text-[12px] tracking-[0.14em] text-[color:var(--museum-accent,#d4af37)]">
+            主要成績サマリー
+          </h3>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {display.summary.map((card) => (
+              <StatCard key={`sum-${card.id}`} card={card} featured />
+            ))}
+          </div>
+        </section>
+      ) : (
+        <p className="text-[13px] text-museum-ivory-soft">
+          この区分の登録成績はまだありません。
+        </p>
+      )}
+
+      <section className="space-y-3">
+        <h3 className="text-[12px] tracking-[0.14em] text-[color:var(--museum-accent,#d4af37)]">
+          年度別成績
+        </h3>
+        <PlayerSeasonLinesPanel
+          playerId={playerId}
+          scope={scope}
+          onScopeChange={setScope}
+          role={role}
+          onRoleChange={setRole}
+          hideControls
+        />
+      </section>
+
+      {display ? (
+        <section className="space-y-5">
+          <h3 className="text-[12px] tracking-[0.14em] text-[color:var(--museum-accent,#d4af37)]">
+            詳細通算成績
+          </h3>
+          {display.groups.map((group) => (
+            <div key={group.id} className="space-y-2.5">
+              <h4 className="text-[11px] tracking-[0.12em] text-museum-ivory-soft">
+                【{group.title}】
+              </h4>
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+                {group.cards.map((card) => (
+                  <StatCard key={`${group.id}-${card.id}`} card={card} />
+                ))}
+              </div>
+            </div>
           ))}
-      </div>
+        </section>
+      ) : null}
     </div>
+  );
+}
+
+function StatCard({
+  card,
+  featured = false,
+}: {
+  card: {
+    id: string;
+    label: string;
+    valueText: string;
+    format: string;
+  };
+  featured?: boolean;
+}) {
+  return (
+    <article
+      className={cn(
+        "rounded-xl border border-white/12 bg-black/50 p-3.5",
+        featured && "border-[color:var(--museum-accent-border,#d4af3773)]/50",
+      )}
+    >
+      <p className="text-[10px] tracking-[0.12em] text-museum-ivory-soft">
+        {card.label}
+      </p>
+      <p
+        className={cn(
+          "mt-1.5 font-display tabular-nums text-[color:var(--museum-accent,#d4af37)]",
+          featured ? "text-[24px] md:text-[26px]" : "text-[20px] md:text-[22px]",
+        )}
+      >
+        {card.valueText}
+        {unitSuffix(card.id, card.format)}
+      </p>
+    </article>
   );
 }
 
@@ -200,11 +275,9 @@ function RoleBtn({
 }
 
 function unitSuffix(id: string, format: string): string {
-  if (format !== "int" && format !== "ip") return "";
-  const map: Record<string, string> = {
-    h: "安打",
-    hr: "本",
-    w: "勝",
-  };
-  return map[id] ?? "";
+  if (format === "ip") return "";
+  if (id === "soRate" || id === "bbRate" || id === "hrRate") return "";
+  if (id === "w") return "";
+  if (id === "l") return "";
+  return "";
 }
