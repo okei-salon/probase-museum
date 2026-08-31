@@ -16,6 +16,35 @@ export type NormalizedNumber = {
 const FULLWIDTH_DIGITS = "０１２３４５６７８９．";
 const HALFWIDTH_DIGITS = "0123456789.";
 
+/**
+ * 未記録トークン（--- / -.-- 等）。
+ * 「0」「.000」「0.00」は正式値なのでここには含めない。
+ */
+export function isMissingStatToken(raw: string): boolean {
+  const t = raw.trim();
+  if (!t) return true;
+  const normalized = t
+    .replace(/[‐‑‒–—―−－]/g, "-")
+    .replace(/[．]/g, ".")
+    .replace(/\s+/g, "");
+  if (
+    normalized === "-" ||
+    normalized === "--" ||
+    normalized === "---" ||
+    normalized === "----" ||
+    normalized === "-.-" ||
+    normalized === "-.--" ||
+    normalized === ".-." ||
+    normalized === "..." ||
+    normalized === "...."
+  ) {
+    return true;
+  }
+  // 「—」「ー」のみ、またはハイフン／ドットだけの並び
+  if (/^[-.]+$/.test(normalized)) return true;
+  return false;
+}
+
 /** 全角数字・句点を半角へ。空白除去。 */
 export function toHalfwidthDigits(input: string): string {
   let out = "";

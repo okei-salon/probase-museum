@@ -1,4 +1,8 @@
-import { requiredPlateAppearances } from "@/lib/stats/qualification";
+import {
+  requiredIpOuts,
+  requiredPlateAppearances,
+} from "@/lib/stats/qualification";
+import type { SeasonLineScope } from "@/data/playerSeasonLines";
 
 /**
  * RECORDS ランキング定義・規定定数
@@ -25,18 +29,93 @@ export type RecordsStatDef = {
   eligibility: RecordsEligibility;
 };
 
-/** 通算規定の係数（1シーズンあたり・標準143試合換算） */
-export const CAREER_QUALIFIERS = {
-  paPerSeason: requiredPlateAppearances(143),
-  ipPerSeason: 143,
-  rispAbPerSeason: 50,
-  csAttemptedPerSeason: 30,
-  reliefIpPerSeason: 30,
-} as const;
+/** 通算規定の標準試合数（1シーズンあたり） */
+export const CAREER_PENNANT_GAMES = 143;
+/** 交流戦の標準試合数（1シーズンあたり） */
+export const CAREER_INTERLEAGUE_GAMES = 18;
+
+export type CareerQualifiers = {
+  /** 1シーズンあたりの規定打席 */
+  paPerSeason: number;
+  /** 1シーズンあたりの規定投球回（イニング） */
+  ipPerSeason: number;
+  /** 1シーズンあたりの規定投球回（アウト数） */
+  ipOutsPerSeason: number;
+  rispAbPerSeason: number;
+  csAttemptedPerSeason: number;
+  reliefIpPerSeason: number;
+};
+
+function buildCareerQualifiers(gamesPerSeason: number): CareerQualifiers {
+  const scale = gamesPerSeason / CAREER_PENNANT_GAMES;
+  return {
+    paPerSeason: requiredPlateAppearances(gamesPerSeason),
+    ipPerSeason: gamesPerSeason,
+    ipOutsPerSeason: requiredIpOuts(gamesPerSeason),
+    // 得点圏・盗塁阻止・救援は143試合基準を試合数比で縮小（交流戦で到達不能にしない）
+    rispAbPerSeason: Math.max(1, Math.floor(50 * scale)),
+    csAttemptedPerSeason: Math.max(1, Math.floor(30 * scale)),
+    reliefIpPerSeason: Math.max(1, Math.floor(30 * scale)),
+  };
+}
+
+/** 通算規定の係数（1シーズンあたり・標準143試合換算）※通常シーズン用 */
+export const CAREER_QUALIFIERS: CareerQualifiers = buildCareerQualifiers(
+  CAREER_PENNANT_GAMES,
+);
+
+/** 交流戦通算規定（1シーズンあたり・標準18試合換算） */
+export const CAREER_INTERLEAGUE_QUALIFIERS: CareerQualifiers =
+  buildCareerQualifiers(CAREER_INTERLEAGUE_GAMES);
+
+/** scope に応じた通算規定。pennant は143試合、interleague は18試合。 */
+export function careerQualifiersForScope(
+  scope: SeasonLineScope = "pennant",
+): CareerQualifiers {
+  return scope === "interleague"
+    ? CAREER_INTERLEAGUE_QUALIFIERS
+    : CAREER_QUALIFIERS;
+}
 
 export const SEASON_RISP_AB_MIN = 50;
 export const SEASON_CS_ATTEMPTED_MIN = 30;
 export const SEASON_RELIEF_IP_MIN = 30;
+
+/** 交流戦・歴代の部門別最低ライン（18/143 比例） */
+export const INTERLEAGUE_SEASON_RISP_AB_MIN = Math.max(
+  1,
+  Math.floor((SEASON_RISP_AB_MIN * CAREER_INTERLEAGUE_GAMES) / CAREER_PENNANT_GAMES),
+);
+export const INTERLEAGUE_SEASON_CS_ATTEMPTED_MIN = Math.max(
+  1,
+  Math.floor(
+    (SEASON_CS_ATTEMPTED_MIN * CAREER_INTERLEAGUE_GAMES) / CAREER_PENNANT_GAMES,
+  ),
+);
+export const INTERLEAGUE_SEASON_RELIEF_IP_MIN = Math.max(
+  1,
+  Math.floor(
+    (SEASON_RELIEF_IP_MIN * CAREER_INTERLEAGUE_GAMES) / CAREER_PENNANT_GAMES,
+  ),
+);
+
+export function seasonRispAbMin(scope: SeasonLineScope = "pennant"): number {
+  return scope === "interleague"
+    ? INTERLEAGUE_SEASON_RISP_AB_MIN
+    : SEASON_RISP_AB_MIN;
+}
+
+export function seasonCsAttemptedMin(scope: SeasonLineScope = "pennant"): number {
+  return scope === "interleague"
+    ? INTERLEAGUE_SEASON_CS_ATTEMPTED_MIN
+    : SEASON_CS_ATTEMPTED_MIN;
+}
+
+export function seasonReliefIpMin(scope: SeasonLineScope = "pennant"): number {
+  return scope === "interleague"
+    ? INTERLEAGUE_SEASON_RELIEF_IP_MIN
+    : SEASON_RELIEF_IP_MIN;
+}
 
 export const BATTER_SEASON_STATS: RecordsStatDef[] = [
   { id: "avg", label: "打率", role: "batter", format: "avg", eligibility: "pa_qualified" },

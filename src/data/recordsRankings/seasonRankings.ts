@@ -23,9 +23,9 @@ import {
 } from "@/lib/stats";
 import {
   formatRecordsValue,
-  SEASON_CS_ATTEMPTED_MIN,
-  SEASON_RELIEF_IP_MIN,
-  SEASON_RISP_AB_MIN,
+  seasonCsAttemptedMin,
+  seasonReliefIpMin,
+  seasonRispAbMin,
   statsForRole,
   type RecordsRole,
   type RecordsStatDef,
@@ -162,6 +162,7 @@ function eligibleSeason(
   line: PlayerSeasonLine,
   def: RecordsStatDef,
   teamGamesCtx: TeamGamesContext,
+  scope: SeasonLineScope,
 ): { ok: boolean; unknown: boolean } {
   switch (def.eligibility) {
     case "none":
@@ -202,13 +203,13 @@ function eligibleSeason(
       if (line.role !== "batter") return { ok: false, unknown: false };
       const ab = line.counting.rispAb;
       if (ab == null) return { ok: false, unknown: true };
-      return { ok: ab >= SEASON_RISP_AB_MIN, unknown: false };
+      return { ok: ab >= seasonRispAbMin(scope), unknown: false };
     }
     case "cs_30": {
       if (line.role !== "batter") return { ok: false, unknown: false };
       const att = line.counting.csAttempted;
       if (att == null) return { ok: false, unknown: true };
-      return { ok: att >= SEASON_CS_ATTEMPTED_MIN, unknown: false };
+      return { ok: att >= seasonCsAttemptedMin(scope), unknown: false };
     }
     case "relief_30": {
       if (line.role !== "pitcher") return { ok: false, unknown: false };
@@ -223,7 +224,7 @@ function eligibleSeason(
           ? line.counting.reliefIpOuts / 3
           : null;
       if (rip == null) return { ok: false, unknown: true };
-      return { ok: rip >= SEASON_RELIEF_IP_MIN, unknown: false };
+      return { ok: rip >= seasonReliefIpMin(scope), unknown: false };
     }
     default:
       return { ok: false, unknown: true };
@@ -317,7 +318,7 @@ export function buildSeasonRecordsBoard(
       });
       ctxCache.set(cacheKey, teamGamesCtx);
     }
-    const el = eligibleSeason(line, def, teamGamesCtx);
+    const el = eligibleSeason(line, def, teamGamesCtx, scope);
     if (el.unknown) {
       unknownCount += 1;
       continue;

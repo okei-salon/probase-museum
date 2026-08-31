@@ -1,4 +1,5 @@
 export {
+  isMissingStatToken,
   normalizeAvgInput,
   normalizeEraInput,
   normalizeIntegerInput,

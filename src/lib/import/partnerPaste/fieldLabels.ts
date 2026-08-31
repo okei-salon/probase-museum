@@ -7,6 +7,7 @@ import type {
   TeamPitchingFieldKey,
 } from "@/data/teamSeasonStats";
 import {
+  isMissingStatToken,
   normalizeAvgInput,
   normalizeEraInput,
   normalizeIntegerInput,
@@ -180,7 +181,7 @@ export function parseTeamFieldValue(
   raw: string,
 ): { raw: string; value: number | null } {
   const trimmed = raw.trim();
-  if (!trimmed || trimmed === "-" || trimmed === "—") {
+  if (isMissingStatToken(trimmed)) {
     return { raw: trimmed, value: null };
   }
   if (SIGNED_AVG_LIKE.has(field)) {

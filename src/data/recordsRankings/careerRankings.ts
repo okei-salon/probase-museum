@@ -20,9 +20,10 @@ import {
 } from "@/lib/manualEntry/computeSeasonStats";
 import { classifyPitcherWorkload } from "@/lib/sop/helpers";
 import {
-  CAREER_QUALIFIERS,
+  careerQualifiersForScope,
   formatRecordsValue,
   statsForRole,
+  type CareerQualifiers,
   type RecordsRole,
   type RecordsStatDef,
 } from "./defs";
@@ -244,9 +245,23 @@ function careerPitcherValue(
   }
 }
 
+/** 通算打席: 保存 PA を優先。0/欠損時は構成要素から復元（0 をデータなし扱いしない） */
+function careerPlateAppearances(
+  c: CareerBatterBundle["counting"],
+): number {
+  const fromParts =
+    c.ab + c.bb + (c.hbp ?? 0) + (c.sf ?? 0) + (c.sac ?? 0);
+  const stored = c.pa;
+  if (stored != null && Number.isFinite(stored) && stored > 0) {
+    return stored;
+  }
+  return fromParts;
+}
+
 function eligibleCareerBatter(
   bundle: CareerBatterBundle,
   def: RecordsStatDef,
+  q: CareerQualifiers,
 ): { ok: boolean; unknown: boolean } {
   const n = bundle.seasonCount;
   const c = bundle.counting;
@@ -254,14 +269,14 @@ function eligibleCareerBatter(
     case "none":
       return { ok: true, unknown: false };
     case "pa_qualified": {
-      const pa = c.pa ?? 0;
-      return { ok: pa >= CAREER_QUALIFIERS.paPerSeason * n, unknown: false };
+      const pa = careerPlateAppearances(c);
+      return { ok: pa >= q.paPerSeason * n, unknown: false };
     }
     case "risp_50": {
       if (bundle.rispUnknown) return { ok: false, unknown: true };
       if (c.rispAb == null) return { ok: false, unknown: true };
       return {
-        ok: c.rispAb >= CAREER_QUALIFIERS.rispAbPerSeason * n,
+        ok: c.rispAb >= q.rispAbPerSeason * n,
         unknown: false,
       };
     }
@@ -269,7 +284,7 @@ function eligibleCareerBatter(
       if (bundle.csUnknown) return { ok: false, unknown: true };
       if (c.csAttempted == null) return { ok: false, unknown: true };
       return {
-        ok: c.csAttempted >= CAREER_QUALIFIERS.csAttemptedPerSeason * n,
+        ok: c.csAttempted >= q.csAttemptedPerSeason * n,
         unknown: false,
       };
     }
@@ -281,15 +296,19 @@ function eligibleCareerBatter(
 function eligibleCareerPitcher(
   bundle: CareerPitcherBundle,
   def: RecordsStatDef,
+  q: CareerQualifiers,
 ): { ok: boolean; unknown: boolean } {
   const n = bundle.seasonCount;
   const c = bundle.counting;
-  const ip = c.ipOuts / 3;
   switch (def.eligibility) {
     case "none":
       return { ok: true, unknown: false };
     case "ip_qualified":
-      return { ok: ip >= CAREER_QUALIFIERS.ipPerSeason * n, unknown: false };
+      // アウト数で比較（投球回の .1/.2 を通常小数と誤算しない）
+      return {
+        ok: c.ipOuts >= q.ipOutsPerSeason * n,
+        unknown: false,
+      };
     case "relief_30": {
       const { class: pClass } = classifyPitcherWorkload(c.g, c.gs ?? null);
       if (pClass === "unknown") return { ok: false, unknown: true };
@@ -299,7 +318,7 @@ function eligibleCareerPitcher(
       }
       const reliefIp = c.reliefIpOuts / 3;
       return {
-        ok: reliefIp >= CAREER_QUALIFIERS.reliefIpPerSeason * n,
+        ok: reliefIp >= q.reliefIpPerSeason * n,
         unknown: false,
       };
     }
@@ -370,6 +389,7 @@ function buildCareerPool(
   const lines = listSeasonLines().filter(
     (l) => l.role === def.role && l.scope === scope,
   );
+  const q = careerQualifiersForScope(scope);
 
   if (lines.length === 0) {
     return { pool: [], unknownCount: 0, empty: true };
@@ -383,13 +403,14 @@ function buildCareerPool(
       lines.filter((l): l is BatterSeasonLine => l.role === "batter"),
     );
     for (const bundle of bundles) {
-      const el = eligibleCareerBatter(bundle, def);
+      const el = eligibleCareerBatter(bundle, def, q);
       if (el.unknown) {
         unknownCount += 1;
         continue;
       }
       if (!el.ok) continue;
       const value = careerBatterValue(bundle, def);
+      // 0 / .000 は正式値。null・非有限のみ除外
       if (value == null || !Number.isFinite(value)) continue;
       pool.push({
         playerId: bundle.playerId,
@@ -404,7 +425,7 @@ function buildCareerPool(
       lines.filter((l): l is PitcherSeasonLine => l.role === "pitcher"),
     );
     for (const bundle of bundles) {
-      const el = eligibleCareerPitcher(bundle, def);
+      const el = eligibleCareerPitcher(bundle, def, q);
       if (el.unknown) {
         unknownCount += 1;
         continue;

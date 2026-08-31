@@ -16,6 +16,7 @@ import {
   PROSPI_BATTER_SEASON_COLUMNS,
   PROSPI_PITCHER_SEASON_COLUMNS,
 } from "@/lib/import/seasonBatchConvert";
+import { isMissingStatToken } from "@/lib/manualEntry/normalizeInput";
 
 export type PartnerPasteType =
   | "BATTER_SEASON"
@@ -232,7 +233,7 @@ function cellFromRaw(
   role: SeasonBatchRole,
 ): SeasonBatchPartialRow["fields"][SeasonBatchFieldKey] {
   const trimmed = raw.trim();
-  if (trimmed === "" || trimmed === "—" || trimmed === "-" || trimmed === "－") {
+  if (isMissingStatToken(trimmed)) {
     return { raw: "", value: null, status: "empty" };
   }
   const parsed = parseStatToken(trimmed, field, role);

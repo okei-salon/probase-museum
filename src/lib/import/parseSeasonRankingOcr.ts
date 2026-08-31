@@ -11,6 +11,7 @@ import { normalizeOcrText } from "@/lib/import/ocr";
 import { resolveRankingPlayer } from "@/lib/import/resolveRankingPlayer";
 import { fieldKind } from "@/lib/import/layouts/seasonBattingRanking";
 import {
+  isMissingStatToken,
   normalizeAvgInput,
   normalizeEraInput,
   normalizeIntegerInput,
@@ -147,7 +148,7 @@ export function parseStatToken(
   note?: string;
 } {
   const cleaned = raw.trim();
-  if (!cleaned || cleaned === "-" || cleaned === "—") {
+  if (isMissingStatToken(cleaned)) {
     return { value: null, display: "", status: "empty" };
   }
 

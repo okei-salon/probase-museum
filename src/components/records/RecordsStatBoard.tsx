@@ -132,7 +132,7 @@ export function RecordsStatBoard({
             <tbody>
               {board.entries.map((row) => (
                 <tr
-                  key={`${row.playerId}-${row.year}-${row.world ?? ""}-${row.rank}`}
+                  key={`${row.playerId}-${row.year}-${row.world ?? ""}-${row.rank}-${row.valueText}`}
                   className="border-t border-white/5 text-museum-ivory"
                 >
                   <td className="px-3 py-2 tabular-nums">{row.rank}</td>
