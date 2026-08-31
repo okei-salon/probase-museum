@@ -48,6 +48,7 @@ import { finalizeBatchRow } from "@/lib/import/seasonBatchRateCheck";
 import {
   createEmptySession,
   mergePartialRowsIntoSession,
+  PARTNER_SEASON_BATCH_MAX_ROWS,
   rowHasWarnings,
   summarizeRowWarnings,
   teamIdFromShort,
@@ -179,9 +180,13 @@ export function SeasonBatchWorkspace({
     y: number,
     matchBy: "rowIndex" | "player",
     meta?: { fileName: string; headers: string[]; confidence: number },
+    maxRows?: number,
   ): SeasonBatchSession {
     const next = {
-      ...mergePartialRowsIntoSession(base, sourceId, partials, y, { matchBy }),
+      ...mergePartialRowsIntoSession(base, sourceId, partials, y, {
+        matchBy,
+        maxRows,
+      }),
       images: meta
         ? [
             ...base.images,
@@ -215,12 +220,13 @@ export function SeasonBatchWorkspace({
           ? { ...session, role: parsed.role, year: parsed.year }
           : createEmptySession(parsed.role, parsed.year);
 
+      // 相棒データは常に選手名+球団で照合（順位番号は表示専用・一意キーにしない）
       const next = applyPartialsToSession(
         base,
         sourceId,
         parsed.rows,
         parsed.year,
-        parsed.mode === "append" ? "player" : "rowIndex",
+        "player",
         {
           fileName:
             parsed.mode === "append"
@@ -229,6 +235,7 @@ export function SeasonBatchWorkspace({
           headers: parsed.headers.map(String),
           confidence: 100,
         },
+        PARTNER_SEASON_BATCH_MAX_ROWS,
       );
       setSession(next);
       setOverlayUrl(null);

@@ -116,8 +116,13 @@ export type SeasonBatchNameCandidate = {
 
 export type SeasonBatchPlayerRow = {
   rowId: string;
-  /** 同一画像群内の行順（補助照合） */
+  /** 同一画像群内の行順（補助照合）。一意キーではない */
   rowIndex: number;
+  /**
+   * 貼り付けテキスト先頭の順位番号（表示専用）。
+   * 同順位が複数でも区別しない。照合・一意キーには使わない。
+   */
+  displayRank?: number | null;
   year: number;
   playerName: string;
   /** OCR生の選手名（照合前） */
@@ -155,7 +160,10 @@ export type SeasonBatchSession = {
 
 /** OCR1枚分のパーシャル行（マージ前） */
 export type SeasonBatchPartialRow = {
+  /** パース順など。順位番号そのものではない */
   rowIndex: number;
+  /** 表示用順位（同順位可）。照合キーに使わない */
+  displayRank?: number | null;
   playerName: string;
   ocrName?: string;
   teamShort: string;

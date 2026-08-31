@@ -297,14 +297,19 @@ function enrichPartialIdentity(
   };
 }
 
+function parseDisplayRank(raw: string): number | null {
+  const rank = Number(raw);
+  return Number.isFinite(rank) && rank >= 1 ? rank : null;
+}
+
 function parseBaseBatterLine(
   line: string,
   fallbackIndex: number,
 ): SeasonBatchPartialRow | null {
   const parts = line.split("|").map((p) => p.trim());
   if (parts.length < 4) return null;
-  const rank = Number(parts[0]);
-  const rowIndex = Number.isFinite(rank) && rank >= 1 ? rank - 1 : fallbackIndex;
+  // 順位は表示専用。行の一意キーにはパース順（fallbackIndex）を使う
+  const displayRank = parseDisplayRank(parts[0] ?? "");
   const playerName = parts[1] ?? "";
   const teamShort = normalizeTeamShort(parts[2] ?? "");
   if (!playerName) return null;
@@ -318,7 +323,8 @@ function parseBaseBatterLine(
   }
 
   return {
-    rowIndex,
+    rowIndex: fallbackIndex,
+    displayRank,
     playerName,
     ocrName: playerName,
     teamShort,
@@ -335,8 +341,8 @@ function parseKeyedLine(
 ): SeasonBatchPartialRow | null {
   const parts = line.split("|").map((p) => p.trim()).filter(Boolean);
   if (parts.length < 3) return null;
-  const rank = Number(parts[0]);
-  const rowIndex = Number.isFinite(rank) && rank >= 1 ? rank - 1 : fallbackIndex;
+  // 順位は表示専用。同順位でも別行として扱う
+  const displayRank = parseDisplayRank(parts[0] ?? "");
   const playerName = parts[1] ?? "";
   if (!playerName) return null;
 
@@ -362,7 +368,8 @@ function parseKeyedLine(
   if (Object.keys(fields).length === 0) return null;
 
   return {
-    rowIndex,
+    rowIndex: fallbackIndex,
+    displayRank,
     playerName,
     ocrName: playerName,
     teamShort,
@@ -411,17 +418,19 @@ export function parsePartnerSeasonPaste(
 
   const rows: SeasonBatchPartialRow[] = [];
 
-  rest.forEach((line, i) => {
+  let parseOrder = 0;
+  rest.forEach((line) => {
     if (/^YEAR\s*=|^TYPE\s*=/i.test(line)) return;
     const parts = line.split("|").map((p) => p.trim());
     const looksLikeKv = parts.some((p) => p.includes("="));
     const useKeyed =
       role !== "batter" || mode === "append" || looksLikeKv;
     const partial = useKeyed
-      ? parseKeyedLine(line, i, role)
-      : parseBaseBatterLine(line, i);
+      ? parseKeyedLine(line, parseOrder, role)
+      : parseBaseBatterLine(line, parseOrder);
     if (!partial) return;
     rows.push(enrichPartialIdentity(partial, year, role));
+    parseOrder += 1;
   });
 
   if (rows.length === 0) {
@@ -430,20 +439,24 @@ export function parsePartnerSeasonPaste(
     );
   }
 
-  rows.sort((a, b) => a.rowIndex - b.rowIndex);
-  const clipped = rows.slice(0, 10);
+  // 表示順位で並べ替え（同順位はパース順を維持）。人数上限は掛けない（同順位タイ対応）
+  rows.sort((a, b) => {
+    const ar = a.displayRank ?? a.rowIndex + 1;
+    const br = b.displayRank ?? b.rowIndex + 1;
+    return ar - br || a.rowIndex - b.rowIndex;
+  });
 
   return {
     year,
     type,
     role,
     mode,
-    rows: clipped,
+    rows,
     headers: defaultHeadersForRole(role),
     message:
       mode === "append"
-        ? `相棒データ（追加）: ${clipped.length}人分の項目を展開しました。既存行へマージし、不一致は要確認になります。`
-        : `相棒データ: ${clipped.length}人分を確認表へ展開しました。まだ登録していません。`,
+        ? `相棒データ（追加）: ${rows.length}人分の項目を展開しました。既存行へマージし、不一致は要確認になります。`
+        : `相棒データ: ${rows.length}人分を確認表へ展開しました。まだ登録していません。`,
     rawText: text,
   };
 }

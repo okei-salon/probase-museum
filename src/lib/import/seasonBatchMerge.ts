@@ -147,6 +147,7 @@ function emptyRow(
   return {
     rowId: `row-${year}-${rowIndex}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     rowIndex,
+    displayRank: partial.displayRank ?? null,
     year,
     playerName: partial.playerName.trim(),
     ocrName: partial.ocrName,
@@ -163,6 +164,11 @@ function emptyRow(
   };
 }
 
+/**
+ * マージ対象行を探す。
+ * - player: 年度+氏名+球団（または playerId / 氏名）。順位番号では照合しない
+ * - rowIndex: OCR横スクロール用（画像内の行位置）
+ */
 function findMergeTargetIndex(
   rows: SeasonBatchPlayerRow[],
   year: number,
@@ -203,40 +209,54 @@ function findMergeTargetIndex(
       if (byName >= 0) return byName;
     }
 
-    // 4. 順位フォールバック
-    return rows.findIndex((r) => r.rowIndex === partial.rowIndex);
+    // 同順位でも別人は新規行。順位／rowIndex では絶対にマージしない
+    return -1;
   }
 
-  // ランキング画像: 順位＝行が絶対
+  // ランキング画像: 画像内の行位置で照合（OCR幾何）。順位番号ではない
   return rows.findIndex((r) => r.rowIndex === partial.rowIndex);
 }
 
+/** OCR 一括の既定上限。相棒貼り付けは同順位タイで超過しうるため opts で上げる */
+export const DEFAULT_SEASON_BATCH_MAX_ROWS = 10;
+export const PARTNER_SEASON_BATCH_MAX_ROWS = 40;
+
 /**
  * 複数画像／相棒データのパーシャル行を統合。
- * matchBy: rowIndex（OCR横スクロール） / player（相棒 APPEND: 年+氏名+球団）
+ * matchBy: rowIndex（OCR横スクロール） / player（相棒: 年+氏名+球団。順位は使わない）
  */
 export function mergePartialRowsIntoSession(
   session: SeasonBatchSession,
   imageId: string,
   partials: SeasonBatchPartialRow[],
   yearOverride?: number,
-  opts?: { matchBy?: "rowIndex" | "player" },
+  opts?: { matchBy?: "rowIndex" | "player"; maxRows?: number },
 ): SeasonBatchSession {
   const year = yearOverride ?? session.year;
   const matchBy = opts?.matchBy ?? "rowIndex";
+  const maxRows = opts?.maxRows ?? DEFAULT_SEASON_BATCH_MAX_ROWS;
   const rows = [...session.rows];
 
   for (const partial of partials) {
     let idx = findMergeTargetIndex(rows, year, partial, matchBy);
 
     if (idx < 0) {
-      if (rows.length >= 10) continue;
-      rows.push(emptyRow(year, partial.rowIndex, partial));
+      if (rows.length >= maxRows) continue;
+      // 新規行の rowIndex はセッション内の連番（表示順位とは独立）
+      const nextIndex =
+        matchBy === "player"
+          ? rows.length
+          : partial.rowIndex;
+      rows.push(emptyRow(year, nextIndex, partial));
       idx = rows.length - 1;
     }
 
     const row = { ...rows[idx]! };
     row.year = year;
+
+    if (partial.displayRank != null && Number.isFinite(partial.displayRank)) {
+      row.displayRank = partial.displayRank;
+    }
 
     if (partial.ocrName?.trim()) {
       row.ocrName = partial.ocrName.trim();
@@ -313,8 +333,12 @@ export function mergePartialRowsIntoSession(
     rows[idx] = row;
   }
 
-  rows.sort((a, b) => a.rowIndex - b.rowIndex);
-  return { ...session, year, rows: rows.slice(0, 10) };
+  rows.sort((a, b) => {
+    const ar = a.displayRank ?? a.rowIndex + 1;
+    const br = b.displayRank ?? b.rowIndex + 1;
+    return ar - br || a.rowIndex - b.rowIndex;
+  });
+  return { ...session, year, rows: rows.slice(0, maxRows) };
 }
 
 export function createEmptySession(

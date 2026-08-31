@@ -323,7 +323,7 @@ export function SeasonBatchTable({
                   className="sticky left-0 z-20 border-b border-white/5 bg-[#0a0a0a] px-2 py-2 text-white/40"
                   style={{ minWidth: RANK_COL_W, width: RANK_COL_W }}
                 >
-                  {row.rowIndex + 1}
+                  {row.displayRank ?? row.rowIndex + 1}
                 </td>
                 {columns.map((col) => {
                   const isEditing =
