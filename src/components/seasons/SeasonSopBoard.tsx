@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { buildYearSopRankings } from "@/data/sop";
 import { parseSeasonKey } from "@/data/seasons";
@@ -31,6 +31,11 @@ type SeasonSopBoardProps = {
   seasonKey?: string;
 };
 
+function entryKey(entry: SopRankEntry): string {
+  const r = entry.result;
+  return `${r.world ?? ""}:${r.playerId}:${r.role}`;
+}
+
 export function SeasonSopBoard({ year, seasonKey }: SeasonSopBoardProps) {
   const { rankings, notes } = useMemo(() => {
     if (seasonKey) {
@@ -40,6 +45,32 @@ export function SeasonSopBoard({ year, seasonKey }: SeasonSopBoardProps) {
     return buildYearSopRankings(year);
   }, [year, seasonKey]);
   const [selected, setSelected] = useState<SopRankEntry | null>(null);
+  const detailRef = useRef<HTMLTableRowElement | null>(null);
+
+  useEffect(() => {
+    setSelected(null);
+  }, [year, seasonKey]);
+
+  useEffect(() => {
+    if (!selected || !detailRef.current) return;
+    detailRef.current.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+    });
+  }, [selected]);
+
+  function toggleEntry(entry: SopRankEntry) {
+    setSelected((prev) => {
+      if (
+        prev &&
+        prev.result.playerId === entry.result.playerId &&
+        prev.result.role === entry.result.role
+      ) {
+        return null;
+      }
+      return entry;
+    });
+  }
 
   if (rankings.length === 0) {
     return (
@@ -85,49 +116,68 @@ export function SeasonSopBoard({ year, seasonKey }: SeasonSopBoardProps) {
                 selected.result.playerId === r.playerId &&
                 selected.result.role === r.role;
               return (
-                <tr
-                  key={`${r.world ?? ""}:${r.playerId}:${r.role}`}
-                  className={cn(
-                    "border-b border-white/8 cursor-pointer transition-colors",
-                    active
-                      ? "bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.12))]"
-                      : "hover:bg-white/5",
-                  )}
-                  onClick={() => setSelected(entry)}
-                >
-                  <td className="px-2.5 py-2 tabular-nums text-[color:var(--museum-accent,#d4af37)]">
-                    {entry.rank}
-                  </td>
-                  <td className="px-2.5 py-2 font-medium text-museum-ivory">
-                    {r.playerName}
-                  </td>
-                  <td className="px-2.5 py-2 text-museum-ivory-soft">
-                    {r.teamShort}
-                  </td>
-                  <td className="px-2.5 py-2 text-museum-ivory-soft">
-                    {r.role === "batter" ? "野手" : "投手"}
-                  </td>
-                  <td className="px-2.5 py-2 tabular-nums font-medium text-museum-ivory">
-                    {r.total}
-                  </td>
-                </tr>
+                <Fragment key={entryKey(entry)}>
+                  <tr
+                    className={cn(
+                      "border-b border-white/8 transition-colors",
+                      active
+                        ? "bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.12))]"
+                        : "hover:bg-white/5",
+                    )}
+                  >
+                    <td className="px-2.5 py-2 tabular-nums text-[color:var(--museum-accent,#d4af37)]">
+                      {entry.rank}
+                    </td>
+                    <td className="px-2.5 py-2 font-medium text-museum-ivory">
+                      <button
+                        type="button"
+                        onClick={() => toggleEntry(entry)}
+                        className={cn(
+                          "min-h-9 cursor-pointer text-left underline-offset-2",
+                          "hover:text-[color:var(--museum-accent,#d4af37)] hover:underline",
+                          active &&
+                            "text-[color:var(--museum-accent,#d4af37)] underline",
+                        )}
+                      >
+                        {r.playerName}
+                      </button>
+                    </td>
+                    <td className="px-2.5 py-2 text-museum-ivory-soft">
+                      {r.teamShort}
+                    </td>
+                    <td className="px-2.5 py-2 text-museum-ivory-soft">
+                      {r.role === "batter" ? "野手" : "投手"}
+                    </td>
+                    <td className="px-2.5 py-2 tabular-nums font-medium text-museum-ivory">
+                      {r.total}
+                    </td>
+                  </tr>
+                  {active ? (
+                    <tr
+                      ref={detailRef}
+                      className="border-b border-white/8 bg-black/55"
+                    >
+                      <td colSpan={5} className="px-2 py-3 sm:px-3">
+                        <SopDetailPanel
+                          result={selected!.result}
+                          rank={selected!.rank}
+                          onClose={() => setSelected(null)}
+                        />
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
               );
             })}
           </tbody>
         </table>
       </div>
 
-      {selected ? (
-        <SopDetailPanel
-          result={selected.result}
-          rank={selected.rank}
-          onClose={() => setSelected(null)}
-        />
-      ) : (
+      {!selected ? (
         <p className="text-[11px] text-museum-ivory-soft">
-          選手行をクリックするとSOP内訳を表示します。同点は同順位です。
+          選手名をクリックすると、その行の直下にSOP内訳を表示します。同点は同順位です。
         </p>
-      )}
+      ) : null}
 
       <ul className="space-y-0.5 text-[10px] text-museum-ivory-soft/70">
         {notes.map((n) => (
@@ -150,7 +200,7 @@ function SopDetailPanel({
   const groups = groupSopItemsByCategory(result);
 
   return (
-    <section className="rounded-xl border border-[color:var(--museum-accent-border,#d4af3773)] bg-black/45 p-4">
+    <section className="rounded-xl border border-[color:var(--museum-accent-border,#d4af3773)] bg-black/45 p-3 sm:p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h3 className="text-[14px] font-medium text-museum-ivory">
