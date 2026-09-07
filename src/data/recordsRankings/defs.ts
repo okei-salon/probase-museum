@@ -16,6 +16,7 @@ export type RecordsEligibility =
   | "none"
   | "pa_qualified" // 規定打席（チーム試合数×3.1 または保存フラグ）
   | "ip_qualified" // 規定投球回（チーム試合数×1.0 または保存フラグ）
+  | "wins_13" // 勝率：13勝以上
   | "risp_50" // 得点圏打席50以上
   | "cs_30" // 被盗企30以上
   | "relief_30"; // 救援型かつ救援30回以上
@@ -138,7 +139,7 @@ export const BATTER_SEASON_STATS: RecordsStatDef[] = [
 export const PITCHER_SEASON_STATS: RecordsStatDef[] = [
   { id: "era", label: "防御率", role: "pitcher", format: "era", lowerIsBetter: true, eligibility: "ip_qualified" },
   { id: "w", label: "勝利", role: "pitcher", format: "int", eligibility: "none" },
-  { id: "winPct", label: "勝率", role: "pitcher", format: "pct", eligibility: "ip_qualified" },
+  { id: "winPct", label: "勝率", role: "pitcher", format: "pct", eligibility: "wins_13" },
   { id: "ip", label: "投球回", role: "pitcher", format: "ip", eligibility: "none" },
   { id: "so", label: "奪三振", role: "pitcher", format: "int", eligibility: "none" },
   { id: "soRate", label: "奪三振率", role: "pitcher", format: "rate2", eligibility: "ip_qualified" },

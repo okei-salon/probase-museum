@@ -15,6 +15,7 @@ import {
 } from "./npbRecords";
 import type { SopFeatsInput, SopPitcherStats, SopPriorYearFlags } from "./input";
 import type { SopLineItem } from "./types";
+import { evaluateWinPctQualified } from "@/lib/stats";
 
 type BasicHit = { id: string; label: string; points: number };
 
@@ -50,7 +51,9 @@ function collectPitcherBasics(s: SopPitcherStats): BasicHit[] {
   if (s.w != null) add("w15", s.w >= 15);
   if (s.so != null) add("so200", s.so >= 200);
   if (s.ip != null) add("ip200", s.ip >= 200);
-  if (s.winPct != null) add("winPct800", s.winPct >= 0.8);
+  if (s.winPct != null && evaluateWinPctQualified(s.w)) {
+    add("winPct800", s.winPct >= 0.8);
+  }
   return hits;
 }
 
@@ -154,8 +157,8 @@ function applyHistoricPitcher(
   if (s.era != null && s.pitcherClass === "starter") {
     tryAdd("starterEra0", isEra0x(s.era));
   }
-  if (s.winPct != null) {
-    tryAdd("winPct1000", s.winPct >= 1.0 && (s.w ?? 0) > 0);
+  if (s.winPct != null && evaluateWinPctQualified(s.w)) {
+    tryAdd("winPct1000", s.winPct >= 1.0);
   }
   if (s.sho != null) tryAdd("sho10", s.sho >= 10);
   if (s.cg != null) tryAdd("cg20", s.cg >= 20);
@@ -248,6 +251,7 @@ function scorePitcherNpb(
     winPct: s.winPct,
   };
   for (const def of NPB_PITCHER_SEASON_RECORDS) {
+    if (def.field === "winPct" && !evaluateWinPctQualified(s.w)) continue;
     if (meetsNpbRecord(fieldMap[def.field], def)) {
       items.push({
         id: `npb:${def.id}`,

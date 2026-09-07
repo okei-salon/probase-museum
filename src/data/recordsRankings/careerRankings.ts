@@ -28,6 +28,7 @@ import {
   type RecordsStatDef,
 } from "./defs";
 import type { RecordsBoard, RecordsRankEntry } from "./seasonRankings";
+import { MIN_WINS_FOR_WIN_PCT } from "@/lib/stats";
 
 type CareerBatterBundle = {
   playerId: string;
@@ -307,6 +308,11 @@ function eligibleCareerPitcher(
       // アウト数で比較（投球回の .1/.2 を通常小数と誤算しない）
       return {
         ok: c.ipOuts >= q.ipOutsPerSeason * n,
+        unknown: false,
+      };
+    case "wins_13":
+      return {
+        ok: (c.w ?? 0) >= MIN_WINS_FOR_WIN_PCT * n,
         unknown: false,
       };
     case "relief_30": {

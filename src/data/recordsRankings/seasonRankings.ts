@@ -18,6 +18,7 @@ import {
   buildTeamGamesContext,
   evaluateIpQualified,
   evaluatePaQualified,
+  evaluateWinPctQualified,
   resolveTeamGamesForPlayer,
   type TeamGamesContext,
 } from "@/lib/stats";
@@ -198,6 +199,13 @@ function eligibleSeason(
       });
       if (!status.known) return { ok: false, unknown: true };
       return { ok: status.qualified, unknown: false };
+    }
+    case "wins_13": {
+      if (line.role !== "pitcher") return { ok: false, unknown: false };
+      return {
+        ok: evaluateWinPctQualified(line.counting.w),
+        unknown: false,
+      };
     }
     case "risp_50": {
       if (line.role !== "batter") return { ok: false, unknown: false };

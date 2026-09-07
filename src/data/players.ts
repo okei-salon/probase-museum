@@ -1,9 +1,7 @@
 import type { LinkListItemData } from "@/components/category/LinkList";
-import {
-  getPlayerAffiliation,
-  getPlayerAffiliationsByPlayer,
-  getPlayerMaster,
-} from "@/data/playerMaster";
+import { getPlayerMaster } from "@/data/playerMaster";
+import { getLatestPlayerAffiliation } from "@/data/players/directory";
+import { getTeam } from "@/data/teams";
 
 export const playersTopMenu: LinkListItemData[] = [
   {
@@ -17,16 +15,10 @@ export const playersTopMenu: LinkListItemData[] = [
     id: "by-team",
     href: "/players/by-team",
     title: "球団から検索",
-    description: "12球団ごとの選手一覧",
+    description: "12球団の現在所属選手",
     icon: "flag",
   },
 ];
-
-export const samplePlayers = [
-  { id: "demo-01", name: "サンプル 太郎", team: "阪神", position: "内野手" },
-  { id: "demo-02", name: "サンプル 次郎", team: "巨人", position: "投手" },
-  { id: "demo-03", name: "サンプル 三郎", team: "ソフトバンク", position: "外野手" },
-] as const;
 
 /** 選手詳細の正式5項目 */
 export const playerDetailSections: LinkListItemData[] = [
@@ -86,48 +78,20 @@ export type PlayerListItem = {
   position: string;
 };
 
-function shortTeamLabel(name: string): string {
-  const map: Record<string, string> = {
-    阪神タイガース: "阪神",
-    読売ジャイアンツ: "巨人",
-    広島東洋カープ: "広島",
-    横浜DeNAベイスターズ: "DeNA",
-    東京ヤクルトスワローズ: "ヤクルト",
-    中日ドラゴンズ: "中日",
-    "オリックス・バファローズ": "オリックス",
-    福岡ソフトバンクホークス: "ソフトバンク",
-    千葉ロッテマリーンズ: "ロッテ",
-    北海道日本ハムファイターズ: "日本ハム",
-    埼玉西武ライオンズ: "西武",
-    東北楽天ゴールデンイーグルス: "楽天",
-  };
-  return map[name] ?? name;
-}
-
-/** デモ選手 + 選手マスター（NPB辞書）の両方を解決 */
+/** 選手マスターから解決（固定サンプルは使わない） */
 export function getPlayer(id: string): PlayerListItem | undefined {
-  const sample = samplePlayers.find((p) => p.id === id);
-  if (sample) {
-    return {
-      id: sample.id,
-      name: sample.name,
-      team: sample.team,
-      position: sample.position,
-    };
-  }
-
   const master = getPlayerMaster(id);
   if (!master) return undefined;
 
-  const aff =
-    getPlayerAffiliation(id, 2026) ??
-    getPlayerAffiliationsByPlayer(id).at(-1) ??
-    null;
+  const aff = getLatestPlayerAffiliation(id);
+  const team = aff
+    ? (getTeam(aff.teamId)?.short ?? aff.teamName)
+    : "—";
 
   return {
     id: master.playerId,
     name: master.fullName,
-    team: aff ? shortTeamLabel(aff.teamName) : "—",
+    team,
     position: aff?.position ?? master.position,
   };
 }

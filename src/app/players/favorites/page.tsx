@@ -1,23 +1,16 @@
-import { CategoryShell, LinkList, PageHeading } from "@/components/category";
-import { samplePlayers } from "@/data/players";
+import { CategoryShell, PageHeading } from "@/components/category";
 
 export default function PlayerFavoritesPage() {
-  const items = samplePlayers.slice(0, 2).map((p) => ({
-    id: p.id,
-    href: `/players/${p.id}`,
-    title: p.name,
-    description: `${p.team} / ${p.position}`,
-    icon: "heart" as const,
-  }));
-
   return (
     <CategoryShell theme="players" back={{ href: "/players", label: "PLAYERS" }}>
       <PageHeading
         title="お気に入り選手"
-        subtitle="登録したお気に入り選手の一覧（ダミー）"
+        subtitle="登録したお気に入り選手の一覧"
         icon="heart"
       />
-      <LinkList items={items} />
+      <p className="text-[13px] text-museum-ivory-soft">
+        お気に入り選手はまだ登録されていません。選手名検索または球団から検索で選手ページを開けます。
+      </p>
     </CategoryShell>
   );
 }

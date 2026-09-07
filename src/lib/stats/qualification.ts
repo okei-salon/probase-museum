@@ -13,6 +13,25 @@ export const PA_PER_TEAM_GAME = 3.1;
 export const IP_PER_TEAM_GAME = 1.0;
 
 /**
+ * 投手・勝率ランキング／SOP勝率評価の最低勝利数。
+ * 13勝未満は勝率が高くても規定外（計算式自体は変更しない）。
+ */
+export const MIN_WINS_FOR_WIN_PCT = 13;
+
+/**
+ * 勝率タイトル・ランキング・SOPの規定到達判定。
+ */
+export function evaluateWinPctQualified(
+  wins: number | null | undefined,
+): boolean {
+  return (
+    wins != null &&
+    Number.isFinite(wins) &&
+    wins >= MIN_WINS_FOR_WIN_PCT
+  );
+}
+
+/**
  * 規定打席 = floor(チーム試合数 × 3.1)
  * 例: 143 → 443、18 → 55
  */

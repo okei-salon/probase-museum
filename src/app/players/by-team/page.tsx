@@ -14,7 +14,7 @@ export default function PlayersByTeamPage() {
     <CategoryShell theme="players" back={{ href: "/players", label: "PLAYERS" }}>
       <PageHeading
         title="球団から検索"
-        subtitle="12球団ごとの選手一覧"
+        subtitle="12球団を選ぶと、現在所属の選手一覧を表示します"
         icon="flag"
       />
       <LinkList items={items} />

@@ -22,6 +22,7 @@ export type TitleEligibility =
   | "none"
   | "pa_qualify" // 規定打席 — PA / チーム試合数が必要
   | "ip_qualify" // 規定投球回
+  | "wins_13" // 勝率 — 13勝以上
   | "relief_ip_30" // 救援30投球回以上
   | "risp" // 得点圏打率 — 専用成績が必要
   | "catcher_cs"; // 盗塁阻止率 — 捕手側成績が必要
@@ -191,9 +192,9 @@ export const PITCHER_TITLES: TitleDef[] = [
     role: "pitcher",
     valueKey: "winPct",
     format: "pct",
-    eligibility: "ip_qualify",
+    eligibility: "wins_13",
     eligibilityNote:
-      "勝率タイトルの登板条件はデータ不足のため参考順位です。",
+      "13勝以上の投手のみ勝率タイトル対象です。12勝以下は規定外です。",
   },
   {
     id: "so",

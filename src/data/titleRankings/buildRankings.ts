@@ -21,6 +21,7 @@ import {
   buildTeamGamesContext,
   evaluateIpQualified,
   evaluatePaQualified,
+  evaluateWinPctQualified,
   resolveTeamGamesForPlayer,
   type TeamGamesContext,
 } from "@/lib/stats";
@@ -101,6 +102,11 @@ function passesEligibility(
       if (!status.known) return { ok: false, unknown: true };
       return { ok: status.qualified, unknown: false };
     }
+    case "wins_13":
+      return {
+        ok: evaluateWinPctQualified(c.values.w),
+        unknown: false,
+      };
     case "relief_ip_30": {
       if (!c.available[def.valueKey]) return { ok: false, unknown: false };
       // 救援型フラグ: values.pitcherClassReliever === 1

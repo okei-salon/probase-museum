@@ -32,6 +32,7 @@ import {
   evaluateCsRateQualified,
   evaluateIpQualified,
   evaluatePaQualified,
+  evaluateWinPctQualified,
   isRateStatKey,
   rankingDisplayRank,
   resolveTeamGamesForPlayer,
@@ -540,6 +541,11 @@ function resolveRowQualified(
       teamGames,
       flag: row.paQualifiedFlag,
     }).qualified;
+  }
+
+  // 勝率は規定投球回ではなく「13勝以上」
+  if (sortKey === "winPct") {
+    return evaluateWinPctQualified(row.values.w);
   }
 
   const ipOuts =

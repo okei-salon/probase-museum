@@ -1,5 +1,4 @@
 import { CategoryShell, LinkList, PageHeading } from "@/components/category";
-import { samplePlayers } from "@/data/players";
 
 export default function PlayerStatusPage() {
   const items = [
@@ -27,9 +26,6 @@ export default function PlayerStatusPage() {
         icon="users"
       />
       <LinkList items={items} />
-      <p className="mt-4 text-[11px] text-museum-ivory-soft">
-        参考ダミー選手: {samplePlayers.map((p) => p.name).join(" / ")}
-      </p>
     </CategoryShell>
   );
 }
