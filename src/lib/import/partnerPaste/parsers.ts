@@ -876,8 +876,26 @@ export function parsePositionAwardPartner(
     const parts = line.split("|").map((p) => p.trim());
     if (parts.length < 2) continue;
     const posRaw = parts[0]!;
-    const position = POSITION_ALIASES[posRaw] ?? POSITION_ALIASES[posRaw.replace(/\s+/g, "")] ?? posRaw;
+    if (!posRaw) continue;
+    const position =
+      POSITION_ALIASES[posRaw] ??
+      POSITION_ALIASES[posRaw.replace(/\s+/g, "")] ??
+      posRaw;
+    if (
+      ![
+        "投手",
+        "捕手",
+        "一塁手",
+        "二塁手",
+        "三塁手",
+        "遊撃手",
+        "外野手",
+      ].includes(position)
+    ) {
+      continue;
+    }
     const name = parts[1] ?? "";
+    if (!name) continue;
     const teamShort = normalizeTeamShort(parts[2] ?? "");
     const role = position === "投手" ? "pitcher" : "batter";
     const resolved = resolvePartnerPlayer({ name, teamShort, year, role });

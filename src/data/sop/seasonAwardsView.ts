@@ -2,6 +2,9 @@
  * シーズン表彰画面用: レジストリを ResolvedAwardCard に重ねる。
  * 正式 WORLD はレジストリ優先（未登録はプレースホルダ）。
  * レガシー／DEMO は従来サンプルの上に world 無しレジストリを重ねる。
+ *
+ * ベストナインの主要成績は表彰レコードに持たず、
+ * 同年度・同 WORLD の保存済み個人成績を表示時に参照する。
  */
 
 import type { LeagueSide, ResolvedAwardCard } from "@/data/awards";
@@ -12,6 +15,7 @@ import {
   getRookieAwards,
   getSawamuraAwards,
 } from "@/data/awards";
+import { getRegisteredSeasonHighlightStats } from "@/data/playerSeasonStats";
 import { formatSeasonAwardHistory } from "@/lib/awardHistory";
 import type { AnnualAwardKind } from "@/lib/sop/rules";
 import {
@@ -41,6 +45,7 @@ function emptyCard(
 function toCard(
   a: RegisteredSeasonAward,
   currentYear: number,
+  stats: ResolvedAwardCard["stats"] = null,
 ): ResolvedAwardCard {
   return {
     playerId: a.playerId,
@@ -49,8 +54,20 @@ function toCard(
     historyLabel: formatSeasonAwardHistory([a.year], currentYear),
     league: a.league,
     position: a.position,
-    stats: null,
+    stats,
   };
+}
+
+function bestNineStatsFor(
+  a: RegisteredSeasonAward,
+  identity: SeasonIdentity,
+): ResolvedAwardCard["stats"] {
+  return getRegisteredSeasonHighlightStats({
+    playerId: a.playerId,
+    year: identity.year,
+    world: identity.world,
+    position: a.position,
+  });
 }
 
 function pickMajor(
@@ -127,10 +144,16 @@ export function resolveSawamuraBoard(identity: SeasonIdentity) {
   return resolveMajorPair(identity, "sawamura", getSawamuraAwards(y));
 }
 
+/**
+ * 守備位置ボードを9枠に固定して解決する。
+ * 余りレコード（空ポジション・非正規・重複）は末尾追加しない。
+ * → 「高橋遥人」のような10人目表示の原因だった。
+ */
 function mergePositionBoard(
   identity: SeasonIdentity,
   kind: "bestNine" | "goldenGlove",
   sample: { central: ResolvedAwardCard[]; pacific: ResolvedAwardCard[] },
+  withSeasonStats: boolean,
 ): { central: ResolvedAwardCard[]; pacific: ResolvedAwardCard[] } {
   const year = identity.year;
   const awards = listRegisteredAwardsForSeason(identity).filter(
@@ -142,30 +165,31 @@ function mergePositionBoard(
     league: LeagueSide,
     base: ResolvedAwardCard[],
   ): ResolvedAwardCard[] {
-    const reg = awards.filter((a) => a.league === league);
+    const reg = awards.filter((a) => {
+      if (a.league !== league) return false;
+      // 空ポジションの孤児は枠に載せない
+      return Boolean((a.position ?? "").trim());
+    });
     if (reg.length === 0) {
       return formal
         ? base.map((b) => emptyCard(league, b.position))
         : base;
     }
-    // 守備位置で上書き。同一位置が複数なら登録順で並べ、余りは末尾追加
+    // 守備位置で上書き。同一位置が複数なら登録順で消費。余りは破棄（9枠固定）
     const used = new Set<string>();
-    const out: ResolvedAwardCard[] = base.map((b) => {
+    return base.map((b) => {
       const hit = reg.find(
-        (a) =>
-          a.position === b.position &&
-          !used.has(a.id),
+        (a) => a.position === b.position && !used.has(a.id),
       );
       if (hit) {
         used.add(hit.id);
-        return toCard(hit, year);
+        const stats = withSeasonStats
+          ? bestNineStatsFor(hit, identity)
+          : null;
+        return toCard(hit, year, stats);
       }
       return formal ? emptyCard(league, b.position) : b;
     });
-    for (const a of reg) {
-      if (!used.has(a.id)) out.push(toCard(a, year));
-    }
-    return out;
   }
 
   return {
@@ -179,6 +203,7 @@ export function resolveBestNineBoard(identity: SeasonIdentity) {
     identity,
     "bestNine",
     getBestNineAwards(String(identity.year)),
+    true,
   );
 }
 
@@ -187,6 +212,7 @@ export function resolveGoldenGloveBoard(identity: SeasonIdentity) {
     identity,
     "goldenGlove",
     getGoldenGloveAwards(String(identity.year)),
+    false,
   );
 }
 

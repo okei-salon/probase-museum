@@ -42,7 +42,8 @@ export type ResolvedAwardCard = {
   league?: LeagueSide;
 };
 
-const POSITIONS = [
+/** ベストナイン／GG の固定9枠（外野は同名×3） */
+export const BEST_NINE_POSITIONS = [
   "投手",
   "捕手",
   "一塁手",
@@ -53,6 +54,8 @@ const POSITIONS = [
   "外野手",
   "外野手",
 ] as const;
+
+const POSITIONS = BEST_NINE_POSITIONS;
 
 function resolveAwardPlayerName(
   w: AwardWinnerBase & { position?: string },

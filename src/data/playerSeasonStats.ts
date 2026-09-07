@@ -3,6 +3,18 @@
  * 表彰レコード側に成績を重複保存せず、playerId + year (+ month) で取得する。
  */
 
+import {
+  getSeasonLine,
+  type PlayerSeasonLine,
+  type SeasonLineRole,
+} from "@/data/playerSeasonLines";
+import type { SeasonWorld } from "@/data/seasons";
+import {
+  formatAvgDisplay,
+  formatWinPctDisplay,
+} from "@/lib/manualEntry/normalizeInput";
+import { formatWhipDisplay } from "@/lib/manualEntry/computeSeasonStats";
+
 export type BatterHighlightStats = {
   kind: "batter";
   avg: number;
@@ -307,6 +319,75 @@ export function getSeasonHighlightStats(
     seasonStats.find((e) => e.playerId === playerId && e.year === year)
       ?.stats ?? null
   );
+}
+
+/**
+ * 表彰カード用: 保存済みシーズン個人成績（pennant）から主要成績を参照する。
+ * 表彰レコードへ成績を複製しない。該当が無ければ null。
+ */
+export function getRegisteredSeasonHighlightStats(params: {
+  playerId: string;
+  year: number;
+  world?: SeasonWorld | null;
+  /** 守備位置。投手以外は野手成績を参照 */
+  position?: string | null;
+}): { label: string; value: string }[] | null {
+  if (!params.playerId) return null;
+  const role: SeasonLineRole =
+    (params.position ?? "").trim() === "投手" ? "pitcher" : "batter";
+  const line = getSeasonLine(
+    params.playerId,
+    params.year,
+    role,
+    "pennant",
+    params.world,
+  );
+  if (!line) return null;
+  return formatSeasonLineHighlightStats(line);
+}
+
+function formatSeasonLineHighlightStats(
+  line: PlayerSeasonLine,
+): { label: string; value: string }[] {
+  if (line.role === "batter") {
+    const c = line.counting;
+    const d = line.derived;
+    const rows: { label: string; value: string }[] = [];
+    if (d.avg != null) {
+      rows.push({ label: "打率", value: formatAvgDisplay(d.avg) });
+    }
+    rows.push({ label: "本塁打", value: String(c.hr ?? 0) });
+    rows.push({ label: "打点", value: String(c.rbi ?? 0) });
+    rows.push({ label: "安打", value: String(c.h ?? 0) });
+    rows.push({ label: "盗塁", value: String(c.sb ?? 0) });
+    if (d.obp != null) {
+      rows.push({ label: "出塁率", value: formatAvgDisplay(d.obp) });
+    }
+    if (d.ops != null) {
+      rows.push({ label: "OPS", value: formatAvgDisplay(d.ops) });
+    }
+    return rows;
+  }
+
+  const c = line.counting;
+  const d = line.derived;
+  const rows: { label: string; value: string }[] = [];
+  if (d.era != null) {
+    rows.push({ label: "防御率", value: d.era.toFixed(2) });
+  }
+  rows.push({ label: "勝", value: String(c.w ?? 0) });
+  rows.push({ label: "敗", value: String(c.l ?? 0) });
+  if (d.winPct != null) {
+    rows.push({ label: "勝率", value: formatWinPctDisplay(d.winPct) });
+  }
+  if (d.ipDisplay) {
+    rows.push({ label: "投球回", value: d.ipDisplay });
+  }
+  rows.push({ label: "奪三振", value: String(c.so ?? 0) });
+  if (d.whip != null) {
+    rows.push({ label: "WHIP", value: formatWhipDisplay(d.whip) });
+  }
+  return rows;
 }
 
 export function getMonthlyHighlightStats(

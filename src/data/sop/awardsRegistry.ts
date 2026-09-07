@@ -208,6 +208,7 @@ export function upsertRegisteredAward(
 /**
  * 同一 WORLD・年・種別・リーグの B9/GG をポジション単位で merge。
  * 渡された position だけ更新し、未入力の他ポジションは残す。
+ * ただし守備位置が空／非正規の孤児レコードは残さない（10人目表示の原因になる）。
  */
 export function replaceRegisteredAwardsForLeague(params: {
   year: number;
@@ -221,40 +222,82 @@ export function replaceRegisteredAwardsForLeague(params: {
 }): RegisteredSeasonAward[] {
   const now = new Date().toISOString();
   const world = normalizeSeasonWorld(params.world);
+  const canonical = new Set([
+    "投手",
+    "捕手",
+    "一塁手",
+    "二塁手",
+    "三塁手",
+    "遊撃手",
+    "外野手",
+  ]);
+
+  // 空ポジションは捨てる。投手など1枠ポジションは最後勝ち、外野は最大3
+  const normalizedIncoming: typeof params.awards = [];
+  const ofBucket: typeof params.awards = [];
+  const singleByPos = new Map<string, (typeof params.awards)[number]>();
+  for (const award of params.awards) {
+    const pos = (award.position ?? "").trim();
+    if (!pos || !canonical.has(pos)) continue;
+    if (pos === "外野手") {
+      if (ofBucket.length < 3) ofBucket.push({ ...award, position: pos });
+    } else {
+      singleByPos.set(pos, { ...award, position: pos });
+    }
+  }
+  for (const pos of [
+    "投手",
+    "捕手",
+    "一塁手",
+    "二塁手",
+    "三塁手",
+    "遊撃手",
+  ]) {
+    const hit = singleByPos.get(pos);
+    if (hit) normalizedIncoming.push(hit);
+  }
+  normalizedIncoming.push(...ofBucket);
+
   const incomingPositions = new Set(
-    params.awards.map((a) => a.position ?? ""),
+    normalizedIncoming.map((a) => a.position ?? ""),
   );
-  // 今回明示されたポジションだけ外し、他ポジションは保持
+
+  // 今回明示されたポジションだけ外し、他ポジションは保持。
+  // 空／非正規ポジションの孤児は常に除去する。
   const kept = readRawAwards().filter((a) => {
     if (a.year !== params.year) return true;
     if (normalizeSeasonWorld(a.world) !== world) return true;
     if (a.kind !== params.kind) return true;
     if (a.league !== params.league) return true;
-    return !incomingPositions.has(a.position ?? "");
+    const pos = (a.position ?? "").trim();
+    if (!pos || !canonical.has(pos)) return false;
+    return !incomingPositions.has(pos);
   });
-  const inserted: RegisteredSeasonAward[] = params.awards.map((award, i) => {
-    const pos = award.position ?? "";
-    const id = world
-      ? registeredAwardId({
-          kind: params.kind,
-          year: params.year,
-          world,
-          league: params.league,
-          position: pos,
-          playerId: award.playerId,
-        })
-      : `${params.kind}:${params.year}:${params.league}:${pos}:${award.playerId}:${i}`;
-    return {
-      ...award,
-      id,
-      year: params.year,
-      world,
-      kind: params.kind,
-      league: params.league,
-      position: pos || award.position,
-      updatedAt: now,
-    };
-  });
+  const inserted: RegisteredSeasonAward[] = normalizedIncoming.map(
+    (award, i) => {
+      const pos = award.position ?? "";
+      const id = world
+        ? registeredAwardId({
+            kind: params.kind,
+            year: params.year,
+            world,
+            league: params.league,
+            position: pos,
+            playerId: award.playerId,
+          })
+        : `${params.kind}:${params.year}:${params.league}:${pos}:${award.playerId}:${i}`;
+      return {
+        ...award,
+        id,
+        year: params.year,
+        world,
+        kind: params.kind,
+        league: params.league,
+        position: pos,
+        updatedAt: now,
+      };
+    },
+  );
   writeRawAwards([...kept, ...inserted]);
   for (const rec of inserted) {
     void putMuseumCollectionRecord(COLLECTION, rec);
