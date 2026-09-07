@@ -133,7 +133,7 @@ export const BATTER_TITLES: TitleDef[] = [
     format: "avg",
     eligibility: "risp",
     eligibilityNote:
-      "圏打数・圏安打が登録されている選手のみ集計します。",
+      "規定打席到達者のうち、圏打数・圏安打が登録されている選手のみ対象です。",
   },
   {
     id: "sac",

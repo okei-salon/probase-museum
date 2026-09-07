@@ -2,9 +2,7 @@ import type { LeagueSide } from "@/data/playerStats";
 import type { SeasonIdentity, SeasonWorld } from "@/data/seasons";
 import {
   getTitleHistoryLabel,
-  listTitleWinsForSeason,
   upsertTitleWinner,
-  type TitleWinRecord,
 } from "./history";
 import {
   loadTitleCandidates,
@@ -116,11 +114,26 @@ function passesEligibility(
       const rip = c.values.reliefIp ?? 0;
       return { ok: rip >= 30, unknown: false };
     }
-    case "risp":
-      return {
-        ok: Boolean(c.available[def.valueKey]),
-        unknown: !c.available[def.valueKey],
-      };
+    case "risp": {
+      // 得点圏打率: 規定打席到達者のみ。圏成績が無ければ対象外。
+      if (!c.available.risp) {
+        return { ok: false, unknown: true };
+      }
+      const teamGames = resolveTeamGamesForPlayer(teamGamesCtx, c.teamId);
+      const flag =
+        c.values.paQualified === 1
+          ? true
+          : c.values.paQualified === 0
+            ? false
+            : null;
+      const status = evaluatePaQualified({
+        pa: c.values.pa,
+        teamGames,
+        flag,
+      });
+      if (!status.known) return { ok: false, unknown: true };
+      return { ok: status.qualified, unknown: false };
+    }
     case "catcher_cs": {
       // 規定：被盗企 30 以上（available 側で判定済み）
       const attempted = c.values.csAttempted ?? 0;
@@ -155,7 +168,14 @@ function top5(
         return false;
       }
     }
-    if (!c.available[def.valueKey] && ["risp", "csRate", "reliefEra", "reliefSoRate"].includes(def.valueKey)) {
+    if (
+      !c.available[def.valueKey] &&
+      ["risp", "csRate", "reliefEra", "reliefSoRate"].includes(def.valueKey)
+    ) {
+      return false;
+    }
+    // 累計系（安打・犠打など）も未収録は除外し、0埋め誤判定を防ぐ
+    if (def.eligibility === "none" && !c.available[def.valueKey]) {
       return false;
     }
     const el = passesEligibility(def, c, teamGamesCtx);
@@ -165,7 +185,11 @@ function top5(
   const sorted = [...pool].sort((a, b) => {
     const av = a.values[def.valueKey] ?? 0;
     const bv = b.values[def.valueKey] ?? 0;
-    return def.lowerIsBetter ? av - bv : bv - av;
+    if (av !== bv) {
+      return def.lowerIsBetter ? av - bv : bv - av;
+    }
+    // 同値は選手名で安定ソート（表示ゆれ防止）
+    return a.playerName.localeCompare(b.playerName, "ja");
   });
 
   const top = sorted.slice(0, 5);
@@ -173,6 +197,7 @@ function top5(
     const rank = i + 1;
     const value = c.values[def.valueKey] ?? 0;
     if (rank === 1 && persistHistory) {
+      // 常に再計算結果で1位を同期（誤った手入力履歴の上書き）
       upsertTitleWinner({
         titleId: def.id,
         year,
@@ -216,7 +241,7 @@ function collectGaps(
   }
   if (role === "batter") {
     gaps.push(
-      "得点圏打率：圏打数・圏安打が未登録の選手は対象外です。",
+      "得点圏打率：規定打席到達者のうち、圏打数・圏安打が登録されている選手のみ対象です。",
       "盗塁阻止率：被盗塁企図30回以上が規定です（試合数・守備機会は使いません）。",
     );
   } else {
@@ -232,30 +257,11 @@ function collectGaps(
   return gaps;
 }
 
-function entriesFromHistory(
-  records: TitleWinRecord[],
-  titleId: string,
-  league: LeagueSide,
-  year: number,
-  world?: SeasonWorld | null,
-): TitleRankEntry[] {
-  return records
-    .filter((r) => r.titleId === titleId && r.league === league)
-    .sort((a, b) => (a.rank ?? 1) - (b.rank ?? 1))
-    .map((r) => ({
-      rank: r.rank ?? 1,
-      playerId: r.playerId,
-      playerName: r.playerName ?? r.playerId,
-      teamShort: r.teamShort ?? "—",
-      value: 0,
-      valueText: r.valueText ?? "—",
-      historyLabel:
-        (r.rank ?? 1) === 1
-          ? getTitleHistoryLabel(titleId, league, r.playerId, year, world)
-          : undefined,
-    }));
-}
-
+/**
+ * 個人タイトルは保存済みシーズン成績から毎回算出する。
+ * タイトル履歴は受賞回数ラベル用で、受賞者の表示根拠には使わない
+ * （誤った手入力履歴がレイエス等を固定表示してしまうのを防ぐ）。
+ */
 export function buildTitleRankings(
   year: number,
   role: TitleRole,
@@ -274,7 +280,6 @@ export function buildTitleRankings(
     identity,
   );
   const defs = titlesForRole(role);
-  const history = identity ? listTitleWinsForSeason(identity) : [];
   const teamGamesCtx = buildTeamGamesContext({
     scope: "pennant",
     identity,
@@ -289,7 +294,7 @@ export function buildTitleRankings(
         def.eligibility === "relief_ip_30") &&
       !candidates.some((c) => c.available[def.valueKey]);
 
-    if (hardMissing && history.every((h) => h.titleId !== def.id)) {
+    if (hardMissing) {
       return {
         def,
         board: { central: [], pacific: [] },
@@ -303,7 +308,7 @@ export function buildTitleRankings(
       candidates,
       "central",
       year,
-      persistHistory && history.filter((h) => h.titleId === def.id && h.league === "central").length === 0,
+      persistHistory,
       world,
       teamGamesCtx,
     );
@@ -312,29 +317,14 @@ export function buildTitleRankings(
       candidates,
       "pacific",
       year,
-      persistHistory && history.filter((h) => h.titleId === def.id && h.league === "pacific").length === 0,
+      persistHistory,
       world,
       teamGamesCtx,
     );
 
-    const histCentral = entriesFromHistory(
-      history,
-      def.id,
-      "central",
-      year,
-      world,
-    );
-    const histPacific = entriesFromHistory(
-      history,
-      def.id,
-      "pacific",
-      year,
-      world,
-    );
-
     const board: TitleLeagueBoard = {
-      central: histCentral.length > 0 ? histCentral : computedCentral,
-      pacific: histPacific.length > 0 ? histPacific : computedPacific,
+      central: computedCentral,
+      pacific: computedPacific,
     };
 
     return {
@@ -345,7 +335,9 @@ export function buildTitleRankings(
         board.pacific.length === 0 &&
         hardMissing,
       note:
-        def.eligibility === "pa_qualify" || def.eligibility === "ip_qualify"
+        def.eligibility === "pa_qualify" ||
+        def.eligibility === "ip_qualify" ||
+        def.eligibility === "risp"
           ? def.eligibilityNote
           : undefined,
     };
