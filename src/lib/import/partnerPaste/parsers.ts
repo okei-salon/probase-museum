@@ -858,7 +858,32 @@ const POSITION_ALIASES: Record<string, string> = {
   外野1: "外野手",
   外野2: "外野手",
   外野3: "外野手",
+  DH: "DH",
+  dh: "DH",
+  ＤＨ: "DH",
+  指名打者: "DH",
 };
+
+const BEST_NINE_ALLOWED = new Set([
+  "投手",
+  "捕手",
+  "一塁手",
+  "二塁手",
+  "三塁手",
+  "遊撃手",
+  "外野手",
+  "DH",
+]);
+
+const GOLD_GLOVE_ALLOWED = new Set([
+  "投手",
+  "捕手",
+  "一塁手",
+  "二塁手",
+  "三塁手",
+  "遊撃手",
+  "外野手",
+]);
 
 export function parsePositionAwardPartner(
   rawText: string,
@@ -870,6 +895,8 @@ export function parsePositionAwardPartner(
   const year = meta.year ?? fallbackYear;
   const league = meta.league ?? "central";
   const entries: PartnerPositionEntry[] = [];
+  const allowed =
+    type === "BEST_NINE" ? BEST_NINE_ALLOWED : GOLD_GLOVE_ALLOWED;
 
   for (const line of meta.rest) {
     if (/^(YEAR|TYPE|LEAGUE)\s*=/i.test(line)) continue;
@@ -880,20 +907,10 @@ export function parsePositionAwardPartner(
     const position =
       POSITION_ALIASES[posRaw] ??
       POSITION_ALIASES[posRaw.replace(/\s+/g, "")] ??
+      POSITION_ALIASES[posRaw.toUpperCase()] ??
       posRaw;
-    if (
-      ![
-        "投手",
-        "捕手",
-        "一塁手",
-        "二塁手",
-        "三塁手",
-        "遊撃手",
-        "外野手",
-      ].includes(position)
-    ) {
-      continue;
-    }
+    if (!allowed.has(position)) continue;
+    // セ・リーグ B9 に DH が混ざってもプレビューには出すが、保存側で除外される
     const name = parts[1] ?? "";
     if (!name) continue;
     const teamShort = normalizeTeamShort(parts[2] ?? "");

@@ -14,6 +14,7 @@ import {
   getMvpAwards,
   getRookieAwards,
   getSawamuraAwards,
+  normalizeBestNinePosition,
 } from "@/data/awards";
 import { getRegisteredSeasonHighlightStats } from "@/data/playerSeasonStats";
 import { formatSeasonAwardHistory } from "@/lib/awardHistory";
@@ -145,9 +146,9 @@ export function resolveSawamuraBoard(identity: SeasonIdentity) {
 }
 
 /**
- * 守備位置ボードを9枠に固定して解決する。
+ * 守備位置ボードをリーグ枠に固定して解決する。
+ * セ B9 / GG: 9枠、パ B9: DH 込み10枠。
  * 余りレコード（空ポジション・非正規・重複）は末尾追加しない。
- * → 「高橋遥人」のような10人目表示の原因だった。
  */
 function mergePositionBoard(
   identity: SeasonIdentity,
@@ -167,26 +168,29 @@ function mergePositionBoard(
   ): ResolvedAwardCard[] {
     const reg = awards.filter((a) => {
       if (a.league !== league) return false;
-      // 空ポジションの孤児は枠に載せない
-      return Boolean((a.position ?? "").trim());
+      return Boolean(normalizeBestNinePosition(a.position));
     });
     if (reg.length === 0) {
       return formal
         ? base.map((b) => emptyCard(league, b.position))
         : base;
     }
-    // 守備位置で上書き。同一位置が複数なら登録順で消費。余りは破棄（9枠固定）
+    // 守備位置で上書き（DH / 指名打者を同一視）。同一位置が複数なら登録順で消費。
     const used = new Set<string>();
     return base.map((b) => {
+      const slot = normalizeBestNinePosition(b.position);
       const hit = reg.find(
-        (a) => a.position === b.position && !used.has(a.id),
+        (a) =>
+          normalizeBestNinePosition(a.position) === slot && !used.has(a.id),
       );
       if (hit) {
         used.add(hit.id);
         const stats = withSeasonStats
           ? bestNineStatsFor(hit, identity)
           : null;
-        return toCard(hit, year, stats);
+        const card = toCard(hit, year, stats);
+        // 表示は正規ポジション名（指名打者 → DH）
+        return { ...card, position: slot || card.position };
       }
       return formal ? emptyCard(league, b.position) : b;
     });

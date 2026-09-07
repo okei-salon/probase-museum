@@ -7,6 +7,7 @@
  */
 
 import type { AnnualAwardKind } from "@/lib/sop/rules";
+import { normalizeBestNinePosition } from "@/data/awards";
 import { excludeDemoRecords } from "@/data/import/demoStore";
 import {
   matchSeason,
@@ -208,7 +209,8 @@ export function upsertRegisteredAward(
 /**
  * 同一 WORLD・年・種別・リーグの B9/GG をポジション単位で merge。
  * 渡された position だけ更新し、未入力の他ポジションは残す。
- * ただし守備位置が空／非正規の孤児レコードは残さない（10人目表示の原因になる）。
+ * ただし守備位置が空／非正規の孤児レコードは残さない。
+ * パ・リーグ ベストナインの DH は正規ポジションとして保存する。
  */
 export function replaceRegisteredAwardsForLeague(params: {
   year: number;
@@ -222,22 +224,14 @@ export function replaceRegisteredAwardsForLeague(params: {
 }): RegisteredSeasonAward[] {
   const now = new Date().toISOString();
   const world = normalizeSeasonWorld(params.world);
-  const canonical = new Set([
-    "投手",
-    "捕手",
-    "一塁手",
-    "二塁手",
-    "三塁手",
-    "遊撃手",
-    "外野手",
-  ]);
+  const canonical = canonicalPositionsForAward(params.kind, params.league);
 
   // 空ポジションは捨てる。投手など1枠ポジションは最後勝ち、外野は最大3
   const normalizedIncoming: typeof params.awards = [];
   const ofBucket: typeof params.awards = [];
   const singleByPos = new Map<string, (typeof params.awards)[number]>();
   for (const award of params.awards) {
-    const pos = (award.position ?? "").trim();
+    const pos = normalizeBestNinePosition(award.position);
     if (!pos || !canonical.has(pos)) continue;
     if (pos === "外野手") {
       if (ofBucket.length < 3) ofBucket.push({ ...award, position: pos });
@@ -252,14 +246,16 @@ export function replaceRegisteredAwardsForLeague(params: {
     "二塁手",
     "三塁手",
     "遊撃手",
+    "DH",
   ]) {
+    if (!canonical.has(pos)) continue;
     const hit = singleByPos.get(pos);
     if (hit) normalizedIncoming.push(hit);
   }
   normalizedIncoming.push(...ofBucket);
 
   const incomingPositions = new Set(
-    normalizedIncoming.map((a) => a.position ?? ""),
+    normalizedIncoming.map((a) => normalizeBestNinePosition(a.position)),
   );
 
   // 今回明示されたポジションだけ外し、他ポジションは保持。
@@ -269,13 +265,13 @@ export function replaceRegisteredAwardsForLeague(params: {
     if (normalizeSeasonWorld(a.world) !== world) return true;
     if (a.kind !== params.kind) return true;
     if (a.league !== params.league) return true;
-    const pos = (a.position ?? "").trim();
+    const pos = normalizeBestNinePosition(a.position);
     if (!pos || !canonical.has(pos)) return false;
     return !incomingPositions.has(pos);
   });
   const inserted: RegisteredSeasonAward[] = normalizedIncoming.map(
     (award, i) => {
-      const pos = award.position ?? "";
+      const pos = normalizeBestNinePosition(award.position);
       const id = world
         ? registeredAwardId({
             kind: params.kind,
@@ -303,6 +299,25 @@ export function replaceRegisteredAwardsForLeague(params: {
     void putMuseumCollectionRecord(COLLECTION, rec);
   }
   return inserted;
+}
+
+function canonicalPositionsForAward(
+  kind: "bestNine" | "goldenGlove",
+  league: "central" | "pacific",
+): Set<string> {
+  const base = [
+    "投手",
+    "捕手",
+    "一塁手",
+    "二塁手",
+    "三塁手",
+    "遊撃手",
+    "外野手",
+  ];
+  if (kind === "bestNine" && league === "pacific") {
+    return new Set([...base, "DH"]);
+  }
+  return new Set(base);
 }
 
 export async function hydrateSopAwardsFromCloud(): Promise<

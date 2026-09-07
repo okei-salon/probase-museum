@@ -42,8 +42,8 @@ export type ResolvedAwardCard = {
   league?: LeagueSide;
 };
 
-/** ベストナイン／GG の固定9枠（外野は同名×3） */
-export const BEST_NINE_POSITIONS = [
+/** セ・リーグ ベストナイン／両リーグ GG の固定9枠（外野は同名×3） */
+export const BEST_NINE_POSITIONS_CENTRAL = [
   "投手",
   "捕手",
   "一塁手",
@@ -55,7 +55,57 @@ export const BEST_NINE_POSITIONS = [
   "外野手",
 ] as const;
 
-const POSITIONS = BEST_NINE_POSITIONS;
+/** パ・リーグ ベストナインは DH 込み10枠 */
+export const BEST_NINE_POSITIONS_PACIFIC = [
+  ...BEST_NINE_POSITIONS_CENTRAL,
+  "DH",
+] as const;
+
+/** @deprecated セ枠と同じ。互換用 */
+export const BEST_NINE_POSITIONS = BEST_NINE_POSITIONS_CENTRAL;
+
+const GG_POSITIONS = BEST_NINE_POSITIONS_CENTRAL;
+
+/**
+ * B9/GG 守備位置の正規化。
+ * 「DH」「指名打者」「ＤＨ」→ DH。既存の他表記は従来どおり。
+ */
+export function normalizeBestNinePosition(
+  raw: string | null | undefined,
+): string {
+  const t = (raw ?? "").trim().replace(/\s+/g, "");
+  if (!t) return "";
+  const folded = t.replace(/Ｄ/g, "D").replace(/Ｈ/g, "H");
+  if (folded.toUpperCase() === "DH" || t === "指名打者") return "DH";
+  const aliases: Record<string, string> = {
+    投手: "投手",
+    捕手: "捕手",
+    一塁手: "一塁手",
+    一塁: "一塁手",
+    二塁手: "二塁手",
+    二塁: "二塁手",
+    三塁手: "三塁手",
+    三塁: "三塁手",
+    遊撃手: "遊撃手",
+    遊撃: "遊撃手",
+    外野手: "外野手",
+    外野手1: "外野手",
+    外野手2: "外野手",
+    外野手3: "外野手",
+    外野1: "外野手",
+    外野2: "外野手",
+    外野3: "外野手",
+  };
+  return aliases[t] ?? aliases[folded] ?? t;
+}
+
+export function bestNinePositionsForLeague(
+  league: LeagueSide,
+): readonly string[] {
+  return league === "pacific"
+    ? BEST_NINE_POSITIONS_PACIFIC
+    : BEST_NINE_POSITIONS_CENTRAL;
+}
 
 function resolveAwardPlayerName(
   w: AwardWinnerBase & { position?: string },
@@ -177,14 +227,17 @@ function buildBestNineLeague(
   prefix: "c" | "p",
   teams: string[],
   history: number[][],
+  positions: readonly string[],
 ): ResolvedAwardCard[] {
-  return POSITIONS.map((position, i) => {
-    const suffix = i >= 6 ? String(i - 5) : "";
+  return positions.map((position, i) => {
+    const ofIndex = positions.slice(0, i + 1).filter((p) => p === "外野手").length;
+    const suffix =
+      position === "外野手" && ofIndex > 0 ? String(ofIndex) : "";
     return resolveSeasonCard(
       {
         playerId: `p-b9-${prefix}-${i}`,
         playerName: `${league === "central" ? "セ" : "パ"}B9 ${position}${suffix}`,
-        teamName: teams[i],
+        teamName: teams[i] ?? "—",
         league,
         position,
         winYears: history[i] ?? [Number(year)],
@@ -216,6 +269,7 @@ export function getBestNineAwards(year: string): {
         [2019, 2023],
         [2021, 2023],
       ],
+      BEST_NINE_POSITIONS_CENTRAL,
     ),
     pacific: buildBestNineLeague(
       year,
@@ -231,6 +285,7 @@ export function getBestNineAwards(year: string): {
         "オリックス",
         "ソフトバンク",
         "オリックス",
+        "ロッテ",
       ],
       [
         [2022, 2023],
@@ -242,7 +297,9 @@ export function getBestNineAwards(year: string): {
         [2023],
         [2023],
         [2023],
+        [2023],
       ],
+      BEST_NINE_POSITIONS_PACIFIC,
     ),
   };
 }
@@ -257,7 +314,7 @@ export function getGoldenGloveAwards(year: string): {
     teams: string[],
     history: number[][],
   ) =>
-    POSITIONS.map((position, i) => {
+    GG_POSITIONS.map((position, i) => {
       const suffix = i >= 6 ? String(i - 5) : "";
       return resolveSeasonCard(
         {
