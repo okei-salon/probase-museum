@@ -151,35 +151,18 @@ export function PlayerStatsExplorer({
 
   const rateStat = isRateStatKey(role, sortKey);
 
+  // ランキング／チーム別とも同一ソート：率系は規定到達 → 未到達、各グループ内は選択列
   const sorted = useMemo(() => {
     const list = [...filtered];
-    if (view === "ranking") {
-      // 率系（打率等）は規定到達 → 未到達、各グループ内は選択列
-      list.sort((a, b) =>
-        compareStatRowsForRanking(a, b, {
-          sortKey,
-          dir,
-          rateStat,
-        }),
-      );
-      return list;
-    }
-    // チーム別
-    // 野手・率系: 規定打席到達を優先（初期の打率降順を含む）
-    // 交流戦・投手: 従来どおり防御率＋規定投球回優先
-    // 累計系などユーザーが明示ソートした非率系: 規定で強制しない
-    const interleaguePitcherTeam =
-      scope === "interleague" && role === "pitcher";
-    const batterRateTeam = role === "batter" && rateStat;
     list.sort((a, b) =>
       compareStatRowsForRanking(a, b, {
-        sortKey: interleaguePitcherTeam ? "era" : sortKey,
-        dir: interleaguePitcherTeam ? "asc" : dir,
-        rateStat: interleaguePitcherTeam || batterRateTeam,
+        sortKey,
+        dir,
+        rateStat,
       }),
     );
     return list;
-  }, [dir, filtered, rateStat, role, scope, sortKey, view]);
+  }, [dir, filtered, rateStat, sortKey]);
 
   const scheduleNote = useMemo(() => {
     const g = teamGamesCtx.scheduleGames;
@@ -390,13 +373,14 @@ export function PlayerStatsExplorer({
             </thead>
             <tbody>
               {sorted.map((row, index) => {
-                const displayRank =
-                  view === "ranking"
-                    ? rankingDisplayRank(index, row, sorted, rateStat)
-                    : index + 1;
+                const displayRank = rankingDisplayRank(
+                  index,
+                  row,
+                  sorted,
+                  rateStat,
+                );
                 const highlight = row.qualified && rateStat;
-                const muted =
-                  view === "ranking" && rateStat && !row.qualified;
+                const muted = rateStat && !row.qualified;
                 const stickyBg = highlight
                   ? STICKY_BG_HIGHLIGHT
                   : STICKY_BG_BODY;
@@ -508,8 +492,8 @@ export function PlayerStatsExplorer({
         {scope === "pennant" ? "シーズン全体" : "交流戦期間"}の個人成績。
         手入力・画像取込で登録した年度成績はランキングに反映されます。
         選手名をクリックすると詳細成績へ移動できます。
-        {view === "ranking" && rateStat
-          ? " 率系は規定到達者を正式順位とし、未到達者は一覧下部に残します。"
+        {rateStat
+          ? " 率系は規定到達者を正式順位とし、未到達者は一覧下部に残します（ランキング・チーム別共通）。"
           : null}
         {scheduleNote ? ` ${scheduleNote}` : null}
       </p>
