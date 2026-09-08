@@ -124,23 +124,15 @@ function fromPitcherLine(
   const teamId = line.teamId;
   const ip = c.ipOuts / 3;
   const { class: pitcherClass } = classifyPitcherWorkload(c.g, c.gs ?? null);
+  // 互換用に救援IPは保持（旧 relief_ip_30）。救援タイトル自体は年度ERA/奪三振率を使う
   const reliefIp =
     c.reliefIpOuts != null && c.reliefIpOuts >= 0 ? c.reliefIpOuts / 3 : null;
-  const reliefEra =
-    reliefIp != null &&
-    reliefIp > 0 &&
-    c.reliefEr != null
-      ? (c.reliefEr * 9) / reliefIp
-      : null;
-  const reliefSoRate =
-    reliefIp != null &&
-    reliefIp > 0 &&
-    c.reliefSo != null
-      ? (c.reliefSo * 9) / reliefIp
-      : null;
   const isReliever = pitcherClass === "reliever";
   // 先発限定タイトル（QS/HQS率など）は混合型・救援型を除外
   const starterOk = pitcherClass === "starter";
+  /** 救援防御率／救援奪三振率 = 年度の防御率／奪三振率（専用入力は不要） */
+  const reliefEra = d.era ?? null;
+  const reliefSoRate = d.soRate ?? null;
   return {
     playerId: line.playerId,
     playerName:
@@ -189,8 +181,9 @@ function fromPitcherLine(
       hp: c.hld != null || c.hp != null,
       hld: c.hld != null || c.hp != null,
       sv: c.sv != null,
-      reliefEra: reliefEra != null && isReliever,
-      reliefSoRate: reliefSoRate != null && isReliever,
+      // 救援タイトルは年度ERA/奪三振率が取れれば対象（救援型・救援IPは不要）
+      reliefEra: reliefEra != null,
+      reliefSoRate: reliefSoRate != null,
     },
   };
 }
@@ -319,8 +312,6 @@ export function candidatesFromPlayerMasterSample(
         const gs = n(id + year + "gs", 15, 28);
         const reliefIpOuts = n(id + year + "rip", 60, 150);
         const reliefIp = reliefIpOuts / 3;
-        const reliefEr = n(id + year + "rer", 5, 25);
-        const reliefSo = n(id + year + "rso", 30, 90);
         out.push({
           playerId: id,
           playerName: m.fullName,
@@ -344,14 +335,9 @@ export function candidatesFromPlayerMasterSample(
             g,
             hp: n(id + year + "hp", 0, 35),
             sv: n(id + year + "sv", 0, 35),
-            reliefEra:
-              reliefIp > 0
-                ? Number(((reliefEr * 9) / reliefIp).toFixed(2))
-                : 0,
-            reliefSoRate:
-              reliefIp > 0
-                ? Number(((reliefSo * 9) / reliefIp).toFixed(2))
-                : 0,
+            // サンプルも本番同様：救援系は年度ERA/奪三振率をミラー
+            reliefEra: ip > 0 ? Number(((er * 9) / ip).toFixed(2)) : 0,
+            reliefSoRate: ip > 0 ? Number(((so * 9) / ip).toFixed(2)) : 0,
             reliefIp,
             ipQualified: 1,
             pitcherClassReliever: 0,

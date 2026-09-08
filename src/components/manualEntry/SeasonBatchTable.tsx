@@ -93,6 +93,8 @@ export function SeasonBatchTable({
       onSelectRow(row.rowId);
       return;
     }
+    const colDef = columns.find((c) => c.key === key);
+    if (colDef?.readOnly) return;
     // 未照合の選手名はオートコンプリートで選択（自由編集は候補選択後）
     if (key === "playerName" && !row.playerId) {
       return;

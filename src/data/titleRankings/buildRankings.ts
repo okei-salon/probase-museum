@@ -190,7 +190,7 @@ function top5(
     }
     if (
       !c.available[def.valueKey] &&
-      ["risp", "csRate"].includes(def.valueKey)
+      ["risp", "csRate", "reliefEra", "reliefSoRate"].includes(def.valueKey)
     ) {
       return false;
     }

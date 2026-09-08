@@ -539,7 +539,7 @@ function resolveRowQualified(
     return evaluateWinPctQualified(row.values.w);
   }
 
-  // 救援防御率／救援奪三振率：登板≥30 かつ 投球回≥30
+  // 救援防御率／救援奪三振率：登板≥30 かつ 投球回≥30（年度ERA／奪三振率を表示）
   if (sortKey === "reliefEra" || sortKey === "reliefSoRate") {
     const ipOuts =
       row.ipOuts ??

@@ -73,6 +73,8 @@ export type BatterBatchFieldKey =
 /** 投手カウントキー（プロスピ個人投手成績／シーズン） */
 export type PitcherBatchFieldKey =
   | "era"
+  /** 表示専用：年度防御率のミラー（保存しない） */
+  | "reliefEra"
   | "ip"
   | "winPct"
   | "w"
@@ -90,6 +92,8 @@ export type PitcherBatchFieldKey =
   | "hqsRate"
   | "so"
   | "soRate"
+  /** 表示専用：年度奪三振率のミラー（保存しない） */
+  | "reliefSoRate"
   | "bb"
   | "bbRate"
   | "hbp"

@@ -15,6 +15,7 @@ import { resolveRankingPlayer } from "@/lib/import/resolveRankingPlayer";
 import {
   PROSPI_BATTER_SEASON_COLUMNS,
   PROSPI_PITCHER_SEASON_COLUMNS,
+  PITCHER_DISPLAY_ONLY_FIELD_KEYS,
 } from "@/lib/import/seasonBatchConvert";
 import { isMissingStatToken } from "@/lib/manualEntry/normalizeInput";
 
@@ -383,7 +384,9 @@ function defaultHeadersForRole(role: SeasonBatchRole): SeasonBatchFieldKey[] {
   if (role === "pitcher") {
     return PROSPI_PITCHER_SEASON_COLUMNS.map((c) => c.key).filter(
       (k): k is SeasonBatchFieldKey =>
-        k !== "playerName" && k !== "teamShort",
+        k !== "playerName" &&
+        k !== "teamShort" &&
+        !PITCHER_DISPLAY_ONLY_FIELD_KEYS.has(k),
     );
   }
   if (role === "catcher") {

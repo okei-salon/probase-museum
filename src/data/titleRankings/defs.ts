@@ -188,8 +188,11 @@ export const PITCHER_TITLES: TitleDef[] = [
     id: "reliefEra",
     label: "救援防御率",
     role: "pitcher",
-    /** 既存の年度防御率を参照（救援専用データは不要） */
-    valueKey: "era",
+    /**
+     * 値は年度の防御率（candidates 側で era を reliefEra にミラー）。
+     * 救援専用の入力・保存フィールドは使わない。
+     */
+    valueKey: "reliefEra",
     format: "era",
     lowerIsBetter: true,
     eligibility: "g30_ip30",
@@ -252,8 +255,8 @@ export const PITCHER_TITLES: TitleDef[] = [
     id: "reliefSoRate",
     label: "救援奪三振率",
     role: "pitcher",
-    /** 既存の年度奪三振率を参照 */
-    valueKey: "soRate",
+    /** 値は年度の奪三振率（candidates 側で soRate をミラー） */
+    valueKey: "reliefSoRate",
     format: "rate2",
     eligibility: "g30_ip30",
     eligibilityNote:

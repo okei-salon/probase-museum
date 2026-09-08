@@ -19,7 +19,15 @@ export type BatchColumnDef = {
   sticky?: boolean;
   /** 最小幅（px）。横スクロール前提で視認性優先 */
   minWidth: number;
+  /** true = 表示専用（年度成績のミラー。編集・保存対象外） */
+  readOnly?: boolean;
 };
+
+/** 投手一括表の表示専用キー（年度ERA／奪三振率のミラー。OCR・保存には載せない） */
+export const PITCHER_DISPLAY_ONLY_FIELD_KEYS = new Set<SeasonBatchFieldKey>([
+  "reliefEra",
+  "reliefSoRate",
+]);
 
 /**
  * プロスピ「個人打撃成績／シーズン」正式30項目（ゲーム画面順）。
@@ -85,6 +93,7 @@ export const PROSPI_PITCHER_SEASON_COLUMNS: BatchColumnDef[] = [
   { key: "playerName", label: "選手", sticky: true, minWidth: 112 },
   { key: "teamShort", label: "球団", sticky: true, minWidth: 72 },
   { key: "era", label: "防御率", minWidth: 56 },
+  { key: "reliefEra", label: "救援防御率", minWidth: 72, readOnly: true },
   { key: "ip", label: "投球回", minWidth: 56 },
   { key: "winPct", label: "勝率", minWidth: 56 },
   { key: "w", label: "勝", minWidth: 40 },
@@ -102,6 +111,7 @@ export const PROSPI_PITCHER_SEASON_COLUMNS: BatchColumnDef[] = [
   { key: "hqsRate", label: "HQS率", minWidth: 56 },
   { key: "so", label: "奪三振", minWidth: 56 },
   { key: "soRate", label: "奪三振率", minWidth: 64 },
+  { key: "reliefSoRate", label: "救援奪三振率", minWidth: 80, readOnly: true },
   { key: "bb", label: "与四球", minWidth: 52 },
   { key: "bbRate", label: "四球率", minWidth: 56 },
   { key: "hbp", label: "与死球", minWidth: 52 },
@@ -254,6 +264,35 @@ export function enrichRowDerivedDisplays(
       derived.soRate,
       derived.soRate != null ? derived.soRate.toFixed(2) : "",
     );
+    // 救援防御率／救援奪三振率は年度の防御率／奪三振率を常にミラー（入力欄は作らない）
+    const mirrorRelief = (
+      src: SeasonBatchFieldKey,
+      dest: SeasonBatchFieldKey,
+      digits: number,
+    ) => {
+      const cell = fields[src];
+      const value =
+        cell?.value != null && typeof cell.value === "number"
+          ? cell.value
+          : src === "era"
+            ? derived.era
+            : src === "soRate"
+              ? derived.soRate
+              : null;
+      if (value == null || !Number.isFinite(value)) return;
+      fields[dest] = {
+        value,
+        display:
+          cell?.display && cell.display !== ""
+            ? cell.display
+            : value.toFixed(digits),
+        status: "ok",
+        sources: [],
+        note: "年度と同値（表示）",
+      };
+    };
+    mirrorRelief("era", "reliefEra", 2);
+    mirrorRelief("soRate", "reliefSoRate", 2);
     setIfEmpty(
       "bbRate",
       derived.bbRate,

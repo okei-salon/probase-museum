@@ -577,6 +577,8 @@ function pitcherStatValue(
   switch (key) {
     case "era":
       return d.era;
+    case "reliefEra":
+      return d.era;
     case "ip":
       return c.ipOuts != null && c.ipOuts >= 0 ? c.ipOuts / 3 : null;
     case "winPct":
@@ -610,6 +612,8 @@ function pitcherStatValue(
     case "so":
       return c.so;
     case "soRate":
+      return d.soRate;
+    case "reliefSoRate":
       return d.soRate;
     case "bb":
       return c.bb ?? null;
