@@ -23,8 +23,11 @@ import type {
   SeasonBatchSession,
 } from "@/data/import/seasonBatchTypes";
 import {
+  applyCatcherCsToCounting,
+  mergeBatterCountingPreserveCatcherCs,
+} from "@/data/playerSeasonLines/batterCatcherMerge";
+import {
   getSeasonLine,
-  pickBatterBasePreferringOffense,
   seasonLineKey,
   upsertBatterSeasonLine,
   upsertPitcherSeasonLine,
@@ -558,61 +561,41 @@ export function SeasonBatchWorkspace({
         if (useSandbox) upsertDemoSeasonLine(line);
         else upsertPitcherSeasonLine(line);
       } else if (role === "catcher") {
-        // 捕手・守備は既存野手行へ4項目だけマージ（打撃成績は消さない）
+        // 捕手・守備: 同一 WORLD の既存野手行へ CS のみマージ（打撃は絶対に触らない）
         const cs = rowToCatcherCounting(row);
-        // 空の正式 WORLD 行より、打撃がある legacy / 既存行を優先（0で上書きしない）
-        const legacyId = world
-          ? seasonLineKey(row.playerId, year, "batter", scope, null)
-          : null;
-        const legacyExisting =
-          legacyId == null
-            ? null
-            : useSandbox
-              ? getDemoSeasonLine(legacyId)
-              : getSeasonLine(row.playerId, year, "batter", scope, null);
-        const baseLine = pickBatterBasePreferringOffense([
-          existing,
-          legacyExisting,
-        ]);
-        const prevCounting = baseLine
-          ? baseLine.counting
-          : {
-              ab: 0,
-              h: 0,
-              doubles: 0,
-              triples: 0,
-              hr: 0,
-              rbi: 0,
-              bb: 0,
-            };
-        // ベースに打撃が無く、CSだけ書く場合でも既存の非零打撃フィールドは残す
-        const counting = {
-          ...prevCounting,
-          csAttempted: cs.csAttempted ?? prevCounting.csAttempted ?? null,
-          csAllowed: cs.csAllowed ?? prevCounting.csAllowed ?? null,
-          csCaught: cs.csCaught ?? prevCounting.csCaught ?? null,
-        };
+        const existingBatter =
+          existing && existing.role === "batter" ? existing : null;
+        const counting = applyCatcherCsToCounting(
+          existingBatter?.counting,
+          cs,
+        );
         const derived = computeBatterDerived(counting);
         const line = {
           id,
           playerId: row.playerId,
-          playerName: row.playerName,
+          playerName: row.playerName || existingBatter?.playerName || "",
           year,
           world,
-          teamId,
-          teamName,
+          teamId: existingBatter?.teamId || teamId,
+          teamName: existingBatter?.teamName || teamName,
           scope,
           role: "batter" as const,
-          source: "ocr" as const,
+          source: existingBatter?.source ?? ("ocr" as const),
           counting,
           derived,
-          createdAt: existing?.createdAt ?? baseLine?.createdAt ?? now,
+          createdAt: existingBatter?.createdAt ?? now,
           updatedAt: now,
         };
         if (useSandbox) upsertDemoSeasonLine(line);
         else upsertBatterSeasonLine(line);
       } else {
-        const counting = rowToBatterCounting(row);
+        const incoming = rowToBatterCounting(row);
+        const existingBatter =
+          existing && existing.role === "batter" ? existing : null;
+        const counting = mergeBatterCountingPreserveCatcherCs(
+          incoming,
+          existingBatter?.counting,
+        );
         const derived = computeBatterDerived(counting);
         const line = {
           id,
@@ -627,7 +610,7 @@ export function SeasonBatchWorkspace({
           source: "ocr" as const,
           counting,
           derived,
-          createdAt: existing?.createdAt ?? now,
+          createdAt: existingBatter?.createdAt ?? now,
           updatedAt: now,
         };
         if (useSandbox) upsertDemoSeasonLine(line);

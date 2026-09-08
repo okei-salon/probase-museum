@@ -23,6 +23,7 @@ import {
   upsertPitcherSeasonLine,
   type SeasonLineScope,
 } from "@/data/playerSeasonLines";
+import { mergeBatterCountingPreserveCatcherCs } from "@/data/playerSeasonLines/batterCatcherMerge";
 import { hydratePlayerMasterFromStorage } from "@/data/playerMaster";
 import {
   formatSeasonLineLabel,
@@ -464,6 +465,13 @@ export function ManualEntryWorkspace({
         scope,
         world,
       );
+      const existingBatter =
+        existing && existing.role === "batter" ? existing : null;
+      const counting = mergeBatterCountingPreserveCatcherCs(
+        batterParsed.counting,
+        existingBatter?.counting,
+      );
+      const derived = computeBatterDerived(counting);
       const line = {
         id,
         playerId: selected.player.playerId,
@@ -475,9 +483,9 @@ export function ManualEntryWorkspace({
         scope,
         role: "batter" as const,
         source: "manual" as const,
-        counting: batterParsed.counting,
-        derived: batterParsed.derived,
-        createdAt: existing?.createdAt ?? now,
+        counting,
+        derived,
+        createdAt: existingBatter?.createdAt ?? now,
         updatedAt: now,
       };
       if (useSandbox) upsertDemoSeasonLine(line);

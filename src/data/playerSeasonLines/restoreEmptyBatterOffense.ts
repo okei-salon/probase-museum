@@ -1,6 +1,9 @@
 /**
- * 空の野手 pennant 行へ、同一選手の既存・意味ある打撃を安全に復元する。
- * 推測値や 0 埋めは行わず、既存 counting のコピーのみ。
+ * 空の野手 pennant 行の判定・同一 id hydrate 用マージ。
+ *
+ * 注意: 他 WORLD / legacy / demo からの自動ピア復元は行わない
+ *（store.restoreEmptyBatterOffenseFromPeers は no-op）。
+ * 復元は同一 WORLD の検証済みソース、またはユーザー再提供データのみ。
  */
 
 import { computeBatterDerived } from "@/lib/manualEntry/computeSeasonStats";

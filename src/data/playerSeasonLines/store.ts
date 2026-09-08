@@ -25,8 +25,6 @@ import type {
 } from "./types";
 import { seasonLineKey } from "./types";
 import {
-  applyEmptyBatterOffenseRestore,
-  demoSeasonLinesAsSources,
   mergeSeasonLinePreferOffense,
 } from "./restoreEmptyBatterOffense";
 
@@ -173,38 +171,19 @@ export async function hydrateSeasonLinesFromCloud(): Promise<PlayerSeasonLine[]>
     writeRaw: writeRawSeasonLines,
     normalize: normalizeLine,
     filterPublic: excludeDemoRecords,
+    // 同一 id の local↔cloud のみ。別 WORLD / legacy / demo からの推測復元はしない
     mergeOne: mergeSeasonLinePreferOffense,
   });
-  // 空の正式 WORLD 行を legacy / 他WORLD / デモ領域の実打撃から復元
-  return restoreEmptyBatterOffenseFromPeers();
+  return listSeasonLines();
 }
 
 /**
- * 打撃が空の pennant 行だけを、同一選手の既存実打撃から復元する。
- * 打撃がある行は変更しない。ソースが無い空行は触らない。
+ * 自動ピア復元は無効（他 WORLD / legacy / demo からの推測コピー禁止）。
+ * 復元待ちの空打撃行は触らず、現状のまま返す。
  */
 export function restoreEmptyBatterOffenseFromPeers(): PlayerSeasonLine[] {
   if (!canUseStorage()) return [];
-  const raw = readRawSeasonLines().map(normalizeLine);
-  const { lines, repaired } = applyEmptyBatterOffenseRestore(
-    raw,
-    demoSeasonLinesAsSources(),
-  );
-  if (repaired.length === 0) {
-    return excludeDemoRecords(raw);
-  }
-  const now = new Date().toISOString();
-  const withStamp = lines.map((line) => {
-    const hit = repaired.find((r) => r.id === line.id);
-    if (!hit) return line;
-    return { ...hit, updatedAt: now };
-  });
-  writeRawSeasonLines(withStamp);
-  for (const line of withStamp) {
-    if (!repaired.some((r) => r.id === line.id)) continue;
-    void putMuseumCollectionRecord(COLLECTION, line);
-  }
-  return excludeDemoRecords(withStamp);
+  return listSeasonLines();
 }
 
 /**

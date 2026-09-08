@@ -23,3 +23,10 @@ export {
   hasOffensiveBatterCounting,
   pickBatterBasePreferringOffense,
 } from "./restoreEmptyBatterOffense";
+export {
+  applyCatcherCsToCounting,
+  mergeBatterCountingPreserveCatcherCs,
+  isZeroedBatterOffense,
+} from "./batterCatcherMerge";
+export { auditCatcherOffenseForSeason } from "./auditCatcherOffense";
+export type { CatcherOffenseAuditRow } from "./auditCatcherOffense";
