@@ -262,7 +262,7 @@ export function AwardsImportWorkspace() {
       setError("選手を選択してください");
       return;
     }
-    const useSandbox = shouldUseIsolatedDemoStore(year);
+    const useSandbox = shouldUseIsolatedDemoStore(year, world);
     const id = buildAwardId();
     if (sub === "title") {
       const titleExisting = useSandbox
@@ -424,14 +424,40 @@ export function AwardsImportWorkspace() {
       {partnerDraft?.kind === "award" ? (
         <PartnerAwardConfirm
           data={partnerDraft.data}
+          world={world}
           onSave={() => savePartner(false)}
         />
       ) : null}
       {partnerDraft?.kind === "position" ? (
         <PartnerPositionConfirm
           data={partnerDraft.data}
+          world={world}
           onSave={() => savePartner(false)}
         />
+      ) : null}
+
+      {/* 相棒展開中もシーズン（YEAR×WORLD）を確認・変更できるようにする */}
+      {inputMode === "partner" && partnerDraft ? (
+        <label className="block max-w-md">
+          <span className="mb-1 block text-[11px] text-white/55">
+            登録先シーズン（YEAR×WORLD）
+          </span>
+          <select
+            value={seasonKey}
+            onChange={(e) => setSeasonKey(e.target.value)}
+            className="w-full rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-[13px] text-white"
+          >
+            {entrySeasons.map((s) => (
+              <option key={s.seasonKey} value={s.seasonKey}>
+                {s.kind === "demo"
+                  ? `${s.year} DEMO SEASON`
+                  : s.world
+                    ? `${s.year} ${s.world}`
+                    : `${s.year}年`}
+              </option>
+            ))}
+          </select>
+        </label>
       ) : null}
 
       {inputMode !== "partner" || !partnerDraft ? (
@@ -649,15 +675,18 @@ function PartnerTitleConfirm({
 
 function PartnerAwardConfirm({
   data,
+  world,
   onSave,
 }: {
   data: PartnerAwardResult;
+  world: ReturnType<typeof normalizeSeasonWorld>;
   onSave: () => void;
 }) {
   return (
     <section className="space-y-2 rounded-xl border border-white/10 bg-black/40 p-4">
       <h3 className="text-[12px] text-[color:var(--museum-accent,#d4af37)]">
-        確認: {data.year}年 年間表彰
+        確認: {data.year}年
+        {world ? ` ${world}` : ""} 年間表彰
       </h3>
       <ul className="space-y-1 text-[12px] text-white/75">
         {data.slots.map((s) => (
@@ -684,15 +713,18 @@ function PartnerAwardConfirm({
 
 function PartnerPositionConfirm({
   data,
+  world,
   onSave,
 }: {
   data: PartnerPositionAwardResult;
+  world: ReturnType<typeof normalizeSeasonWorld>;
   onSave: () => void;
 }) {
   return (
     <section className="space-y-2 rounded-xl border border-white/10 bg-black/40 p-4">
       <h3 className="text-[12px] text-[color:var(--museum-accent,#d4af37)]">
-        確認: {data.year}年 {data.type === "BEST_NINE" ? "ベストナイン" : "ゴールデングラブ"}（
+        確認: {data.year}年{world ? ` ${world}` : ""}{" "}
+        {data.type === "BEST_NINE" ? "ベストナイン" : "ゴールデングラブ"}（
         {data.league === "central" ? "セ" : "パ"}）
       </h3>
       <table className="w-full text-left text-[12px]">

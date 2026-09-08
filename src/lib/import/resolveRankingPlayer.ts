@@ -159,9 +159,7 @@ export function resolveRankingPlayer(input: {
 
   const roleOk = (position: string) => {
     if (input.role === "pitcher") return position === "投手";
-    if (input.role === "catcher") {
-      return position === "捕手" || position !== "投手";
-    }
+    if (input.role === "catcher") return position === "捕手";
     return position !== "投手";
   };
 

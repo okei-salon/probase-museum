@@ -2,10 +2,16 @@
  * デモ取込モード（OCRサンドボックス用の分離領域）
  *
  * YEAR=2000（DEMO SEASON）は常に正式ストアへ保存する。
- * 分離デモ領域は year !== 2000 かつデモ取込モード ON のときのみ使う。
+ * 正式 WORLD（BLUE/RED）付きも常に正式ストアへ保存する
+ * （表彰・シーズン画面はデモ領域を参照しないため）。
+ * 分離デモ領域は world 無しかつ year !== 2000 かつデモ取込モード ON のときのみ使う。
  */
 
-import { DEMO_SEASON_YEAR } from "@/data/seasons";
+import {
+  DEMO_SEASON_YEAR,
+  normalizeSeasonWorld,
+  type SeasonWorld,
+} from "@/data/seasons";
 
 /** @deprecated 別名互換 — DEMO_SEASON_YEAR を使用 */
 export const DEMO_IMPORT_YEAR = DEMO_SEASON_YEAR;
@@ -37,10 +43,14 @@ export function setImportDemoMode(on: boolean): void {
 
 /**
  * 分離デモ領域（sandbox）へ書くか。
- * YEAR=2000 は常に false（正式ストア固定）。
+ * YEAR=2000 および正式 WORLD 付きは常に false（正式ストア固定）。
  */
-export function shouldUseIsolatedDemoStore(year: number): boolean {
+export function shouldUseIsolatedDemoStore(
+  year: number,
+  world?: SeasonWorld | null,
+): boolean {
   if (year === DEMO_SEASON_YEAR) return false;
+  if (normalizeSeasonWorld(world)) return false;
   return getImportDemoMode();
 }
 

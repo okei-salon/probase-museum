@@ -15,9 +15,18 @@ export const runtime = "nodejs";
 type Params = { params: Promise<{ collection: string; id: string }> };
 
 function asRecord(payload: unknown, id: string, updatedAt: string) {
+  let raw: unknown = payload;
+  // jsonb が文字列として返る／二重エンコードされた場合を救済
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
   const base =
-    payload && typeof payload === "object"
-      ? { ...(payload as Record<string, unknown>) }
+    raw && typeof raw === "object"
+      ? { ...(raw as Record<string, unknown>) }
       : {};
   return {
     ...base,

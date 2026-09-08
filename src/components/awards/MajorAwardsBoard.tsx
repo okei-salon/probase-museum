@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import {
   AwardWinnerCard,
   LeagueTwoColumn,
 } from "@/components/awards/AwardCards";
+import { subscribeImportDemoMode } from "@/data/import/demoMode";
+import { listRegisteredAwards } from "@/data/sop/awardsRegistry";
 import {
   identityFromSeasonKey,
   resolveMvpBoard,
@@ -26,6 +28,26 @@ type MajorAwardsBoardProps = {
   seasonKey?: string;
 };
 
+const EMPTY_AWARDS: ReturnType<typeof listRegisteredAwards> = [];
+let awardsSnapshotCache: ReturnType<typeof listRegisteredAwards> | null = null;
+
+function getAwardsSnapshot() {
+  if (awardsSnapshotCache) return awardsSnapshotCache;
+  awardsSnapshotCache = listRegisteredAwards();
+  return awardsSnapshotCache;
+}
+
+function getAwardsServerSnapshot() {
+  return EMPTY_AWARDS;
+}
+
+function subscribeAwardsStore(onStoreChange: () => void): () => void {
+  return subscribeImportDemoMode(() => {
+    awardsSnapshotCache = null;
+    onStoreChange();
+  });
+}
+
 /** 年間主要表彰：MVP / 新人王 / 沢村賞（レジストリ優先・WORLD 分離） */
 export function MajorAwardsBoard({
   year,
@@ -37,11 +59,19 @@ export function MajorAwardsBoard({
     [seasonKey, year],
   );
 
+  // Neon hydrate / 取込後に再描画（キャッシュ参照を安定化）
+  const awardsVersion = useSyncExternalStore(
+    subscribeAwardsStore,
+    getAwardsSnapshot,
+    getAwardsServerSnapshot,
+  );
+
   const data = useMemo(() => {
+    void awardsVersion;
     if (kind === "rookie") return resolveRookieBoard(identity);
     if (kind === "sawamura") return resolveSawamuraBoard(identity);
     return resolveMvpBoard(identity);
-  }, [kind, identity]);
+  }, [kind, identity, awardsVersion]);
 
   const badge = TABS.find((t) => t.id === kind)?.badge ?? "MVP";
 

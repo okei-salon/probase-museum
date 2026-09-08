@@ -47,8 +47,11 @@ function canUseStorage() {
 }
 
 function normalizeAward(a: RegisteredSeasonAward): RegisteredSeasonAward {
+  const yearNum = Number(a.year);
   return {
     ...a,
+    // Neon / JSON 経由で year が文字列になることがある → matchSeason 厳密一致用に数値化
+    year: Number.isFinite(yearNum) ? yearNum : a.year,
     world: normalizeSeasonWorld(a.world),
     updatedAt: a.updatedAt || new Date(0).toISOString(),
   };

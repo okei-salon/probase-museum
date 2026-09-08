@@ -416,7 +416,7 @@ export function SeasonBatchWorkspace({
       return;
     }
 
-    const useSandbox = shouldUseIsolatedDemoStore(year);
+    const useSandbox = shouldUseIsolatedDemoStore(year, world);
     const lineRole = role === "pitcher" ? "pitcher" : "batter";
 
     // 既存 playerId の上書き確認を、新規マスター作成より先に行う
@@ -559,18 +559,35 @@ export function SeasonBatchWorkspace({
       } else if (role === "catcher") {
         // 捕手・守備は既存野手行へ4項目だけマージ（打撃成績は消さない）
         const cs = rowToCatcherCounting(row);
-        const prevCounting =
+        // 正式 WORLD 行が無いとき、同選手の world 無しレガシー打撃行をベースにする
+        // （CATCHER_SEASON だけが BLUE で先に入ると空打撃行になり B9 主成績が 0 になる）
+        const legacyId =
+          !existing && world
+            ? seasonLineKey(row.playerId, year, "batter", scope, null)
+            : null;
+        const legacyExisting =
+          legacyId == null
+            ? null
+            : useSandbox
+              ? getDemoSeasonLine(legacyId)
+              : getSeasonLine(row.playerId, year, "batter", scope, null);
+        const baseLine =
           existing && existing.role === "batter"
-            ? existing.counting
-            : {
-                ab: 0,
-                h: 0,
-                doubles: 0,
-                triples: 0,
-                hr: 0,
-                rbi: 0,
-                bb: 0,
-              };
+            ? existing
+            : legacyExisting && legacyExisting.role === "batter"
+              ? legacyExisting
+              : null;
+        const prevCounting = baseLine
+          ? baseLine.counting
+          : {
+              ab: 0,
+              h: 0,
+              doubles: 0,
+              triples: 0,
+              hr: 0,
+              rbi: 0,
+              bb: 0,
+            };
         const counting = {
           ...prevCounting,
           csAttempted: cs.csAttempted ?? prevCounting.csAttempted ?? null,
@@ -591,7 +608,7 @@ export function SeasonBatchWorkspace({
           source: "ocr" as const,
           counting,
           derived,
-          createdAt: existing?.createdAt ?? now,
+          createdAt: existing?.createdAt ?? baseLine?.createdAt ?? now,
           updatedAt: now,
         };
         if (useSandbox) upsertDemoSeasonLine(line);

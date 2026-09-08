@@ -51,8 +51,8 @@ export function savePartnerTitleResult(
   force: boolean,
   world?: SeasonWorld | null,
 ): { ok: true; summary: string } | { ok: false; needsConfirm: boolean; message: string } {
-  const useSandbox = shouldUseIsolatedDemoStore(result.year);
   const w = normalizeSeasonWorld(world);
+  const useSandbox = shouldUseIsolatedDemoStore(result.year, w);
   const byLeague = new Map<"central" | "pacific", typeof result.entries>();
   for (const e of result.entries) {
     const list = byLeague.get(e.league) ?? [];
@@ -123,8 +123,8 @@ export function savePartnerAwardResult(
   force: boolean,
   world?: SeasonWorld | null,
 ): { ok: true; summary: string } | { ok: false; needsConfirm: boolean; message: string } {
-  const useSandbox = shouldUseIsolatedDemoStore(result.year);
   const w = normalizeSeasonWorld(world);
+  const useSandbox = shouldUseIsolatedDemoStore(result.year, w);
   const unresolved = result.slots.filter((s) => !s.playerId);
   if (unresolved.length) {
     return {
@@ -224,8 +224,8 @@ export function savePartnerPositionAwardResult(
   force: boolean,
   world?: SeasonWorld | null,
 ): { ok: true; summary: string } | { ok: false; needsConfirm: boolean; message: string } {
-  const useSandbox = shouldUseIsolatedDemoStore(result.year);
   const w = normalizeSeasonWorld(world);
+  const useSandbox = shouldUseIsolatedDemoStore(result.year, w);
   const kind = result.type === "BEST_NINE" ? "bestNine" : "goldenGlove";
   const unresolved = result.entries.filter((e) => !e.playerId);
   if (unresolved.length) {
@@ -332,8 +332,8 @@ export function savePartnerSpecialResult(
   force: boolean,
   world?: SeasonWorld | null,
 ): { ok: true; summary: string } | { ok: false; needsConfirm: boolean; message: string } {
-  const useSandbox = shouldUseIsolatedDemoStore(result.year);
   const w = normalizeSeasonWorld(world);
+  const useSandbox = shouldUseIsolatedDemoStore(result.year, w);
   const unresolved = result.entries.filter((e) => !e.playerId);
   if (unresolved.length) {
     return {

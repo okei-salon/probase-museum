@@ -5,10 +5,14 @@
 
 import {
   getSeasonLine,
+  listSeasonLines,
   type PlayerSeasonLine,
   type SeasonLineRole,
 } from "@/data/playerSeasonLines";
-import type { SeasonWorld } from "@/data/seasons";
+import {
+  normalizeSeasonWorld,
+  type SeasonWorld,
+} from "@/data/seasons";
 import {
   formatAvgDisplay,
   formatWinPctDisplay,
@@ -324,6 +328,10 @@ export function getSeasonHighlightStats(
 /**
  * 表彰カード用: 保存済みシーズン個人成績（pennant）から主要成績を参照する。
  * 表彰レコードへ成績を複製しない。該当が無ければ null。
+ *
+ * 捕手は CATCHER_SEASON 取込で「正式 WORLD の空打撃行」が先に作られ、
+ * 実打撃がレガシー（world 無し）行や別キーに残ることがあるため、
+ * 空の行なら同一 playerId・年度の意味ある打撃行へフォールバックする。
  */
 export function getRegisteredSeasonHighlightStats(params: {
   playerId: string;
@@ -335,15 +343,82 @@ export function getRegisteredSeasonHighlightStats(params: {
   if (!params.playerId) return null;
   const role: SeasonLineRole =
     (params.position ?? "").trim() === "投手" ? "pitcher" : "batter";
-  const line = getSeasonLine(
+  const world = params.world;
+  const year = Number(params.year);
+
+  if (role === "pitcher") {
+    const line = getSeasonLine(
+      params.playerId,
+      year,
+      "pitcher",
+      "pennant",
+      world,
+    );
+    return line ? formatSeasonLineHighlightStats(line) : null;
+  }
+
+  const preferred = getSeasonLine(
     params.playerId,
-    params.year,
-    role,
+    year,
+    "batter",
     "pennant",
-    params.world,
+    world,
+  );
+  const line = pickMeaningfulBatterLine(
+    params.playerId,
+    year,
+    world,
+    preferred,
   );
   if (!line) return null;
   return formatSeasonLineHighlightStats(line);
+}
+
+function hasOffensiveBatterStats(line: PlayerSeasonLine | null): boolean {
+  if (!line || line.role !== "batter") return false;
+  const c = line.counting;
+  return (
+    (c.ab ?? 0) > 0 ||
+    (c.pa ?? 0) > 0 ||
+    (c.h ?? 0) > 0 ||
+    (c.hr ?? 0) > 0 ||
+    (c.rbi ?? 0) > 0
+  );
+}
+
+/**
+ * 正式 WORLD の空行より、同一選手・年度で打撃が入っている pennant 行を優先。
+ * 1) 指定 world かつ打撃あり 2) world 無しレガシーで打撃あり 3) その他 world で打撃あり
+ * 4) なければ preferred（空でも表示用に返す）
+ */
+function pickMeaningfulBatterLine(
+  playerId: string,
+  year: number,
+  world: SeasonWorld | null | undefined,
+  preferred: PlayerSeasonLine | null,
+): PlayerSeasonLine | null {
+  if (hasOffensiveBatterStats(preferred)) return preferred;
+
+  const wanted = normalizeSeasonWorld(world);
+  const candidates = listSeasonLines().filter(
+    (l) =>
+      l.playerId === playerId &&
+      Number(l.year) === year &&
+      l.role === "batter" &&
+      l.scope === "pennant" &&
+      hasOffensiveBatterStats(l),
+  );
+  if (candidates.length === 0) return preferred;
+
+  const sameWorld = candidates.find(
+    (l) => normalizeSeasonWorld(l.world) === wanted,
+  );
+  if (sameWorld) return sameWorld;
+
+  const legacy = candidates.find((l) => normalizeSeasonWorld(l.world) == null);
+  if (legacy) return legacy;
+
+  return candidates[0] ?? preferred;
 }
 
 function formatSeasonLineHighlightStats(

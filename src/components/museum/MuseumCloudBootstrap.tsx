@@ -97,6 +97,12 @@ export function MuseumCloudBootstrap() {
           hydratePlayerMasterFromCloud(),
           hydrateSopFeatsFromCloud(),
         ]);
+
+        // 表彰・成績ボードが hydrate 後に再描画できるよう通知
+        const { notifyImportStoreChanged } = await import(
+          "@/data/import/demoMode"
+        );
+        notifyImportStoreChanged();
       } catch {
         // オフライン時は静かにスキップ（各画面の個別 hydrate に任せる）
       }
