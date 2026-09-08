@@ -134,14 +134,14 @@ PL
 4|山川穂高|ソフトバンク|28
 5|柳田悠岐|ソフトバンク|25`,
 
-  AWARD: `YEAR=2000
+  AWARD: `YEAR=2026
 TYPE=AWARD
 
 MVP_CL=佐藤輝明|阪神
 MVP_PL=万波中正|日本ハム
-ROOKIE_CL=未定|阪神
-ROOKIE_PL=未定|日本ハム
-SAWAMURA=村上頌樹|阪神`,
+ROOKIE_CL=該当なし
+ROOKIE_PL=該当なし
+SAWAMURA=該当なし`,
 
   BEST_NINE: `YEAR=2000
 TYPE=BEST_NINE

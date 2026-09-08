@@ -24,6 +24,12 @@ import {
   splitPartnerLines,
   type PartnerTypeId,
 } from "./meta";
+import {
+  AWARD_NONE_PLAYER_ID,
+  awardKeyAllowsNoneOrPending,
+  isAwardNoneToken,
+  isAwardPendingToken,
+} from "./awardOutcome";
 import { resolvePartnerPlayer } from "./resolvePlayer";
 import {
   parseTeamFieldValue,
@@ -118,6 +124,8 @@ export type PartnerAwardSlot = {
   playerId: string | null;
   displayName: string;
   status: "matched" | "needs_confirm" | "unknown";
+  /** winner=受賞者 / none=該当なし確定 / pending=未定（保存しない） */
+  outcome: "winner" | "none" | "pending";
 };
 
 export type PartnerAwardResult = {
@@ -807,6 +815,38 @@ export function parseAwardPartner(
     const raw = meta.kv[m.key];
     if (!raw) continue;
     const { name, teamShort } = parseNameTeam(raw);
+    const allowsSpecial = awardKeyAllowsNoneOrPending(m.key);
+
+    if (allowsSpecial && isAwardNoneToken(name)) {
+      slots.push({
+        key: m.key,
+        kind: m.kind,
+        league: m.league,
+        name: "該当なし",
+        teamShort: "",
+        playerId: AWARD_NONE_PLAYER_ID,
+        displayName: "該当なし",
+        status: "matched",
+        outcome: "none",
+      });
+      continue;
+    }
+
+    if (allowsSpecial && isAwardPendingToken(name)) {
+      slots.push({
+        key: m.key,
+        kind: m.kind,
+        league: m.league,
+        name: "未定",
+        teamShort: "",
+        playerId: null,
+        displayName: "未定",
+        status: "matched",
+        outcome: "pending",
+      });
+      continue;
+    }
+
     const resolved = resolvePartnerPlayer({
       name,
       teamShort: normalizeTeamShort(teamShort),
@@ -822,6 +862,7 @@ export function parseAwardPartner(
       playerId: resolved.playerId,
       displayName: resolved.displayName,
       status: resolved.status,
+      outcome: "winner",
     });
   }
 

@@ -125,7 +125,11 @@ export function savePartnerAwardResult(
 ): { ok: true; summary: string } | { ok: false; needsConfirm: boolean; message: string } {
   const w = normalizeSeasonWorld(world);
   const useSandbox = shouldUseIsolatedDemoStore(result.year, w);
-  const unresolved = result.slots.filter((s) => !s.playerId);
+  // 「未定」は正式結果にしない。「該当なし」は sentinel playerId で保存可。
+  const savable = result.slots.filter((s) => s.outcome !== "pending");
+  const unresolved = savable.filter(
+    (s) => s.outcome === "winner" && !s.playerId,
+  );
   if (unresolved.length) {
     return {
       ok: false,
@@ -133,10 +137,17 @@ export function savePartnerAwardResult(
       message: `選手未確定: ${unresolved.map((s) => s.key).join(", ")}`,
     };
   }
+  if (savable.length === 0) {
+    return {
+      ok: false,
+      needsConfirm: false,
+      message: "保存対象がありません（未定のみは登録しません）",
+    };
+  }
 
   if (!force) {
     const conflicts: string[] = [];
-    for (const s of result.slots) {
+    for (const s of savable) {
       const id = registeredAwardId({
         kind: s.kind,
         year: result.year,
@@ -173,7 +184,7 @@ export function savePartnerAwardResult(
   }
 
   const ids: string[] = [];
-  for (const s of result.slots) {
+  for (const s of savable) {
     const id = registeredAwardId({
       kind: s.kind,
       year: result.year,
@@ -181,15 +192,17 @@ export function savePartnerAwardResult(
       league: s.league,
       playerId: s.playerId!,
     });
+    const isNone = s.outcome === "none";
     const payload = {
       id,
       year: result.year,
       world: w,
       kind: s.kind,
       playerId: s.playerId!,
-      playerName: s.displayName || s.name,
-      teamShort: s.teamShort,
+      playerName: isNone ? "該当なし" : s.displayName || s.name,
+      teamShort: isNone ? undefined : s.teamShort || undefined,
       league: s.league,
+      outcome: isNone ? ("none" as const) : ("winner" as const),
     };
     if (useSandbox) upsertDemoAward(payload);
     else upsertRegisteredAward(payload);

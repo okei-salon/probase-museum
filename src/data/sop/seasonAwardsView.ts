@@ -20,6 +20,10 @@ import { getRegisteredSeasonHighlightStats } from "@/data/playerSeasonStats";
 import { formatSeasonAwardHistory } from "@/lib/awardHistory";
 import type { AnnualAwardKind } from "@/lib/sop/rules";
 import {
+  AWARD_NONE_PLAYER_ID,
+  isRegisteredAwardNone,
+} from "@/lib/import/partnerPaste/awardOutcome";
+import {
   listRegisteredAwardsForSeason,
   type RegisteredSeasonAward,
 } from "@/data/sop/awardsRegistry";
@@ -48,6 +52,17 @@ function toCard(
   currentYear: number,
   stats: ResolvedAwardCard["stats"] = null,
 ): ResolvedAwardCard {
+  if (isRegisteredAwardNone(a)) {
+    return {
+      playerId: AWARD_NONE_PLAYER_ID,
+      playerName: "該当なし",
+      teamName: "—",
+      historyLabel: "—",
+      league: a.league,
+      position: a.position,
+      stats: null,
+    };
+  }
   return {
     playerId: a.playerId,
     playerName: a.playerName,

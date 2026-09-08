@@ -19,6 +19,10 @@ import {
   hydrateLocalArrayFromCloud,
   putMuseumCollectionRecord,
 } from "@/lib/museumCloud/clientSync";
+import {
+  AWARD_NONE_PLAYER_ID,
+  isRegisteredAwardNone,
+} from "@/lib/import/partnerPaste/awardOutcome";
 
 const STORAGE_KEY = "probase-museum.sop-awards-registry.v1";
 const COLLECTION = "sop_awards_registry";
@@ -38,6 +42,11 @@ export type RegisteredSeasonAward = {
   count?: number;
   /** ベストナイン／ゴールデングラブの守備位置 */
   position?: string;
+  /**
+   * winner（省略時）= 実選手受賞。
+   * none = 「該当なし」確定（新人王・沢村など）。
+   */
+  outcome?: "winner" | "none";
   /** クラウド merge 用 */
   updatedAt?: string;
 };
@@ -48,11 +57,15 @@ function canUseStorage() {
 
 function normalizeAward(a: RegisteredSeasonAward): RegisteredSeasonAward {
   const yearNum = Number(a.year);
+  const none = isRegisteredAwardNone(a);
   return {
     ...a,
     // Neon / JSON 経由で year が文字列になることがある → matchSeason 厳密一致用に数値化
     year: Number.isFinite(yearNum) ? yearNum : a.year,
     world: normalizeSeasonWorld(a.world),
+    playerId: none ? AWARD_NONE_PLAYER_ID : a.playerId,
+    playerName: none ? "該当なし" : a.playerName,
+    outcome: none ? "none" : "winner",
     updatedAt: a.updatedAt || new Date(0).toISOString(),
   };
 }

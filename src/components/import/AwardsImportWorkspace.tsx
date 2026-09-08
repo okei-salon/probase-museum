@@ -693,9 +693,23 @@ function PartnerAwardConfirm({
           <li key={s.key} className="flex flex-wrap gap-2 border-b border-white/8 py-1">
             <span className="text-white/45">{s.key}</span>
             <span>{s.displayName || s.name}</span>
-            <span>{s.teamShort}</span>
-            <span className={s.status === "matched" ? "text-emerald-300" : "text-amber-200"}>
-              {s.status === "matched" ? "OK" : "要確認"}
+            <span>
+              {s.outcome === "none" || s.outcome === "pending"
+                ? "—"
+                : s.teamShort || "—"}
+            </span>
+            <span
+              className={
+                s.status === "matched"
+                  ? "text-emerald-300"
+                  : "text-amber-200"
+              }
+            >
+              {s.outcome === "pending"
+                ? "未定（登録しない）"
+                : s.status === "matched"
+                  ? "OK"
+                  : "要確認"}
             </span>
           </li>
         ))}
