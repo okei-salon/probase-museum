@@ -150,7 +150,6 @@ export function SeasonPlayerDetailEditor({
       doubles: 0,
       triples: 0,
       hr: 0,
-      rbi: 0,
       bb: 0,
       csAttempted: fieldStr(row, "csAttempted")
         ? Number(fieldStr(row, "csAttempted"))

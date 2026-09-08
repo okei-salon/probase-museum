@@ -381,7 +381,6 @@ function enrichCatcherDerivedDisplays(
     doubles: 0,
     triples: 0,
     hr: 0,
-    rbi: 0,
     bb: 0,
     csAttempted: att,
     csCaught: caught,
