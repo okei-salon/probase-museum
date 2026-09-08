@@ -19,6 +19,8 @@ const STREAK_TYPES: Record<string, string> = {
   hit_streak: "連続試合安打",
   on_base_streak: "連続試合出塁",
   hr_streak: "連続試合本塁打",
+  pa_hr_streak: "連続打席本塁打",
+  ab_hit_streak: "連続打数安打",
   scoreless_ip: "連続無失点イニング",
   win_streak: "連勝",
 };

@@ -27,5 +27,10 @@ export {
 export {
   buildYearFeats,
   listAchievementsForPlayer,
+  collectYearAchievementsRaw,
   type YearFeatsResult,
 } from "./buildYearFeats";
+export {
+  FEATS_DISPLAY_STREAK_TYPES,
+  filterStreaksToLeagueLeaders,
+} from "./streakDisplay";

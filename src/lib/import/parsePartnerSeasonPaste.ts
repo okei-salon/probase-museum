@@ -79,6 +79,18 @@ const BATTER_FIELD_ALIASES: AliasEntry[] = [
     keys: ["連続出塁", "連試出", "連続試合出塁", "onBaseStreak"],
     field: "onBaseStreak",
   },
+  {
+    keys: ["連続試合本塁打", "連本試合", "hrStreak"],
+    field: "hrStreak",
+  },
+  {
+    keys: ["連続打席本塁打", "連打席本", "paHrStreak"],
+    field: "paHrStreak",
+  },
+  {
+    keys: ["連続打数安打", "連打数安", "abHitStreak"],
+    field: "abHitStreak",
+  },
   { keys: ["猛打賞", "multiHit"], field: "multiHit" },
   { keys: ["ops", "OPS", "ＯＰＳ"], field: "ops" },
   {

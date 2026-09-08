@@ -148,6 +148,14 @@ export function buildSopRulesCatalog(): SopRuleSection[] {
         ...tierLines("連続試合安打", BATTER_FEATS.hitStreak, "試合"),
         ...tierLines("連続試合出塁", BATTER_FEATS.onBaseStreak, "試合"),
         ...tierLines("連続試合本塁打", BATTER_FEATS.hrStreak, "試合"),
+        {
+          label: BATTER_FEATS.paHrStreakLeagueLeader.label,
+          pointsText: `${BATTER_FEATS.paHrStreakLeagueLeader.points}点`,
+        },
+        {
+          label: BATTER_FEATS.abHitStreakLeagueLeader.label,
+          pointsText: `${BATTER_FEATS.abHitStreakLeagueLeader.points}点`,
+        },
       ],
     },
     {

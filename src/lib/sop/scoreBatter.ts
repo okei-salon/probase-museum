@@ -171,6 +171,30 @@ function scoreBatterFeats(feats: SopFeatsInput): SopLineItem[] {
       points: hrs.points,
     });
   }
+  if (feats.paHrStreakLeagueLeader) {
+    items.push({
+      id: "feat:paHrStreakLeagueLeader",
+      category: "feats_streaks",
+      label: BATTER_FEATS.paHrStreakLeagueLeader.label,
+      points: BATTER_FEATS.paHrStreakLeagueLeader.points,
+      detail:
+        feats.paHrStreak != null
+          ? `${feats.paHrStreak}打席`
+          : undefined,
+    });
+  }
+  if (feats.abHitStreakLeagueLeader) {
+    items.push({
+      id: "feat:abHitStreakLeagueLeader",
+      category: "feats_streaks",
+      label: BATTER_FEATS.abHitStreakLeagueLeader.label,
+      points: BATTER_FEATS.abHitStreakLeagueLeader.points,
+      detail:
+        feats.abHitStreak != null
+          ? `${feats.abHitStreak}打数`
+          : undefined,
+    });
+  }
   return items;
 }
 

@@ -349,46 +349,78 @@ function detectPitcherSeason(
 }
 
 /**
- * 成績ライン上の連続記録（hitStreak等）があれば連続記録カード化。
- * SOP点は Ver.3 ティアを参照。
+ * 成績ライン上の連続記録をカード化。
+ * 表示用の候補は値≥1で全件生成し、リーグ最高への絞り込みは buildYearFeats 側。
+ * SOP閾値加点は成績値／feats 入力から別経路で行う。
  */
 function detectStreaksFromLine(line: PlayerSeasonLine): SeasonAchievement[] {
   const meta = baseMeta(line);
   const out: SeasonAchievement[] = [];
 
-  if (line.role === "batter") {
-    const { hitStreak, onBaseStreak } = line.counting;
-    if (hitStreak != null && hitStreak >= 20) {
-      const pts =
-        hitStreak >= 40 ? 15 : hitStreak >= 30 ? 10 : 5;
-      out.push({
-        ...meta,
-        id: makeId(line, "hit_streak"),
-        category: "streak",
-        recordType: "hit_streak",
-        recordName: "連続試合安打",
-        value: hitStreak,
-        unit: "試合",
-        valueLabel: `${hitStreak}試合`,
-        sopPoints: pts,
-      });
-    }
-    if (onBaseStreak != null && onBaseStreak >= 20) {
-      const pts =
-        onBaseStreak >= 40 ? 15 : onBaseStreak >= 30 ? 10 : 5;
-      out.push({
-        ...meta,
-        id: makeId(line, "on_base_streak"),
-        category: "streak",
-        recordType: "on_base_streak",
-        recordName: "連続試合出塁",
-        value: onBaseStreak,
-        unit: "試合",
-        valueLabel: `${onBaseStreak}試合`,
-        sopPoints: pts,
-      });
-    }
-  }
+  if (line.role !== "batter") return out;
+  const c = line.counting;
+
+  const pushStreak = (
+    recordType: string,
+    recordName: string,
+    value: number | null | undefined,
+    unit: string,
+    sopPoints: number,
+  ) => {
+    if (value == null || !Number.isFinite(value) || value < 1) return;
+    out.push({
+      ...meta,
+      id: makeId(line, recordType),
+      category: "streak",
+      recordType,
+      recordName,
+      value,
+      unit,
+      valueLabel: `${value}${unit}`,
+      sopPoints,
+    });
+  };
+
+  const hit = c.hitStreak ?? null;
+  pushStreak(
+    "hit_streak",
+    "連続試合安打",
+    hit,
+    "試合",
+    hit != null && hit >= 40 ? 15 : hit != null && hit >= 30 ? 10 : hit != null && hit >= 20 ? 5 : 0,
+  );
+  const ob = c.onBaseStreak ?? null;
+  pushStreak(
+    "on_base_streak",
+    "連続試合出塁",
+    ob,
+    "試合",
+    ob != null && ob >= 40 ? 15 : ob != null && ob >= 30 ? 10 : ob != null && ob >= 20 ? 5 : 0,
+  );
+  const hrs = c.hrStreak ?? null;
+  pushStreak(
+    "hr_streak",
+    "連続試合本塁打",
+    hrs,
+    "試合",
+    hrs != null && hrs >= 5 ? 10 : hrs != null && hrs >= 4 ? 5 : hrs != null && hrs >= 3 ? 2 : 0,
+  );
+  // リーグ1位SOPは別経路。カード上の sopPoints は表示用に1位確定後も5のままにする
+  pushStreak(
+    "pa_hr_streak",
+    "連続打席本塁打",
+    c.paHrStreak ?? null,
+    "打席",
+    5,
+  );
+  pushStreak(
+    "ab_hit_streak",
+    "連続打数安打",
+    c.abHitStreak ?? null,
+    "打数",
+    5,
+  );
+
   return out;
 }
 

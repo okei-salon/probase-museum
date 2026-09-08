@@ -2,7 +2,7 @@
  * 年度の記録・偉業一覧を構築。
  * 手動登録 + 自動判定 + （任意）デモ。同一キーは手動優先。
  *
- * Step10: SeasonIdentity 指定時は WORLD 厳密。数値のみは world 無しのみ。
+ * 連続系5種の画面表示はリーグ最高のみ（SOP加点とは別）。
  */
 
 import { listSeasonLinesForSeason } from "@/data/playerSeasonLines";
@@ -12,6 +12,7 @@ import {
 } from "@/data/seasons";
 import { getDemoAchievements } from "./demoData";
 import { detectAchievementsFromSeasonLines } from "./detectSeason";
+import { filterStreaksToLeagueLeaders } from "./streakDisplay";
 import { listStoredAchievementsForSeasonIdentity } from "./store";
 import type { AchievementCategory, SeasonAchievement } from "./types";
 
@@ -49,21 +50,7 @@ function dedupePreferManual(
   return [...map.values()];
 }
 
-export function buildYearFeats(
-  yearOrIdentity: number | SeasonIdentity,
-): YearFeatsResult {
-  const identity = resolveIdentity(yearOrIdentity);
-  const pennantLines = listSeasonLinesForSeason(identity).filter(
-    (l) => l.scope === "pennant",
-  );
-  const auto = detectAchievementsFromSeasonLines(pennantLines);
-  const manual = listStoredAchievementsForSeasonIdentity(identity);
-  // DEMO は world 無し年度のみ従来どおり
-  const demo =
-    identity.world == null ? getDemoAchievements(identity.year) : [];
-
-  const merged = dedupePreferManual([...auto, ...manual, ...demo]);
-
+function sortAchievements(items: SeasonAchievement[]): SeasonAchievement[] {
   const order: AchievementCategory[] = [
     "npb_record",
     "special",
@@ -71,27 +58,50 @@ export function buildYearFeats(
     "single_game",
     "season",
   ];
-  merged.sort((a, b) => {
+  return [...items].sort((a, b) => {
     const ca = order.indexOf(a.category);
     const cb = order.indexOf(b.category);
     if (ca !== cb) return ca - cb;
     return a.playerName.localeCompare(b.playerName, "ja");
   });
+}
+
+/** 生データ（SOP用）。連続系のリーグ絞り込み前。 */
+export function collectYearAchievementsRaw(
+  yearOrIdentity: number | SeasonIdentity,
+): SeasonAchievement[] {
+  const identity = resolveIdentity(yearOrIdentity);
+  const pennantLines = listSeasonLinesForSeason(identity).filter(
+    (l) => l.scope === "pennant",
+  );
+  const auto = detectAchievementsFromSeasonLines(pennantLines);
+  const manual = listStoredAchievementsForSeasonIdentity(identity);
+  const demo =
+    identity.world == null ? getDemoAchievements(identity.year) : [];
+  return dedupePreferManual([...auto, ...manual, ...demo]);
+}
+
+export function buildYearFeats(
+  yearOrIdentity: number | SeasonIdentity,
+): YearFeatsResult {
+  const merged = collectYearAchievementsRaw(yearOrIdentity);
+  const items = sortAchievements(filterStreaksToLeagueLeaders(merged));
 
   return {
-    items: merged,
-    demoCount: merged.filter((i) => i.source === "demo").length,
-    autoCount: merged.filter((i) => i.source === "auto").length,
-    manualCount: merged.filter((i) => i.source === "manual").length,
+    items,
+    demoCount: items.filter((i) => i.source === "demo").length,
+    autoCount: items.filter((i) => i.source === "auto").length,
+    manualCount: items.filter((i) => i.source === "manual").length,
   };
 }
 
+/** SOP feats 変換用：連続系は絞り込み前の生データを返す */
 export function listAchievementsForPlayer(
   yearOrIdentity: number | SeasonIdentity,
   playerId: string,
   role: "batter" | "pitcher",
 ): SeasonAchievement[] {
-  return buildYearFeats(yearOrIdentity).items.filter(
+  return collectYearAchievementsRaw(yearOrIdentity).filter(
     (a) => a.playerId === playerId && a.role === role,
   );
 }

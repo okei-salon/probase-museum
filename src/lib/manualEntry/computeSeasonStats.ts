@@ -46,6 +46,12 @@ export type BatterCountingInput = {
   hitStreak?: number | null;
   /** 連続出塁（連試出） */
   onBaseStreak?: number | null;
+  /** 連続試合本塁打 */
+  hrStreak?: number | null;
+  /** 連続打席本塁打 */
+  paHrStreak?: number | null;
+  /** 連続打数安打 */
+  abHitStreak?: number | null;
   /** 猛打賞 */
   multiHit?: number | null;
   // —— 捕手（盗塁阻止）——
@@ -424,6 +430,9 @@ export function normalizeBatterCounting(
     basesLoadedH: raw.basesLoadedH ?? null,
     hitStreak: raw.hitStreak ?? null,
     onBaseStreak: raw.onBaseStreak ?? null,
+    hrStreak: raw.hrStreak ?? null,
+    paHrStreak: raw.paHrStreak ?? null,
+    abHitStreak: raw.abHitStreak ?? null,
     multiHit: raw.multiHit ?? null,
     csAttempted: raw.csAttempted ?? null,
     csAllowed: raw.csAllowed ?? null,
@@ -631,6 +640,9 @@ export function aggregateBatterCounting(
     csCaught: null,
     hitStreak: null,
     onBaseStreak: null,
+    hrStreak: null,
+    paHrStreak: null,
+    abHitStreak: null,
   };
 
   for (const raw of rows) {
@@ -669,6 +681,15 @@ export function aggregateBatterCounting(
     }
     if (r.onBaseStreak != null) {
       sum.onBaseStreak = Math.max(sum.onBaseStreak ?? 0, r.onBaseStreak);
+    }
+    if (r.hrStreak != null) {
+      sum.hrStreak = Math.max(sum.hrStreak ?? 0, r.hrStreak);
+    }
+    if (r.paHrStreak != null) {
+      sum.paHrStreak = Math.max(sum.paHrStreak ?? 0, r.paHrStreak);
+    }
+    if (r.abHitStreak != null) {
+      sum.abHitStreak = Math.max(sum.abHitStreak ?? 0, r.abHitStreak);
     }
   }
 

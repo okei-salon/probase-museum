@@ -41,6 +41,12 @@ export function achievementsToSopFeats(
       case "hr_streak":
         feats.hrStreak = Math.max(feats.hrStreak ?? 0, a.value ?? 0);
         break;
+      case "pa_hr_streak":
+        feats.paHrStreak = Math.max(feats.paHrStreak ?? 0, a.value ?? 0);
+        break;
+      case "ab_hit_streak":
+        feats.abHitStreak = Math.max(feats.abHitStreak ?? 0, a.value ?? 0);
+        break;
       case "scoreless_ip":
         feats.scorelessIp = Math.max(feats.scorelessIp ?? 0, a.value ?? 0);
         break;
@@ -78,6 +84,14 @@ export function mergeSopFeats(
     hitStreak: maxOr(primary.hitStreak, fallback.hitStreak),
     onBaseStreak: maxOr(primary.onBaseStreak, fallback.onBaseStreak),
     hrStreak: maxOr(primary.hrStreak, fallback.hrStreak),
+    paHrStreak: maxOr(primary.paHrStreak, fallback.paHrStreak),
+    abHitStreak: maxOr(primary.abHitStreak, fallback.abHitStreak),
+    paHrStreakLeagueLeader: Boolean(
+      primary.paHrStreakLeagueLeader || fallback.paHrStreakLeagueLeader,
+    ),
+    abHitStreakLeagueLeader: Boolean(
+      primary.abHitStreakLeagueLeader || fallback.abHitStreakLeagueLeader,
+    ),
     scorelessIp: maxOr(primary.scorelessIp, fallback.scorelessIp),
     gameSo: maxOr(primary.gameSo, fallback.gameSo),
     winStreak: maxOr(primary.winStreak, fallback.winStreak),

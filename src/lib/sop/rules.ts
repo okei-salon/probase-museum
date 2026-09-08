@@ -177,6 +177,15 @@ export const BATTER_FEATS = {
     { min: 4, points: 5 },
     { min: 3, points: 2 },
   ],
+  /** リーグ1位のみ（段階式ではない） */
+  paHrStreakLeagueLeader: {
+    points: 5,
+    label: "連続打席本塁打 リーグ1位",
+  },
+  abHitStreakLeagueLeader: {
+    points: 5,
+    label: "連続打数安打 リーグ1位",
+  },
 } as const;
 
 /** 投手特殊・連続 */

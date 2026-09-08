@@ -148,6 +148,10 @@ function featsFor(
   playerId: string,
   role: "batter" | "pitcher",
   line: PlayerSeasonLine,
+  streakLeaders?: {
+    paHr: Set<string>;
+    abHit: Set<string>;
+  },
 ): SopFeatsInput {
   const fromAchievements = achievementsToSopFeats(
     listAchievementsForPlayer(identity, playerId, role),
@@ -175,6 +179,11 @@ function featsFor(
       ? {
           hitStreak: line.counting.hitStreak ?? null,
           onBaseStreak: line.counting.onBaseStreak ?? null,
+          hrStreak: line.counting.hrStreak ?? null,
+          paHrStreak: line.counting.paHrStreak ?? null,
+          abHitStreak: line.counting.abHitStreak ?? null,
+          paHrStreakLeagueLeader: streakLeaders?.paHr.has(playerId) ?? false,
+          abHitStreakLeagueLeader: streakLeaders?.abHit.has(playerId) ?? false,
         }
       : {};
 
@@ -182,6 +191,44 @@ function featsFor(
     fromAchievements,
     mergeSopFeats(fromLegacyStore, fromLine),
   );
+}
+
+/**
+ * 連続打席本塁打／連続打数安打のリーグ1位（同率含む）playerId 集合。
+ * SOP +5 専用。記録・偉業の表示フィルタとは別。
+ */
+function batterStreakLeagueLeaders(lines: PlayerSeasonLine[]): {
+  paHr: Set<string>;
+  abHit: Set<string>;
+} {
+  type Row = { playerId: string; league: "central" | "pacific"; value: number };
+  const paRows: Row[] = [];
+  const abRows: Row[] = [];
+  for (const line of lines) {
+    if (line.role !== "batter") continue;
+    const league = leagueOf(line) as "central" | "pacific";
+    const pa = line.counting.paHrStreak;
+    const ab = line.counting.abHitStreak;
+    if (pa != null && Number.isFinite(pa) && pa >= 1) {
+      paRows.push({ playerId: line.playerId, league, value: pa });
+    }
+    if (ab != null && Number.isFinite(ab) && ab >= 1) {
+      abRows.push({ playerId: line.playerId, league, value: ab });
+    }
+  }
+  const pick = (rows: Row[]) => {
+    const out = new Set<string>();
+    for (const league of ["central", "pacific"] as const) {
+      const list = rows.filter((r) => r.league === league);
+      if (list.length === 0) continue;
+      const max = Math.max(...list.map((r) => r.value));
+      for (const r of list) {
+        if (r.value === max) out.add(r.playerId);
+      }
+    }
+    return out;
+  };
+  return { paHr: pick(paRows), abHit: pick(abRows) };
 }
 
 /** レジストリ + 月間MVP（WORLD 厳密）。レガシーのみハードコード表彰フォールバック */
@@ -391,12 +438,19 @@ export function buildYearSopRankings(
   const results: SopSeasonResult[] = [];
   const byPlayer = groupLinesByPlayer(lines);
   const interleagueItemsByPlayer = buildInterleagueSopItemsForSeason(identity);
+  const streakLeaders = batterStreakLeagueLeaders(lines);
 
   for (const line of lines) {
     const key = `${line.playerId}:${line.role}`;
     const prior = priorFlagsFromResult(prevByKey.get(key));
     const pennant = computeSeasonSop(
-      lineToInput(line, identity, prior, byPlayer.get(line.playerId)),
+      lineToInput(
+        line,
+        identity,
+        prior,
+        byPlayer.get(line.playerId),
+        streakLeaders,
+      ),
     );
     const ilItems = (interleagueItemsByPlayer.get(line.playerId) ?? []).filter(
       (it) => {
@@ -469,6 +523,10 @@ function lineToInput(
     batter?: Extract<PlayerSeasonLine, { role: "batter" }>;
     pitcher?: Extract<PlayerSeasonLine, { role: "pitcher" }>;
   },
+  streakLeaders?: {
+    paHr: Set<string>;
+    abHit: Set<string>;
+  },
 ): SopPlayerYearInput {
   const name =
     getPlayerMaster(line.playerId)?.fullName ?? line.playerName;
@@ -486,7 +544,7 @@ function lineToInput(
     league: leagueOf(line) as "central" | "pacific",
     awards: collectAwardsForPlayer(identity, line.playerId),
     titles: titlesForPlayer(identity, line.playerId, line.role),
-    feats: featsFor(identity, line.playerId, line.role, line),
+    feats: featsFor(identity, line.playerId, line.role, line, streakLeaders),
     priorYear: prior,
     applyTwoWay: hasBothRoles,
   };

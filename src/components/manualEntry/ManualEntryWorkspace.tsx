@@ -79,6 +79,9 @@ type BatterFields = {
   basesLoadedH: string;
   hitStreak: string;
   onBaseStreak: string;
+  hrStreak: string;
+  paHrStreak: string;
+  abHitStreak: string;
   multiHit: string;
   csAttempted: string;
   csAllowed: string;
@@ -132,6 +135,9 @@ const emptyBatter = (): BatterFields => ({
   basesLoadedH: "",
   hitStreak: "",
   onBaseStreak: "",
+  hrStreak: "",
+  paHrStreak: "",
+  abHitStreak: "",
   multiHit: "",
   csAttempted: "",
   csAllowed: "",
@@ -310,6 +316,9 @@ export function ManualEntryWorkspace({
       basesLoadedH: optInt(batter.basesLoadedH) ?? null,
       hitStreak: optInt(batter.hitStreak) ?? null,
       onBaseStreak: optInt(batter.onBaseStreak) ?? null,
+      hrStreak: optInt(batter.hrStreak) ?? null,
+      paHrStreak: optInt(batter.paHrStreak) ?? null,
+      abHitStreak: optInt(batter.abHitStreak) ?? null,
       multiHit: optInt(batter.multiHit) ?? null,
       csAttempted: optInt(batter.csAttempted) ?? null,
       csAllowed: optInt(batter.csAllowed) ?? null,
@@ -845,6 +854,27 @@ export function ManualEntryWorkspace({
                     optional
                     value={batter.onBaseStreak}
                     onChange={(v) => patchBatter("onBaseStreak", v)}
+                    normalize={normalizeIntegerInput}
+                  />
+                  <StatNumberField
+                    label="連続試合本塁打"
+                    optional
+                    value={batter.hrStreak}
+                    onChange={(v) => patchBatter("hrStreak", v)}
+                    normalize={normalizeIntegerInput}
+                  />
+                  <StatNumberField
+                    label="連続打席本塁打"
+                    optional
+                    value={batter.paHrStreak}
+                    onChange={(v) => patchBatter("paHrStreak", v)}
+                    normalize={normalizeIntegerInput}
+                  />
+                  <StatNumberField
+                    label="連続打数安打"
+                    optional
+                    value={batter.abHitStreak}
+                    onChange={(v) => patchBatter("abHitStreak", v)}
                     normalize={normalizeIntegerInput}
                   />
                   <StatNumberField

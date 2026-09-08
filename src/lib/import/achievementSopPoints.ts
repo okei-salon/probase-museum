@@ -22,6 +22,10 @@ export function sopPointsForRecordType(
       return tierPoints(BATTER_FEATS.onBaseStreak, v);
     case "hr_streak":
       return tierPoints(BATTER_FEATS.hrStreak, v);
+    case "pa_hr_streak":
+      return BATTER_FEATS.paHrStreakLeagueLeader.points;
+    case "ab_hit_streak":
+      return BATTER_FEATS.abHitStreakLeagueLeader.points;
     case "scoreless_ip":
       return tierPoints(PITCHER_FEATS.scorelessIp, v);
     case "win_streak":

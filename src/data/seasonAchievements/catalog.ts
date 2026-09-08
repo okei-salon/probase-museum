@@ -58,6 +58,20 @@ export const ACHIEVEMENT_CATALOG: AchievementCatalogEntry[] = [
     needsManual: true,
   },
   {
+    recordType: "pa_hr_streak",
+    category: "streak",
+    recordName: "連続打席本塁打",
+    unit: "打席",
+    needsManual: false,
+  },
+  {
+    recordType: "ab_hit_streak",
+    category: "streak",
+    recordName: "連続打数安打",
+    unit: "打数",
+    needsManual: false,
+  },
+  {
     recordType: "scoreless_ip",
     category: "streak",
     recordName: "連続無失点イニング",
