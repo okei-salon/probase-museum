@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
 import {
   BATTER_CATCHER_STAT_KEYS,
@@ -16,6 +16,7 @@ import {
   type PlayerStatRow,
   type StatsScope,
 } from "@/data/playerStats";
+import { subscribeImportDemoMode } from "@/data/import/demoMode";
 import {
   listSeasonLines,
   listSeasonLinesForSeason,
@@ -62,6 +63,26 @@ type EnrichedStatRow = PlayerStatRow & {
   qualified: boolean;
 };
 
+const EMPTY_LINES: PlayerSeasonLine[] = [];
+let seasonLinesSnapshotCache: PlayerSeasonLine[] | null = null;
+
+function getSeasonLinesSnapshot(): PlayerSeasonLine[] {
+  if (seasonLinesSnapshotCache) return seasonLinesSnapshotCache;
+  seasonLinesSnapshotCache = listSeasonLines();
+  return seasonLinesSnapshotCache;
+}
+
+function getSeasonLinesServerSnapshot(): PlayerSeasonLine[] {
+  return EMPTY_LINES;
+}
+
+function subscribeSeasonLinesStore(onStoreChange: () => void): () => void {
+  return subscribeImportDemoMode(() => {
+    seasonLinesSnapshotCache = null;
+    onStoreChange();
+  });
+}
+
 export function PlayerStatsExplorer({
   scope,
   year,
@@ -100,10 +121,17 @@ export function PlayerStatsExplorer({
     [seasonKey],
   );
 
+  const seasonLinesVersion = useSyncExternalStore(
+    subscribeSeasonLinesStore,
+    getSeasonLinesSnapshot,
+    getSeasonLinesServerSnapshot,
+  );
+
   const registered = useMemo(() => {
+    void seasonLinesVersion;
     if (seasonIdentity) return listSeasonLinesForSeason(seasonIdentity);
     return listSeasonLines();
-  }, [seasonIdentity]);
+  }, [seasonIdentity, seasonLinesVersion]);
 
   const allowSample = allowsLayoutSampleFallback(seasonIdentity);
 

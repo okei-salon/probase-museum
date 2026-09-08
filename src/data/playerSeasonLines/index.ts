@@ -14,7 +14,12 @@ export {
   listSeasonLinesForSeason,
   listPennantSeasonIdentities,
   hydrateSeasonLinesFromCloud,
+  restoreEmptyBatterOffenseFromPeers,
   upsertBatterSeasonLine,
   upsertPitcherSeasonLine,
   upsertSeasonLine,
 } from "./store";
+export {
+  hasOffensiveBatterCounting,
+  pickBatterBasePreferringOffense,
+} from "./restoreEmptyBatterOffense";

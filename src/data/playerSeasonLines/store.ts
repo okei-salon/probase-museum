@@ -24,6 +24,11 @@ import type {
   SeasonLineScope,
 } from "./types";
 import { seasonLineKey } from "./types";
+import {
+  applyEmptyBatterOffenseRestore,
+  demoSeasonLinesAsSources,
+  mergeSeasonLinePreferOffense,
+} from "./restoreEmptyBatterOffense";
 
 const STORAGE_KEY = "probase-museum.season-lines.v1";
 const COLLECTION = "season_lines";
@@ -34,7 +39,12 @@ function canUseStorage() {
 
 function normalizeLine(line: PlayerSeasonLine): PlayerSeasonLine {
   const world = normalizeSeasonWorld(line.world);
-  const base = { ...line, world };
+  const yearNum = Number(line.year);
+  const base = {
+    ...line,
+    world,
+    year: Number.isFinite(yearNum) ? yearNum : line.year,
+  };
 
   if (base.role === "batter") {
     const counting = normalizeBatterCounting(base.counting);
@@ -157,13 +167,44 @@ export function upsertPitcherSeasonLine(
 
 export async function hydrateSeasonLinesFromCloud(): Promise<PlayerSeasonLine[]> {
   if (!canUseStorage()) return [];
-  return hydrateLocalArrayFromCloud({
+  await hydrateLocalArrayFromCloud({
     collection: COLLECTION,
     readRaw: readRawSeasonLines,
     writeRaw: writeRawSeasonLines,
     normalize: normalizeLine,
     filterPublic: excludeDemoRecords,
+    mergeOne: mergeSeasonLinePreferOffense,
   });
+  // 空の正式 WORLD 行を legacy / 他WORLD / デモ領域の実打撃から復元
+  return restoreEmptyBatterOffenseFromPeers();
+}
+
+/**
+ * 打撃が空の pennant 行だけを、同一選手の既存実打撃から復元する。
+ * 打撃がある行は変更しない。ソースが無い空行は触らない。
+ */
+export function restoreEmptyBatterOffenseFromPeers(): PlayerSeasonLine[] {
+  if (!canUseStorage()) return [];
+  const raw = readRawSeasonLines().map(normalizeLine);
+  const { lines, repaired } = applyEmptyBatterOffenseRestore(
+    raw,
+    demoSeasonLinesAsSources(),
+  );
+  if (repaired.length === 0) {
+    return excludeDemoRecords(raw);
+  }
+  const now = new Date().toISOString();
+  const withStamp = lines.map((line) => {
+    const hit = repaired.find((r) => r.id === line.id);
+    if (!hit) return line;
+    return { ...hit, updatedAt: now };
+  });
+  writeRawSeasonLines(withStamp);
+  for (const line of withStamp) {
+    if (!repaired.some((r) => r.id === line.id)) continue;
+    void putMuseumCollectionRecord(COLLECTION, line);
+  }
+  return excludeDemoRecords(withStamp);
 }
 
 /**

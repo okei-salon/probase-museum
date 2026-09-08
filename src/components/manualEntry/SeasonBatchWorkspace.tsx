@@ -24,6 +24,7 @@ import type {
 } from "@/data/import/seasonBatchTypes";
 import {
   getSeasonLine,
+  pickBatterBasePreferringOffense,
   seasonLineKey,
   upsertBatterSeasonLine,
   upsertPitcherSeasonLine,
@@ -559,24 +560,20 @@ export function SeasonBatchWorkspace({
       } else if (role === "catcher") {
         // 捕手・守備は既存野手行へ4項目だけマージ（打撃成績は消さない）
         const cs = rowToCatcherCounting(row);
-        // 正式 WORLD 行が無いとき、同選手の world 無しレガシー打撃行をベースにする
-        // （CATCHER_SEASON だけが BLUE で先に入ると空打撃行になり B9 主成績が 0 になる）
-        const legacyId =
-          !existing && world
-            ? seasonLineKey(row.playerId, year, "batter", scope, null)
-            : null;
+        // 空の正式 WORLD 行より、打撃がある legacy / 既存行を優先（0で上書きしない）
+        const legacyId = world
+          ? seasonLineKey(row.playerId, year, "batter", scope, null)
+          : null;
         const legacyExisting =
           legacyId == null
             ? null
             : useSandbox
               ? getDemoSeasonLine(legacyId)
               : getSeasonLine(row.playerId, year, "batter", scope, null);
-        const baseLine =
-          existing && existing.role === "batter"
-            ? existing
-            : legacyExisting && legacyExisting.role === "batter"
-              ? legacyExisting
-              : null;
+        const baseLine = pickBatterBasePreferringOffense([
+          existing,
+          legacyExisting,
+        ]);
         const prevCounting = baseLine
           ? baseLine.counting
           : {
@@ -588,6 +585,7 @@ export function SeasonBatchWorkspace({
               rbi: 0,
               bb: 0,
             };
+        // ベースに打撃が無く、CSだけ書く場合でも既存の非零打撃フィールドは残す
         const counting = {
           ...prevCounting,
           csAttempted: cs.csAttempted ?? prevCounting.csAttempted ?? null,
