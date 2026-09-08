@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AwardsImportWorkspace } from "@/components/import/AwardsImportWorkspace";
+import { CatcherBatterRestore2026BluePanel } from "@/components/import/CatcherBatterRestore2026BluePanel";
 import { DemoModeToggle } from "@/components/import/DemoModeToggle";
 import { ImportCategoryTabs } from "@/components/import/ImportCategoryTabs";
 import { InterleagueImportWorkspace } from "@/components/import/InterleagueImportWorkspace";
@@ -35,6 +36,7 @@ export function ImportWorkspace() {
   return (
     <div className="space-y-5">
       <DemoModeToggle />
+      <CatcherBatterRestore2026BluePanel />
       <ImportCategoryTabs value={category} onChange={setCategory} />
 
       {category === "player_season" ? (
