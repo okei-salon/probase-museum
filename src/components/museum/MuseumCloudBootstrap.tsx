@@ -41,20 +41,6 @@ export function MuseumCloudBootstrap() {
     const signal = { cancelled: false };
 
     void (async () => {
-      // DB未設定でも、local の空打撃行を legacy/demo 実データから復元
-      try {
-        const { restoreEmptyBatterOffenseFromPeers } = await import(
-          "@/data/playerSeasonLines"
-        );
-        restoreEmptyBatterOffenseFromPeers();
-        const { notifyImportStoreChanged } = await import(
-          "@/data/import/demoMode"
-        );
-        notifyImportStoreChanged();
-      } catch {
-        // ignore
-      }
-
       const authed = await waitUntilAuthenticated(signal);
       if (!authed || signal.cancelled) return;
 
