@@ -68,7 +68,6 @@ export function batchColumnsForRole(role: SeasonBatchRole): BatchColumnDef[] {
     return [
       { key: "playerName", label: "選手", sticky: true, minWidth: 112 },
       { key: "teamShort", label: "球団", sticky: true, minWidth: 72 },
-      { key: "g", label: "試合", minWidth: 48 },
       { key: "csAttempted", label: "被盗塁企図数", minWidth: 80 },
       { key: "csAllowed", label: "許盗塁数", minWidth: 64 },
       { key: "csCaught", label: "盗塁刺", minWidth: 56 },
@@ -278,6 +277,11 @@ export function enrichRowDerivedDisplays(
     return { ...row, fields };
   }
 
+  // 捕手・守備: 4項目のみ。野手打撃の派生補完はしない
+  if (role === "catcher") {
+    return enrichCatcherDerivedDisplays(row);
+  }
+
   const counting = rowToBatterCounting(row);
   const derived = computeBatterDerived(counting);
   const fields = { ...row.fields };
@@ -312,6 +316,68 @@ export function enrichRowDerivedDisplays(
     setIfEmpty("tb", derived.tb, String(derived.tb));
   }
   return { ...row, fields };
+}
+
+const CATCHER_BATCH_KEYS: SeasonBatchFieldKey[] = [
+  "csAttempted",
+  "csAllowed",
+  "csCaught",
+  "csRate",
+];
+
+/** 捕手守備4項目以外を落とし、阻止率のみ自動補完 */
+function enrichCatcherDerivedDisplays(
+  row: SeasonBatchPlayerRow,
+): SeasonBatchPlayerRow {
+  const fields: SeasonBatchPlayerRow["fields"] = {};
+  for (const key of CATCHER_BATCH_KEYS) {
+    const cell = row.fields[key];
+    if (cell) fields[key] = cell;
+  }
+  const att = optNum({ ...row, fields }, "csAttempted");
+  const caught = optNum({ ...row, fields }, "csCaught");
+  const derived = computeBatterDerived({
+    ab: 0,
+    h: 0,
+    doubles: 0,
+    triples: 0,
+    hr: 0,
+    rbi: 0,
+    bb: 0,
+    csAttempted: att,
+    csCaught: caught,
+  });
+  const existingRate = fields.csRate;
+  if (
+    derived.csRate != null &&
+    !(
+      existingRate &&
+      (existingRate.value != null ||
+        (existingRate.display && existingRate.display !== ""))
+    )
+  ) {
+    fields.csRate = {
+      value: derived.csRate,
+      display: formatAvg(derived.csRate),
+      status: "ok",
+      sources: [],
+      note: "自動補完",
+    };
+  }
+  return { ...row, fields };
+}
+
+/** 捕手バッチ行から盗塁阻止カウントだけ取り出す */
+export function rowToCatcherCounting(row: SeasonBatchPlayerRow): {
+  csAttempted: number | null;
+  csAllowed: number | null;
+  csCaught: number | null;
+} {
+  return {
+    csAttempted: optNum(row, "csAttempted"),
+    csAllowed: optNum(row, "csAllowed"),
+    csCaught: optNum(row, "csCaught"),
+  };
 }
 
 function formatAvg(n: number) {

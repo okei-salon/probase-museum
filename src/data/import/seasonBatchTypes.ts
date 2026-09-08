@@ -1,6 +1,6 @@
 import type { TeamId } from "@/data/teams";
 
-/** 一括取込の対象ロール（捕手は野手ラインの守備項目） */
+/** 一括取込の対象ロール（捕手は盗塁阻止4項目のみ。野手打撃フォーマットとは分離） */
 export type SeasonBatchRole = "batter" | "pitcher" | "catcher";
 
 export type FieldCellStatus =

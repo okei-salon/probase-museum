@@ -364,8 +364,8 @@ export function parseSeasonRankingOcrText(
       headers = ["era", "g", "w", "l", "sv", "ip", "er", "so", "h", "bb"];
       headerLabels = ["防御率", "登板", "勝", "敗", "セーブ", "投球回", "自責", "奪三振", "被安打", "与四球"];
     } else if (role === "catcher") {
-      headers = ["csAttempted", "csAllowed", "csCaught", "csRate", "g"];
-      headerLabels = ["被盗企", "許盗", "盗塁刺", "阻止率", "試合"];
+      headers = ["csAttempted", "csAllowed", "csCaught", "csRate"];
+      headerLabels = ["被盗塁企図数", "許盗塁数", "盗塁刺", "盗塁阻止率"];
     } else {
       headers = ["avg", "g", "pa", "ab", "h", "doubles", "triples", "hr", "rbi", "r", "sb", "obp", "ops"];
       headerLabels = ["打率", "試合", "打席", "打数", "安打", "二塁打", "三塁打", "本塁打", "打点", "得点", "盗塁", "出塁率", "OPS"];

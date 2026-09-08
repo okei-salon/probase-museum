@@ -41,6 +41,7 @@ import {
 import type { TeamId } from "@/data/teams";
 import {
   rowToBatterCounting,
+  rowToCatcherCounting,
   rowToPitcherCounting,
   validateBatchRow,
 } from "@/lib/import/seasonBatchConvert";
@@ -57,6 +58,8 @@ import {
 import { processSeasonRankingImage } from "@/lib/import/processSeasonRankingImage";
 import {
   PARTNER_APPEND_EXAMPLE,
+  PARTNER_CATCHER_APPEND_EXAMPLE,
+  PARTNER_CATCHER_EXAMPLE,
   PARTNER_PASTE_EXAMPLE,
   PARTNER_PITCHER_EXAMPLE,
   parsePartnerSeasonPaste,
@@ -208,7 +211,7 @@ export function SeasonBatchWorkspace({
     setError(null);
     setMessage(null);
     try {
-      const parsed = parsePartnerSeasonPaste(partnerText, year);
+      const parsed = parsePartnerSeasonPaste(partnerText, year, role);
       if (parsed.role !== role) {
         setRole(parsed.role);
       }
@@ -553,6 +556,46 @@ export function SeasonBatchWorkspace({
         };
         if (useSandbox) upsertDemoSeasonLine(line);
         else upsertPitcherSeasonLine(line);
+      } else if (role === "catcher") {
+        // 捕手・守備は既存野手行へ4項目だけマージ（打撃成績は消さない）
+        const cs = rowToCatcherCounting(row);
+        const prevCounting =
+          existing && existing.role === "batter"
+            ? existing.counting
+            : {
+                ab: 0,
+                h: 0,
+                doubles: 0,
+                triples: 0,
+                hr: 0,
+                rbi: 0,
+                bb: 0,
+              };
+        const counting = {
+          ...prevCounting,
+          csAttempted: cs.csAttempted ?? prevCounting.csAttempted ?? null,
+          csAllowed: cs.csAllowed ?? prevCounting.csAllowed ?? null,
+          csCaught: cs.csCaught ?? prevCounting.csCaught ?? null,
+        };
+        const derived = computeBatterDerived(counting);
+        const line = {
+          id,
+          playerId: row.playerId,
+          playerName: row.playerName,
+          year,
+          world,
+          teamId,
+          teamName,
+          scope,
+          role: "batter" as const,
+          source: "ocr" as const,
+          counting,
+          derived,
+          createdAt: existing?.createdAt ?? now,
+          updatedAt: now,
+        };
+        if (useSandbox) upsertDemoSeasonLine(line);
+        else upsertBatterSeasonLine(line);
       } else {
         const counting = rowToBatterCounting(row);
         const derived = computeBatterDerived(counting);
@@ -786,7 +829,13 @@ export function SeasonBatchWorkspace({
             onChange={(e) => setPartnerText(e.target.value)}
             spellCheck={false}
             rows={14}
-            placeholder={PARTNER_PASTE_EXAMPLE}
+            placeholder={
+              role === "catcher"
+                ? PARTNER_CATCHER_EXAMPLE
+                : role === "pitcher"
+                  ? PARTNER_PITCHER_EXAMPLE
+                  : PARTNER_PASTE_EXAMPLE
+            }
             className="w-full rounded-lg border border-white/15 bg-black/60 px-3 py-3 font-mono text-[12px] leading-relaxed text-white/90 placeholder:text-white/25"
           />
           <div className="flex flex-wrap gap-2">
@@ -809,16 +858,28 @@ export function SeasonBatchWorkspace({
                 setPartnerText(
                   role === "pitcher"
                     ? PARTNER_PITCHER_EXAMPLE
-                    : PARTNER_PASTE_EXAMPLE,
+                    : role === "catcher"
+                      ? PARTNER_CATCHER_EXAMPLE
+                      : PARTNER_PASTE_EXAMPLE,
                 )
               }
               className="rounded-md border border-white/15 px-3 py-2 text-[12px] text-white/65 hover:border-white/30"
             >
-              {role === "pitcher" ? "投手フォーマット例" : "基本フォーマット例"}
+              {role === "pitcher"
+                ? "投手フォーマット例"
+                : role === "catcher"
+                  ? "捕手守備フォーマット例"
+                  : "基本フォーマット例"}
             </button>
             <button
               type="button"
-              onClick={() => setPartnerText(PARTNER_APPEND_EXAMPLE)}
+              onClick={() =>
+                setPartnerText(
+                  role === "catcher"
+                    ? PARTNER_CATCHER_APPEND_EXAMPLE
+                    : PARTNER_APPEND_EXAMPLE,
+                )
+              }
               className="rounded-md border border-white/15 px-3 py-2 text-[12px] text-white/65 hover:border-white/30"
             >
               追加フォーマット例

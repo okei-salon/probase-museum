@@ -23,6 +23,7 @@ import {
 } from "@/lib/manualEntry/computeSeasonStats";
 import {
   ipDisplayToOuts,
+  normalizeAvgInput,
   normalizeIntegerInput,
   normalizeIpInput,
 } from "@/lib/manualEntry/normalizeInput";
@@ -113,7 +114,7 @@ export function SeasonPlayerDetailEditor({
   const isCatcher = role === "catcher";
 
   const batterLive = useMemo(() => {
-    if (isPitcher) return null;
+    if (isPitcher || isCatcher) return null;
     const ab = Number(fieldStr(row, "ab")) || 0;
     const h = Number(fieldStr(row, "h")) || 0;
     const derived = computeBatterDerived({
@@ -139,7 +140,43 @@ export function SeasonPlayerDetailEditor({
         : null,
     });
     return { items: batterAutoCalcItems(derived), derived };
-  }, [row, isPitcher]);
+  }, [row, isPitcher, isCatcher]);
+
+  const catcherLive = useMemo(() => {
+    if (!isCatcher) return null;
+    const derived = computeBatterDerived({
+      ab: 0,
+      h: 0,
+      doubles: 0,
+      triples: 0,
+      hr: 0,
+      rbi: 0,
+      bb: 0,
+      csAttempted: fieldStr(row, "csAttempted")
+        ? Number(fieldStr(row, "csAttempted"))
+        : null,
+      csCaught: fieldStr(row, "csCaught")
+        ? Number(fieldStr(row, "csCaught"))
+        : null,
+    });
+    return {
+      items: [
+        {
+          label: "盗塁阻止率",
+          text:
+            derived.csRate != null
+              ? derived.csRate >= 1
+                ? derived.csRate.toFixed(3)
+                : `.${Math.round(derived.csRate * 1000)
+                    .toString()
+                    .padStart(3, "0")}`
+              : "—",
+          ready: derived.csRate != null,
+        },
+      ],
+      derived,
+    };
+  }, [row, isCatcher]);
 
   const pitcherLive = useMemo(() => {
     if (!isPitcher) return null;
@@ -301,6 +338,9 @@ export function SeasonPlayerDetailEditor({
         </label>
 
         {batterLive ? <AutoCalcPanel className="mt-3" items={batterLive.items} /> : null}
+        {catcherLive ? (
+          <AutoCalcPanel className="mt-3" items={catcherLive.items} />
+        ) : null}
         {pitcherLive ? <AutoCalcPanel className="mt-3" items={pitcherLive.items} /> : null}
 
         {isPitcher ? (
@@ -339,10 +379,10 @@ export function SeasonPlayerDetailEditor({
           <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
             {(
               [
-                ["g", "試合"],
                 ["csAttempted", "被盗塁企図数"],
                 ["csAllowed", "許盗塁数"],
                 ["csCaught", "盗塁刺"],
+                ["csRate", "盗塁阻止率"],
               ] as const
             ).map(([key, label]) => (
               <StatNumberField
@@ -351,7 +391,9 @@ export function SeasonPlayerDetailEditor({
                 optional
                 value={fieldStr(row, key)}
                 onChange={(v) => patch(key, v)}
-                normalize={normalizeIntegerInput}
+                normalize={
+                  key === "csRate" ? normalizeAvgInput : normalizeIntegerInput
+                }
               />
             ))}
           </div>

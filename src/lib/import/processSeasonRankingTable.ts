@@ -69,7 +69,7 @@ function lockedFieldsForRole(role: SeasonBatchRole): SeasonBatchFieldKey[] {
     return ["era", "g", "w", "l", "sv", "ip", "so"];
   }
   if (role === "catcher") {
-    return ["csAttempted", "csAllowed", "csCaught", "csRate", "g"];
+    return ["csAttempted", "csAllowed", "csCaught", "csRate"];
   }
   return [...DEFAULT_BATTING_STAT_COLUMNS];
 }

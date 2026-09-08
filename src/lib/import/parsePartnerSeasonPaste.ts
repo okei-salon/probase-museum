@@ -143,7 +143,6 @@ const PITCHER_FIELD_ALIASES: AliasEntry[] = [
 ];
 
 const CATCHER_FIELD_ALIASES: AliasEntry[] = [
-  { keys: ["試合", "g"], field: "g" },
   {
     keys: ["被盗塁企図数", "被盗塁企図", "被盗企", "csAttempted"],
     field: "csAttempted",
@@ -388,7 +387,7 @@ function defaultHeadersForRole(role: SeasonBatchRole): SeasonBatchFieldKey[] {
     );
   }
   if (role === "catcher") {
-    return ["g", "csAttempted", "csAllowed", "csCaught", "csRate"];
+    return ["csAttempted", "csAllowed", "csCaught", "csRate"];
   }
   return PROSPI_BATTER_SEASON_COLUMNS.map((c) => c.key).filter(
     (k): k is SeasonBatchFieldKey => k !== "playerName" && k !== "teamShort",
@@ -397,10 +396,12 @@ function defaultHeadersForRole(role: SeasonBatchRole): SeasonBatchFieldKey[] {
 
 /**
  * 相棒データ貼り付けテキストを解析する。
+ * @param preferredRole TYPE 未指定時に UI で選んでいるロールを優先する
  */
 export function parsePartnerSeasonPaste(
   rawText: string,
   fallbackYear: number,
+  preferredRole?: SeasonBatchRole,
 ): PartnerPasteParseResult {
   const text = rawText.replace(/^\uFEFF/, "").trim();
   if (!text) {
@@ -414,7 +415,13 @@ export function parsePartnerSeasonPaste(
 
   const { year: metaYear, type: metaType, rest } = parseMeta(lines);
   const year = metaYear ?? fallbackYear;
-  const type = metaType ?? "BATTER_SEASON";
+  const type =
+    metaType ??
+    (preferredRole === "pitcher"
+      ? "PITCHER_SEASON"
+      : preferredRole === "catcher"
+        ? "CATCHER_SEASON"
+        : "BATTER_SEASON");
   const { role, mode } = typeToRoleAndMode(type);
 
   const rows: SeasonBatchPartialRow[] = [];
@@ -430,6 +437,15 @@ export function parsePartnerSeasonPaste(
       ? parseKeyedLine(line, parseOrder, role)
       : parseBaseBatterLine(line, parseOrder);
     if (!partial) return;
+    // 捕手は4項目以外のフィールドを落とす
+    if (role === "catcher") {
+      const kept: SeasonBatchPartialRow["fields"] = {};
+      for (const key of defaultHeadersForRole("catcher")) {
+        const cell = partial.fields[key];
+        if (cell) kept[key] = cell;
+      }
+      partial.fields = kept;
+    }
     rows.push(enrichPartialIdentity(partial, year, role));
     parseOrder += 1;
   });
@@ -457,7 +473,9 @@ export function parsePartnerSeasonPaste(
     message:
       mode === "append"
         ? `相棒データ（追加）: ${rows.length}人分の項目を展開しました。既存行へマージし、不一致は要確認になります。`
-        : `相棒データ: ${rows.length}人分を確認表へ展開しました。まだ登録していません。`,
+        : role === "catcher"
+          ? `相棒データ（捕手・守備）: ${rows.length}人分を確認表へ展開しました（被盗塁企図数・許盗塁数・盗塁刺・盗塁阻止率）。まだ登録していません。`
+          : `相棒データ: ${rows.length}人分を確認表へ展開しました。まだ登録していません。`,
     rawText: text,
   };
 }
@@ -473,6 +491,18 @@ TYPE=BATTER_SEASON_APPEND
 
 1|佐藤輝|阪神|得点圏打数=68|得点圏安打=28|連続安打=12|盗塁死=2
 2|森下|阪神|三塁打=0|本塁打=21|打点=62`;
+
+export const PARTNER_CATCHER_EXAMPLE = `YEAR=2026
+TYPE=CATCHER_SEASON
+
+1|梅野|阪神|被盗塁企図数=50|許盗塁数=30|盗塁刺=20|盗塁阻止率=.400
+2|坂本|巨人|被盗塁企図数=42|許盗塁数=28|盗塁刺=14|盗塁阻止率=.333`;
+
+export const PARTNER_CATCHER_APPEND_EXAMPLE = `YEAR=2026
+TYPE=CATCHER_SEASON_APPEND
+
+1|梅野|阪神|被盗塁企図数=50|許盗塁数=30|盗塁刺=20
+2|坂本|巨人|盗塁阻止率=.333`;
 
 export const PARTNER_PITCHER_EXAMPLE = `YEAR=2000
 TYPE=PITCHER_SEASON
