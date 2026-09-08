@@ -174,8 +174,6 @@ function top5(
   world: SeasonWorld | null | undefined,
   teamGamesCtx: TeamGamesContext,
 ): TitleRankEntry[] {
-  const showUnqualifiedBelow = def.eligibility === "g30_ip30";
-
   const pool = candidates.filter((c) => {
     if (c.league !== league) return false;
     if (!c.available[def.valueKey] && def.eligibility !== "none") {
@@ -183,14 +181,19 @@ function top5(
         def.eligibility === "risp" ||
         def.eligibility === "catcher_cs" ||
         def.eligibility === "relief_ip_30" ||
-        def.eligibility === "g30_ip30"
+        def.eligibility === "g30_ip30" ||
+        def.eligibility === "ip_qualify" ||
+        def.eligibility === "pa_qualify" ||
+        def.eligibility === "wins_13"
       ) {
         return false;
       }
     }
     if (
       !c.available[def.valueKey] &&
-      ["risp", "csRate", "reliefEra", "reliefSoRate"].includes(def.valueKey)
+      ["risp", "csRate", "reliefEra", "reliefSoRate", "qsRate", "hqsRate"].includes(
+        def.valueKey,
+      )
     ) {
       return false;
     }
@@ -198,20 +201,12 @@ function top5(
     if (def.eligibility === "none" && !c.available[def.valueKey]) {
       return false;
     }
-    if (showUnqualifiedBelow) {
-      // 救援系: 規定内外を両方プールし、後で到達優先ソート
-      return Boolean(c.available[def.valueKey]);
-    }
+    // 率系・規定付きは到達者のみ（未達は数値に関わらず除外）
     const el = passesEligibility(def, c, teamGamesCtx);
     return el.ok;
   });
 
   const sorted = [...pool].sort((a, b) => {
-    if (showUnqualifiedBelow) {
-      const aq = passesEligibility(def, a, teamGamesCtx).ok;
-      const bq = passesEligibility(def, b, teamGamesCtx).ok;
-      if (aq !== bq) return aq ? -1 : 1;
-    }
     const av = a.values[def.valueKey] ?? 0;
     const bv = b.values[def.valueKey] ?? 0;
     if (av !== bv) {
@@ -220,14 +215,9 @@ function top5(
     return a.playerName.localeCompare(b.playerName, "ja");
   });
 
-  const top = sorted.slice(0, showUnqualifiedBelow ? 10 : 5);
-  let qualifiedRank = 0;
-  return top.map((c) => {
+  return sorted.slice(0, 5).map((c, index) => {
     const value = c.values[def.valueKey] ?? 0;
-    const qualified = showUnqualifiedBelow
-      ? passesEligibility(def, c, teamGamesCtx).ok
-      : true;
-    const rank = qualified ? (qualifiedRank += 1) : null;
+    const rank = index + 1;
     if (rank === 1 && persistHistory) {
       upsertTitleWinner({
         titleId: def.id,
@@ -247,7 +237,7 @@ function top5(
       teamShort: c.teamShort,
       value,
       valueText: formatTitleValue(def.format, value),
-      qualified,
+      qualified: true,
       historyLabel:
         rank === 1
           ? getTitleHistoryLabel(def.id, league, c.playerId, year, world)
@@ -278,7 +268,8 @@ function collectGaps(
     );
   } else {
     gaps.push(
-      "救援防御率 / 救援奪三振率：登板30以上かつ投球回30以上を規定到達とし、到達者を上位に表示します（年度の防御率／奪三振率を使用）。",
+      "救援防御率 / 救援奪三振率：登板30以上かつ投球回30以上の投手のみ対象です（年度の防御率／奪三振率を使用）。",
+      "QS率 / HQS率：規定投球回到達かつ先発型のみ対象です。",
     );
   }
   if (usingSample) {
@@ -370,7 +361,8 @@ export function buildTitleRankings(
         def.eligibility === "pa_qualify" ||
         def.eligibility === "ip_qualify" ||
         def.eligibility === "risp" ||
-        def.eligibility === "g30_ip30"
+        def.eligibility === "g30_ip30" ||
+        def.eligibility === "wins_13"
           ? def.eligibilityNote
           : undefined,
     };

@@ -2,7 +2,7 @@
  * 選手のその他の記録（seasonAchievements 横断。デモ除外）
  */
 
-import { RECORDS_HR_SB_MIN_SUM } from "@/data/recordsRankings/otherFeats";
+import { RECORDS_HR_SB_MIN_EACH } from "@/data/recordsRankings/otherFeats";
 import { listCrossYearAchievements } from "@/data/recordsRankings/streakRankings";
 import type { SeasonAchievement } from "@/data/seasonAchievements";
 
@@ -85,25 +85,27 @@ export function buildPlayerFeatsSummary(
     });
   }
 
-  // HR×SB（合計60以上）→ 30-30達成として集計
+  // 20-20 / 30-30 / 40-40 / 50-50（各年の最高到達ランク名で集計）
   const hrSb = feats.filter((a) => {
     if (a.recordType !== "hr_sb_combo") return false;
-    const sum =
-      a.tertiaryValue ??
-      (a.value != null && a.secondaryValue != null
-        ? a.value + a.secondaryValue
-        : null);
-    return sum != null && sum >= RECORDS_HR_SB_MIN_SUM;
+    const hr = a.value ?? 0;
+    const sb = a.secondaryValue ?? 0;
+    return hr >= RECORDS_HR_SB_MIN_EACH && sb >= RECORDS_HR_SB_MIN_EACH;
   });
   if (hrSb.length > 0) {
     const years = [...new Set(hrSb.map((r) => r.season))].sort((a, b) => a - b);
     items.push({
-      key: "hr_sb_60",
-      label: "30-30達成",
+      key: "hr_sb_combo",
+      label: "本塁打＆盗塁達成",
       valueLabel: `${hrSb.length}回`,
       years,
       detail: hrSb
-        .map((a) => a.valueLabel ?? `${a.season}年`)
+        .map(
+          (a) =>
+            `${a.season}年 ${a.recordName}${
+              a.valueLabel ? `（${a.valueLabel}）` : ""
+            }`,
+        )
         .join(" / "),
     });
   }

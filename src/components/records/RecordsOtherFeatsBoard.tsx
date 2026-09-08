@@ -86,7 +86,7 @@ function FeatCard({
         {isNpb && item.category !== "npb_record"
           ? `${ACHIEVEMENT_CATEGORY_LABELS[item.category]} · NPB`
           : item.recordType === "hr_sb_combo"
-            ? "本塁打 × 盗塁"
+            ? "本塁打＆盗塁"
             : ACHIEVEMENT_CATEGORY_LABELS[item.category]}
         {item.isNpbUpdate ? " · 更新" : item.isNpbRecord ? " · 到達" : null}
       </p>

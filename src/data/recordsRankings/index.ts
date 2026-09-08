@@ -40,7 +40,7 @@ export {
 } from "./streakRankings";
 
 export {
-  RECORDS_HR_SB_MIN_SUM,
+  RECORDS_HR_SB_MIN_EACH,
   achievementSeasonLabel,
   buildOtherFeatsSections,
   countOtherFeats,

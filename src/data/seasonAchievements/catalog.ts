@@ -83,7 +83,7 @@ export const ACHIEVEMENT_CATALOG: AchievementCatalogEntry[] = [
   {
     recordType: "hr_sb_combo",
     category: "season",
-    recordName: "HR × SB",
+    recordName: "20-20達成",
     needsManual: false,
   },
   {

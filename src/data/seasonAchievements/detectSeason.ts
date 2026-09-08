@@ -1,10 +1,12 @@
 /**
  * 個人成績からシーズン偉業を自動判定。
  * SOP Ver.3 のルール定数を参照し、ポイント計算ロジックは再実装しない。
- * データ不足は推測せずスキップ。
+ * 率系・原則対象は規定到達者のみ（データ不足は推測せずスキップ）。
  */
 
 import type { PlayerSeasonLine } from "@/data/playerSeasonLines";
+import { getPlayerMaster } from "@/data/playerMaster";
+import { identityFromWorldYear } from "@/data/seasons";
 import { getTeam } from "@/data/teams";
 import { bestSumTierPoints, classifyPitcherWorkload } from "@/lib/sop/helpers";
 import {
@@ -15,7 +17,16 @@ import {
   PITCHER_FEATS,
   PITCHER_HISTORIC,
 } from "@/lib/sop/rules";
-import { getPlayerMaster } from "@/data/playerMaster";
+import {
+  buildTeamGamesContext,
+  evaluateCsRateQualified,
+  evaluateIpQualified,
+  evaluatePaQualified,
+  evaluateWinPctQualified,
+  resolveTeamGamesForPlayer,
+  type TeamGamesContext,
+} from "@/lib/stats";
+import { hrSbAchievementLabel } from "./hrSbLabel";
 import type { SeasonAchievement } from "./types";
 
 function nowIso() {
@@ -45,14 +56,40 @@ function makeId(line: PlayerSeasonLine, recordType: string) {
   return base;
 }
 
-/** 野手のシーズン偉業（成績のみで判定可能） */
+function batterPaQualified(
+  line: Extract<PlayerSeasonLine, { role: "batter" }>,
+  ctx: TeamGamesContext,
+): boolean {
+  const teamGames = resolveTeamGamesForPlayer(ctx, line.teamId);
+  return evaluatePaQualified({
+    pa: line.counting.pa ?? null,
+    teamGames,
+    flag: line.counting.paQualified ?? null,
+  }).qualified;
+}
+
+function pitcherIpQualified(
+  line: Extract<PlayerSeasonLine, { role: "pitcher" }>,
+  ctx: TeamGamesContext,
+): boolean {
+  const teamGames = resolveTeamGamesForPlayer(ctx, line.teamId);
+  return evaluateIpQualified({
+    ipOuts: line.counting.ipOuts,
+    teamGames,
+    flag: line.counting.ipQualified ?? null,
+  }).qualified;
+}
+
+/** 野手のシーズン偉業（規定到達者のみ／阻止率は被盗企規定） */
 function detectBatterSeason(
   line: Extract<PlayerSeasonLine, { role: "batter" }>,
+  ctx: TeamGamesContext,
 ): SeasonAchievement[] {
   const c = line.counting;
   const d = line.derived;
   const meta = baseMeta(line);
   const out: SeasonAchievement[] = [];
+  const paOk = batterPaQualified(line, ctx);
 
   const hr = c.hr;
   const sb = c.sb ?? null;
@@ -62,101 +99,110 @@ function detectBatterSeason(
   const risp = d.rispAvg;
   const csRate = d.csRate;
 
-  // HR × SB（最高ティアのみ）
-  if (hr >= HR_SB_MIN_EACH && sb != null && sb >= HR_SB_MIN_EACH) {
+  // 20-20 / 30-30 / 40-40 / 50-50（最高到達のみ）。規定打席到達者のみ。
+  if (paOk && hr >= HR_SB_MIN_EACH && sb != null && sb >= HR_SB_MIN_EACH) {
+    const label = hrSbAchievementLabel(hr, sb);
     const sum = hr + sb;
     const tier = bestSumTierPoints(sum, HR_SB_COMBO_TIERS);
-    if (tier) {
+    if (label) {
       out.push({
         ...meta,
         id: makeId(line, "hr_sb_combo"),
         category: "season",
         recordType: "hr_sb_combo",
-        recordName: "HR × SB",
+        recordName: label,
         value: hr,
         secondaryValue: sb,
         tertiaryValue: sum,
-        valueLabel: `${hr}本塁打・${sb}盗塁　合計${sum}`,
-        sopPoints: tier.points,
+        valueLabel: `${hr}本塁打・${sb}盗塁`,
+        sopPoints: tier?.points ?? 5,
       });
     }
   }
 
-  const hasTriple =
-    avg != null && avg >= 0.3 && hr >= 30 && sb != null && sb >= 30;
-  const hasRbi100 = rbi >= 100;
-  const has300HrRbi =
-    avg != null && avg >= 0.3 && hr >= 30 && hasRbi100;
+  if (paOk) {
+    const hasTriple =
+      avg != null && avg >= 0.3 && hr >= 30 && sb != null && sb >= 30;
+    const hasRbi100 = rbi >= 100;
+    const has300HrRbi =
+      avg != null && avg >= 0.3 && hr >= 30 && hasRbi100;
 
-  if (hasTriple && hasRbi100) {
-    out.push({
-      ...meta,
-      id: makeId(line, "triple_three_rbi100"),
-      category: "season",
-      recordType: "triple_three_rbi100",
-      recordName: BATTER_COMBOS.tripleThreeRbi100.label,
-      valueLabel: "達成",
-      sopPoints: BATTER_COMBOS.tripleThreeRbi100.points,
-    });
-  } else if (hasTriple) {
-    out.push({
-      ...meta,
-      id: makeId(line, "triple_three"),
-      category: "season",
-      recordType: "triple_three",
-      recordName: BATTER_COMBOS.tripleThree.label,
-      valueLabel: "達成",
-      sopPoints: BATTER_COMBOS.tripleThree.points,
-    });
-  } else if (has300HrRbi) {
-    out.push({
-      ...meta,
-      id: makeId(line, "avg300_hr30_rbi100"),
-      category: "season",
-      recordType: "avg300_hr30_rbi100",
-      recordName: BATTER_COMBOS.avg300Hr30Rbi100.label,
-      valueLabel: "達成",
-      sopPoints: BATTER_COMBOS.avg300Hr30Rbi100.points,
-    });
+    if (hasTriple && hasRbi100) {
+      out.push({
+        ...meta,
+        id: makeId(line, "triple_three_rbi100"),
+        category: "season",
+        recordType: "triple_three_rbi100",
+        recordName: BATTER_COMBOS.tripleThreeRbi100.label,
+        valueLabel: "達成",
+        sopPoints: BATTER_COMBOS.tripleThreeRbi100.points,
+      });
+    } else if (hasTriple) {
+      out.push({
+        ...meta,
+        id: makeId(line, "triple_three"),
+        category: "season",
+        recordType: "triple_three",
+        recordName: BATTER_COMBOS.tripleThree.label,
+        valueLabel: "達成",
+        sopPoints: BATTER_COMBOS.tripleThree.points,
+      });
+    } else if (has300HrRbi) {
+      out.push({
+        ...meta,
+        id: makeId(line, "avg300_hr30_rbi100"),
+        category: "season",
+        recordType: "avg300_hr30_rbi100",
+        recordName: BATTER_COMBOS.avg300Hr30Rbi100.label,
+        valueLabel: "達成",
+        sopPoints: BATTER_COMBOS.avg300Hr30Rbi100.points,
+      });
+    }
+
+    if (avg != null && avg >= 0.4) {
+      out.push({
+        ...meta,
+        id: makeId(line, "avg400"),
+        category: "season",
+        recordType: "avg400",
+        recordName: BATTER_HISTORIC.avg400.label,
+        value: avg,
+        valueLabel: `打率 ${avg.toFixed(3)}`,
+        sopPoints: BATTER_HISTORIC.avg400.points,
+      });
+    }
+    if (risp != null && risp >= 0.4) {
+      out.push({
+        ...meta,
+        id: makeId(line, "risp400"),
+        category: "season",
+        recordType: "risp400",
+        recordName: BATTER_HISTORIC.risp400.label,
+        value: risp,
+        valueLabel: `圏打率 ${risp.toFixed(3)}`,
+        sopPoints: BATTER_HISTORIC.risp400.points,
+      });
+    }
+    if (ops != null && ops >= 1.1) {
+      out.push({
+        ...meta,
+        id: makeId(line, "ops1100"),
+        category: "season",
+        recordType: "ops1100",
+        recordName: BATTER_HISTORIC.ops1100.label,
+        value: ops,
+        valueLabel: `OPS ${ops.toFixed(3)}`,
+        sopPoints: BATTER_HISTORIC.ops1100.points,
+      });
+    }
   }
 
-  if (avg != null && avg >= 0.4) {
-    out.push({
-      ...meta,
-      id: makeId(line, "avg400"),
-      category: "season",
-      recordType: "avg400",
-      recordName: BATTER_HISTORIC.avg400.label,
-      value: avg,
-      valueLabel: `打率 ${avg.toFixed(3)}`,
-      sopPoints: BATTER_HISTORIC.avg400.points,
-    });
-  }
-  if (risp != null && risp >= 0.4) {
-    out.push({
-      ...meta,
-      id: makeId(line, "risp400"),
-      category: "season",
-      recordType: "risp400",
-      recordName: BATTER_HISTORIC.risp400.label,
-      value: risp,
-      valueLabel: `圏打率 ${risp.toFixed(3)}`,
-      sopPoints: BATTER_HISTORIC.risp400.points,
-    });
-  }
-  if (ops != null && ops >= 1.1) {
-    out.push({
-      ...meta,
-      id: makeId(line, "ops1100"),
-      category: "season",
-      recordType: "ops1100",
-      recordName: BATTER_HISTORIC.ops1100.label,
-      value: ops,
-      valueLabel: `OPS ${ops.toFixed(3)}`,
-      sopPoints: BATTER_HISTORIC.ops1100.points,
-    });
-  }
-  if (csRate != null && csRate >= 0.8) {
+  // 盗塁阻止率：被盗企規定（打席規定ではない）
+  if (
+    csRate != null &&
+    csRate >= 0.8 &&
+    evaluateCsRateQualified(c.csAttempted)
+  ) {
     out.push({
       ...meta,
       id: makeId(line, "cs_rate800"),
@@ -174,6 +220,7 @@ function detectBatterSeason(
 
 function detectPitcherSeason(
   line: Extract<PlayerSeasonLine, { role: "pitcher" }>,
+  ctx: TeamGamesContext,
 ): SeasonAchievement[] {
   const c = line.counting;
   const d = line.derived;
@@ -181,8 +228,16 @@ function detectPitcherSeason(
   const out: SeasonAchievement[] = [];
   const { class: pClass } = classifyPitcherWorkload(c.g, c.gs ?? null);
   const hp = c.hld ?? c.hp ?? null;
+  const ipOk = pitcherIpQualified(line, ctx);
 
-  if (pClass === "starter" && d.era != null && d.era < 1.0 && d.era >= 0) {
+  // 率系：規定投球回（防御率）／13勝（勝率）
+  if (
+    ipOk &&
+    pClass === "starter" &&
+    d.era != null &&
+    d.era < 1.0 &&
+    d.era >= 0
+  ) {
     out.push({
       ...meta,
       id: makeId(line, "starter_era0"),
@@ -194,7 +249,11 @@ function detectPitcherSeason(
       sopPoints: PITCHER_HISTORIC.starterEra0.points,
     });
   }
-  if (d.winPct != null && d.winPct >= 1.0 && c.w > 0) {
+  if (
+    evaluateWinPctQualified(c.w) &&
+    d.winPct != null &&
+    d.winPct >= 1.0
+  ) {
     out.push({
       ...meta,
       id: makeId(line, "win_pct_1000"),
@@ -206,6 +265,8 @@ function detectPitcherSeason(
       sopPoints: PITCHER_HISTORIC.winPct1000.points,
     });
   }
+
+  // 累計系（規定投球回は不要：救援の登板・HP を潰さない）
   if ((c.sho ?? 0) >= 10) {
     out.push({
       ...meta,
@@ -335,13 +396,30 @@ export function detectAchievementsFromSeasonLines(
   lines: PlayerSeasonLine[],
 ): SeasonAchievement[] {
   const out: SeasonAchievement[] = [];
+  // 年度×WORLD ごとに規定試合数コンテキストを共有
+  const ctxCache = new Map<string, TeamGamesContext>();
+
   for (const line of lines) {
     if (line.scope !== "pennant") continue;
+    const world = line.world ?? null;
+    const cacheKey = `${world ?? "legacy"}:${line.year}`;
+    let ctx = ctxCache.get(cacheKey);
+    if (!ctx) {
+      const identity = identityFromWorldYear(line.year, world);
+      ctx = buildTeamGamesContext({
+        scope: "pennant",
+        identity,
+        year: line.year,
+        world,
+      });
+      ctxCache.set(cacheKey, ctx);
+    }
+
     if (line.role === "batter") {
-      out.push(...detectBatterSeason(line));
+      out.push(...detectBatterSeason(line, ctx));
       out.push(...detectStreaksFromLine(line));
     } else {
-      out.push(...detectPitcherSeason(line));
+      out.push(...detectPitcherSeason(line, ctx));
     }
   }
   return out;

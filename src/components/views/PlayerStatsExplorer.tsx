@@ -158,9 +158,12 @@ export function PlayerStatsExplorer({
 
   const rateStat = isRateStatKey(role, sortKey);
 
-  // ランキング／チーム別とも同一ソート：率系は規定到達 → 未到達、各グループ内は選択列
+  // ランキング：率系は規定到達者のみ。チーム別は全選手（到達優先ソート）
   const sorted = useMemo(() => {
-    const list = [...filtered];
+    const list =
+      view === "ranking" && rateStat
+        ? filtered.filter((r) => r.qualified)
+        : [...filtered];
     list.sort((a, b) =>
       compareStatRowsForRanking(a, b, {
         sortKey,
@@ -169,7 +172,7 @@ export function PlayerStatsExplorer({
       }),
     );
     return list;
-  }, [dir, filtered, rateStat, sortKey]);
+  }, [dir, filtered, rateStat, sortKey, view]);
 
   const scheduleNote = useMemo(() => {
     const g = teamGamesCtx.scheduleGames;
@@ -500,7 +503,9 @@ export function PlayerStatsExplorer({
         手入力・画像取込で登録した年度成績はランキングに反映されます。
         選手名をクリックすると詳細成績へ移動できます。
         {rateStat
-          ? " 率系は規定到達者を正式順位とし、未到達者は一覧下部に残します（ランキング・チーム別共通）。"
+          ? view === "ranking"
+            ? " 率系ランキングは規定到達者のみ表示します。"
+            : " 率系は規定到達者を正式順位とし、未到達者は一覧下部に残します（チーム別）。"
           : null}
         {scheduleNote ? ` ${scheduleNote}` : null}
       </p>

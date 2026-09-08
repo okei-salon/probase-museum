@@ -17,8 +17,8 @@ const OTHER_SEASON_TYPES = new Set([
 
 const SPECIAL_TYPES = new Set(["perfect_game", "no_hitter", "cycle"]);
 
-/** HR×SB は合計60以上のみ（SOPの40台は載せない） */
-export const RECORDS_HR_SB_MIN_SUM = 60;
+/** 20-20以上（各20以上）を掲載。表示名は達成ランク（20-20/30-30…） */
+export const RECORDS_HR_SB_MIN_EACH = 20;
 
 export type OtherFeatsSectionId =
   | "special"
@@ -41,12 +41,9 @@ function withFullName(item: SeasonAchievement): SeasonAchievement {
 
 function isHrSbForRecords(a: SeasonAchievement): boolean {
   if (a.recordType !== "hr_sb_combo") return false;
-  const sum =
-    a.tertiaryValue ??
-    (a.value != null && a.secondaryValue != null
-      ? a.value + a.secondaryValue
-      : null);
-  return sum != null && sum >= RECORDS_HR_SB_MIN_SUM;
+  const hr = a.value ?? 0;
+  const sb = a.secondaryValue ?? 0;
+  return hr >= RECORDS_HR_SB_MIN_EACH && sb >= RECORDS_HR_SB_MIN_EACH;
 }
 
 function sortBySeasonDesc(a: SeasonAchievement, b: SeasonAchievement) {
@@ -90,7 +87,7 @@ export function buildOtherFeatsSections(): OtherFeatsSection[] {
 
   return [
     { id: "special", label: "特殊記録", items: special },
-    { id: "hr_sb", label: "本塁打 × 盗塁", items: hrSb },
+    { id: "hr_sb", label: "20-20達成", items: hrSb },
     {
       id: "season_historic",
       label: "その他のシーズン偉業",

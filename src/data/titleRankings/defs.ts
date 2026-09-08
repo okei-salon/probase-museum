@@ -197,7 +197,7 @@ export const PITCHER_TITLES: TitleDef[] = [
     lowerIsBetter: true,
     eligibility: "g30_ip30",
     eligibilityNote:
-      "登板30以上かつ投球回30以上の投手を規定到達とします。到達者を上位に並べ、タイトルは到達者のみから決めます。",
+      "登板30以上かつ投球回30以上の投手のみ対象です。規定未達はランキングに含めません。",
   },
   {
     id: "winPct",
@@ -260,7 +260,7 @@ export const PITCHER_TITLES: TitleDef[] = [
     format: "rate2",
     eligibility: "g30_ip30",
     eligibilityNote:
-      "登板30以上かつ投球回30以上の投手を規定到達とします。到達者を上位に並べ、タイトルは到達者のみから決めます。",
+      "登板30以上かつ投球回30以上の投手のみ対象です。規定未達はランキングに含めません。",
   },
   {
     id: "sho",
@@ -292,7 +292,9 @@ export const PITCHER_TITLES: TitleDef[] = [
     role: "pitcher",
     valueKey: "qsRate",
     format: "pct100",
-    eligibility: "none",
+    eligibility: "ip_qualify",
+    eligibilityNote:
+      "規定投球回到達者（かつ先発型）のみ対象です。未設定・規定外は除外します。",
   },
   {
     id: "hqsRate",
@@ -300,7 +302,9 @@ export const PITCHER_TITLES: TitleDef[] = [
     role: "pitcher",
     valueKey: "hqsRate",
     format: "pct100",
-    eligibility: "none",
+    eligibility: "ip_qualify",
+    eligibilityNote:
+      "規定投球回到達者（かつ先発型）のみ対象です。未設定・規定外は除外します。",
   },
   {
     id: "g",
