@@ -141,6 +141,8 @@ function scoreBatterFeats(feats: SopFeatsInput): SopLineItem[] {
       points: BATTER_FEATS.cycle.points,
     });
   }
+
+  // 基準達成ポイント（最高段階のみ）— 順位不問
   const hs = bestTierPoints(feats.hitStreak ?? null, BATTER_FEATS.hitStreak);
   if (hs) {
     items.push({
@@ -171,30 +173,54 @@ function scoreBatterFeats(feats: SopFeatsInput): SopLineItem[] {
       points: hrs.points,
     });
   }
-  if (feats.paHrStreakLeagueLeader) {
+
+  // リーグ1位ボーナス（基準未達でも付与。基準点とは別加算）
+  const pushLeader = (
+    flag: boolean | undefined,
+    id: string,
+    def: { points: number; label: string },
+    detail?: string,
+  ) => {
+    if (!flag) return;
     items.push({
-      id: "feat:paHrStreakLeagueLeader",
+      id,
       category: "feats_streaks",
-      label: BATTER_FEATS.paHrStreakLeagueLeader.label,
-      points: BATTER_FEATS.paHrStreakLeagueLeader.points,
-      detail:
-        feats.paHrStreak != null
-          ? `${feats.paHrStreak}打席`
-          : undefined,
+      label: def.label,
+      points: def.points,
+      detail,
     });
-  }
-  if (feats.abHitStreakLeagueLeader) {
-    items.push({
-      id: "feat:abHitStreakLeagueLeader",
-      category: "feats_streaks",
-      label: BATTER_FEATS.abHitStreakLeagueLeader.label,
-      points: BATTER_FEATS.abHitStreakLeagueLeader.points,
-      detail:
-        feats.abHitStreak != null
-          ? `${feats.abHitStreak}打数`
-          : undefined,
-    });
-  }
+  };
+  pushLeader(
+    feats.hitStreakLeagueLeader,
+    "feat:hitStreakLeagueLeader",
+    BATTER_FEATS.hitStreakLeagueLeader,
+    feats.hitStreak != null ? `${feats.hitStreak}試合` : undefined,
+  );
+  pushLeader(
+    feats.onBaseStreakLeagueLeader,
+    "feat:onBaseStreakLeagueLeader",
+    BATTER_FEATS.onBaseStreakLeagueLeader,
+    feats.onBaseStreak != null ? `${feats.onBaseStreak}試合` : undefined,
+  );
+  pushLeader(
+    feats.hrStreakLeagueLeader,
+    "feat:hrStreakLeagueLeader",
+    BATTER_FEATS.hrStreakLeagueLeader,
+    feats.hrStreak != null ? `${feats.hrStreak}試合` : undefined,
+  );
+  pushLeader(
+    feats.paHrStreakLeagueLeader,
+    "feat:paHrStreakLeagueLeader",
+    BATTER_FEATS.paHrStreakLeagueLeader,
+    feats.paHrStreak != null ? `${feats.paHrStreak}打席` : undefined,
+  );
+  pushLeader(
+    feats.abHitStreakLeagueLeader,
+    "feat:abHitStreakLeagueLeader",
+    BATTER_FEATS.abHitStreakLeagueLeader,
+    feats.abHitStreak != null ? `${feats.abHitStreak}打数` : undefined,
+  );
+
   return items;
 }
 

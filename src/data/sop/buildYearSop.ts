@@ -45,6 +45,9 @@ import { listRegisteredAwardsForSeason } from "./awardsRegistry";
 import { getSopFeat } from "./featsStore";
 import {
   achievementsToSopFeats,
+  collectYearAchievementsRaw,
+  FEATS_DISPLAY_STREAK_TYPES,
+  leagueSideFromTeamShort,
   listAchievementsForPlayer,
   mergeSopFeats,
 } from "@/data/seasonAchievements";
@@ -149,6 +152,9 @@ function featsFor(
   role: "batter" | "pitcher",
   line: PlayerSeasonLine,
   streakLeaders?: {
+    hit: Set<string>;
+    onBase: Set<string>;
+    hr: Set<string>;
     paHr: Set<string>;
     abHit: Set<string>;
   },
@@ -182,6 +188,10 @@ function featsFor(
           hrStreak: line.counting.hrStreak ?? null,
           paHrStreak: line.counting.paHrStreak ?? null,
           abHitStreak: line.counting.abHitStreak ?? null,
+          hitStreakLeagueLeader: streakLeaders?.hit.has(playerId) ?? false,
+          onBaseStreakLeagueLeader:
+            streakLeaders?.onBase.has(playerId) ?? false,
+          hrStreakLeagueLeader: streakLeaders?.hr.has(playerId) ?? false,
           paHrStreakLeagueLeader: streakLeaders?.paHr.has(playerId) ?? false,
           abHitStreakLeagueLeader: streakLeaders?.abHit.has(playerId) ?? false,
         }
@@ -194,28 +204,49 @@ function featsFor(
 }
 
 /**
- * 連続打席本塁打／連続打数安打のリーグ1位（同率含む）playerId 集合。
- * SOP +5 専用。記録・偉業の表示フィルタとは別。
+ * 連続系5種のリーグ1位（同率含む）playerId 集合。
+ * SOP +5 ボーナス専用（表示フィルタとは別経路）。
+ * 判定は記録・偉業と同じ生達成データで「年度×リーグ×項目の最大値」。
  */
-function batterStreakLeagueLeaders(lines: PlayerSeasonLine[]): {
+function batterStreakLeagueLeaders(identity: SeasonIdentity): {
+  hit: Set<string>;
+  onBase: Set<string>;
+  hr: Set<string>;
   paHr: Set<string>;
   abHit: Set<string>;
 } {
   type Row = { playerId: string; league: "central" | "pacific"; value: number };
-  const paRows: Row[] = [];
-  const abRows: Row[] = [];
-  for (const line of lines) {
-    if (line.role !== "batter") continue;
-    const league = leagueOf(line) as "central" | "pacific";
-    const pa = line.counting.paHrStreak;
-    const ab = line.counting.abHitStreak;
-    if (pa != null && Number.isFinite(pa) && pa >= 1) {
-      paRows.push({ playerId: line.playerId, league, value: pa });
-    }
-    if (ab != null && Number.isFinite(ab) && ab >= 1) {
-      abRows.push({ playerId: line.playerId, league, value: ab });
-    }
+  type Bucket = "hit" | "onBase" | "hr" | "paHr" | "abHit";
+  const buckets: Record<Bucket, Row[]> = {
+    hit: [],
+    onBase: [],
+    hr: [],
+    paHr: [],
+    abHit: [],
+  };
+  const typeToBucket: Record<string, Bucket> = {
+    hit_streak: "hit",
+    on_base_streak: "onBase",
+    hr_streak: "hr",
+    pa_hr_streak: "paHr",
+    ab_hit_streak: "abHit",
+  };
+
+  for (const a of collectYearAchievementsRaw(identity)) {
+    if (a.source === "demo") continue;
+    if (a.category !== "streak") continue;
+    if (!FEATS_DISPLAY_STREAK_TYPES.has(a.recordType)) continue;
+    const bucket = typeToBucket[a.recordType];
+    if (!bucket) continue;
+    const value = a.value;
+    if (value == null || !Number.isFinite(value) || value < 1) continue;
+    buckets[bucket].push({
+      playerId: a.playerId,
+      league: leagueSideFromTeamShort(a.teamShort),
+      value,
+    });
   }
+
   const pick = (rows: Row[]) => {
     const out = new Set<string>();
     for (const league of ["central", "pacific"] as const) {
@@ -228,7 +259,14 @@ function batterStreakLeagueLeaders(lines: PlayerSeasonLine[]): {
     }
     return out;
   };
-  return { paHr: pick(paRows), abHit: pick(abRows) };
+
+  return {
+    hit: pick(buckets.hit),
+    onBase: pick(buckets.onBase),
+    hr: pick(buckets.hr),
+    paHr: pick(buckets.paHr),
+    abHit: pick(buckets.abHit),
+  };
 }
 
 /** レジストリ + 月間MVP（WORLD 厳密）。レガシーのみハードコード表彰フォールバック */
@@ -438,7 +476,7 @@ export function buildYearSopRankings(
   const results: SopSeasonResult[] = [];
   const byPlayer = groupLinesByPlayer(lines);
   const interleagueItemsByPlayer = buildInterleagueSopItemsForSeason(identity);
-  const streakLeaders = batterStreakLeagueLeaders(lines);
+  const streakLeaders = batterStreakLeagueLeaders(identity);
 
   for (const line of lines) {
     const key = `${line.playerId}:${line.role}`;
@@ -524,6 +562,9 @@ function lineToInput(
     pitcher?: Extract<PlayerSeasonLine, { role: "pitcher" }>;
   },
   streakLeaders?: {
+    hit: Set<string>;
+    onBase: Set<string>;
+    hr: Set<string>;
     paHr: Set<string>;
     abHit: Set<string>;
   },

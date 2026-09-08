@@ -25,13 +25,13 @@ export type SopFeatsInput = {
   hitStreak?: number | null;
   onBaseStreak?: number | null;
   hrStreak?: number | null;
-  /** 連続打席本塁打（値）。リーグ1位点はフラグで付与 */
   paHrStreak?: number | null;
-  /** 連続打数安打（値）。リーグ1位点はフラグで付与 */
   abHitStreak?: number | null;
-  /** 連続打席本塁打：当該シーズン・リーグ1位（同率含む） */
+  /** 連続系リーグ1位ボーナス（基準点とは別加算。同率含む） */
+  hitStreakLeagueLeader?: boolean;
+  onBaseStreakLeagueLeader?: boolean;
+  hrStreakLeagueLeader?: boolean;
   paHrStreakLeagueLeader?: boolean;
-  /** 連続打数安打：当該シーズン・リーグ1位（同率含む） */
   abHitStreakLeagueLeader?: boolean;
   perfectGame?: boolean;
   noHitter?: boolean;

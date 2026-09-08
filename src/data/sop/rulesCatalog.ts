@@ -149,6 +149,10 @@ export function buildSopRulesCatalog(): SopRuleSection[] {
         ...tierLines("連続試合出塁", BATTER_FEATS.onBaseStreak, "試合"),
         ...tierLines("連続試合本塁打", BATTER_FEATS.hrStreak, "試合"),
         {
+          label: "連続系各項目 リーグ1位（基準点とは別加算）",
+          pointsText: `+${BATTER_FEATS.streakLeagueLeaderBonus.points}点`,
+        },
+        {
           label: BATTER_FEATS.paHrStreakLeagueLeader.label,
           pointsText: `${BATTER_FEATS.paHrStreakLeagueLeader.points}点`,
         },

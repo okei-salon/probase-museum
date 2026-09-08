@@ -177,7 +177,20 @@ export const BATTER_FEATS = {
     { min: 4, points: 5 },
     { min: 3, points: 2 },
   ],
-  /** リーグ1位のみ（段階式ではない） */
+  /** 連続系共通：セ／パ各リーグ1位ボーナス（基準点とは別加算） */
+  streakLeagueLeaderBonus: { points: 5 },
+  hitStreakLeagueLeader: {
+    points: 5,
+    label: "連続試合安打 リーグ1位",
+  },
+  onBaseStreakLeagueLeader: {
+    points: 5,
+    label: "連続試合出塁 リーグ1位",
+  },
+  hrStreakLeagueLeader: {
+    points: 5,
+    label: "連続試合本塁打 リーグ1位",
+  },
   paHrStreakLeagueLeader: {
     points: 5,
     label: "連続打席本塁打 リーグ1位",

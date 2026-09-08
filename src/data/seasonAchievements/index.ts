@@ -33,4 +33,5 @@ export {
 export {
   FEATS_DISPLAY_STREAK_TYPES,
   filterStreaksToLeagueLeaders,
+  leagueSideFromTeamShort,
 } from "./streakDisplay";

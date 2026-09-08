@@ -86,6 +86,15 @@ export function mergeSopFeats(
     hrStreak: maxOr(primary.hrStreak, fallback.hrStreak),
     paHrStreak: maxOr(primary.paHrStreak, fallback.paHrStreak),
     abHitStreak: maxOr(primary.abHitStreak, fallback.abHitStreak),
+    hitStreakLeagueLeader: Boolean(
+      primary.hitStreakLeagueLeader || fallback.hitStreakLeagueLeader,
+    ),
+    onBaseStreakLeagueLeader: Boolean(
+      primary.onBaseStreakLeagueLeader || fallback.onBaseStreakLeagueLeader,
+    ),
+    hrStreakLeagueLeader: Boolean(
+      primary.hrStreakLeagueLeader || fallback.hrStreakLeagueLeader,
+    ),
     paHrStreakLeagueLeader: Boolean(
       primary.paHrStreakLeagueLeader || fallback.paHrStreakLeagueLeader,
     ),
