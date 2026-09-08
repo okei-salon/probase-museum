@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import {
   BATTER_CATCHER_STAT_KEYS,
+  CATCHER_CS_VIEW_COLUMNS,
   batterColumns,
   formatPlayerStatValue,
   getPlayerStats,
@@ -30,6 +31,7 @@ import {
   buildTeamGamesContext,
   compareStatRowsForRanking,
   evaluateCsRateQualified,
+  evaluateG30Ip30Qualified,
   evaluateIpQualified,
   evaluatePaQualified,
   evaluateWinPctQualified,
@@ -82,10 +84,15 @@ export function PlayerStatsExplorer({
     role === "batter" && isBatterCatcherStatKey(sortKey);
 
   const visibleColumns = useMemo(() => {
-    if (role !== "batter" || showCatcherColumns) return columns;
-    return columns.filter(
-      (c) => !(BATTER_CATCHER_STAT_KEYS as readonly string[]).includes(c.key),
-    );
+    if (role === "batter" && showCatcherColumns) {
+      return CATCHER_CS_VIEW_COLUMNS;
+    }
+    if (role === "batter") {
+      return columns.filter(
+        (c) => !(BATTER_CATCHER_STAT_KEYS as readonly string[]).includes(c.key),
+      );
+    }
+    return columns;
   }, [columns, role, showCatcherColumns]);
 
   const seasonIdentity = useMemo(
@@ -258,7 +265,7 @@ export function PlayerStatsExplorer({
               setDir(col?.lowerIsBetter ? "asc" : "desc");
             }}
             className={toggleClass(showCatcherColumns)}
-            title="捕手系4項目（被盗塁企図数・許盗塁数・盗塁刺・盗塁阻止率）を表示して並べ替え"
+            title="被盗企・許盗数・盗塁刺・盗塁阻止率の4項目だけを表示"
           >
             盗塁阻止率
           </button>
@@ -302,7 +309,7 @@ export function PlayerStatsExplorer({
               role === "pitcher"
                 ? "min-w-[820px] md:min-w-[1100px]"
                 : showCatcherColumns
-                  ? "min-w-[820px] md:min-w-[1100px]"
+                  ? "min-w-[420px] md:min-w-[520px]"
                   : "min-w-[720px] md:min-w-[980px]",
             )}
           >
@@ -532,6 +539,19 @@ function resolveRowQualified(
     return evaluateWinPctQualified(row.values.w);
   }
 
+  // 救援防御率／救援奪三振率：登板≥30 かつ 投球回≥30
+  if (sortKey === "reliefEra" || sortKey === "reliefSoRate") {
+    const ipOuts =
+      row.ipOuts ??
+      (row.values.ip != null && Number.isFinite(row.values.ip)
+        ? Math.round(row.values.ip * 3)
+        : null);
+    return evaluateG30Ip30Qualified({
+      g: row.values.g,
+      ipOuts,
+    });
+  }
+
   const ipOuts =
     row.ipOuts ??
     (row.values.ip != null && Number.isFinite(row.values.ip)
@@ -750,6 +770,8 @@ function seasonLineToStatRow(line: PlayerSeasonLine): PlayerStatRow {
     ipQualifiedFlag: c.ipQualified ?? null,
     values: {
       era: d.era ?? 0,
+      /** 救援防御率表示用：年度防御率をそのまま参照 */
+      reliefEra: d.era ?? 0,
       ip,
       winPct: d.winPct ?? 0,
       w: c.w,
@@ -767,6 +789,8 @@ function seasonLineToStatRow(line: PlayerSeasonLine): PlayerStatRow {
       hqsRate: d.hqsRate ?? 0,
       so: c.so,
       soRate: d.soRate ?? 0,
+      /** 救援奪三振率表示用：年度奪三振率をそのまま参照 */
+      reliefSoRate: d.soRate ?? 0,
       bb: c.bb ?? 0,
       bbRate: d.bbRate ?? 0,
       hbp: c.hbp ?? 0,

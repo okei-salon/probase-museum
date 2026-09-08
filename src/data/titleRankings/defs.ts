@@ -23,7 +23,8 @@ export type TitleEligibility =
   | "pa_qualify" // 規定打席 — PA / チーム試合数が必要
   | "ip_qualify" // 規定投球回
   | "wins_13" // 勝率 — 13勝以上
-  | "relief_ip_30" // 救援30投球回以上
+  | "g30_ip30" // 救援防御率・救援奪三振率 — 登板≥30 かつ 投球回≥30
+  | "relief_ip_30" // 旧：救援専用投球回（互換のため残す）
   | "risp" // 得点圏打率 — 専用成績が必要
   | "catcher_cs"; // 盗塁阻止率 — 捕手側成績が必要
 
@@ -162,10 +163,15 @@ export const BATTER_TITLES: TitleDef[] = [
     lowerIsBetter: false,
     eligibility: "catcher_cs",
     eligibilityNote:
-      "盗塁阻止率ランキングは被盗塁企図30回以上が規定です（試合数・守備機会は使いません）。",
+      "盗塁阻止率ランキングは被盗塁企図30回以上が規定です（試合数・守備機会は使いません）。表示は被盗企・許盗数・盗塁刺・盗塁阻止率の4項目です。",
   },
 ];
 
+/**
+ * 投手タイトル順：
+ * 防御率 → 救援防御率 → 勝率 → 勝 → セーブ → HP → 奪三振 → 奪三振率 → 救援奪三振率 → …
+ * 救援系は年度の防御率／奪三振率を使い、登板≥30かつ投球回≥30で規定判定。
+ */
 export const PITCHER_TITLES: TitleDef[] = [
   {
     id: "era",
@@ -179,12 +185,16 @@ export const PITCHER_TITLES: TitleDef[] = [
       "規定投球回到達フラグ（ipQualified）が true の投手のみ対象です。未設定は判定不可として除外します。",
   },
   {
-    id: "w",
-    label: "勝利",
+    id: "reliefEra",
+    label: "救援防御率",
     role: "pitcher",
-    valueKey: "w",
-    format: "int",
-    eligibility: "none",
+    /** 既存の年度防御率を参照（救援専用データは不要） */
+    valueKey: "era",
+    format: "era",
+    lowerIsBetter: true,
+    eligibility: "g30_ip30",
+    eligibilityNote:
+      "登板30以上かつ投球回30以上の投手を規定到達とします。到達者を上位に並べ、タイトルは到達者のみから決めます。",
   },
   {
     id: "winPct",
@@ -195,6 +205,30 @@ export const PITCHER_TITLES: TitleDef[] = [
     eligibility: "wins_13",
     eligibilityNote:
       "13勝以上の投手のみ勝率タイトル対象です。12勝以下は規定外です。",
+  },
+  {
+    id: "w",
+    label: "勝利",
+    role: "pitcher",
+    valueKey: "w",
+    format: "int",
+    eligibility: "none",
+  },
+  {
+    id: "sv",
+    label: "セーブ",
+    role: "pitcher",
+    valueKey: "sv",
+    format: "int",
+    eligibility: "none",
+  },
+  {
+    id: "hp",
+    label: "ホールド",
+    role: "pitcher",
+    valueKey: "hp",
+    format: "int",
+    eligibility: "none",
   },
   {
     id: "so",
@@ -213,6 +247,17 @@ export const PITCHER_TITLES: TitleDef[] = [
     eligibility: "ip_qualify",
     eligibilityNote:
       "規定投球回到達フラグ（ipQualified）が true の投手のみ対象です。未設定は判定不可として除外します。",
+  },
+  {
+    id: "reliefSoRate",
+    label: "救援奪三振率",
+    role: "pitcher",
+    /** 既存の年度奪三振率を参照 */
+    valueKey: "soRate",
+    format: "rate2",
+    eligibility: "g30_ip30",
+    eligibilityNote:
+      "登板30以上かつ投球回30以上の投手を規定到達とします。到達者を上位に並べ、タイトルは到達者のみから決めます。",
   },
   {
     id: "sho",
@@ -261,43 +306,6 @@ export const PITCHER_TITLES: TitleDef[] = [
     valueKey: "g",
     format: "int",
     eligibility: "none",
-  },
-  {
-    id: "hp",
-    label: "ホールド",
-    role: "pitcher",
-    valueKey: "hp",
-    format: "int",
-    eligibility: "none",
-  },
-  {
-    id: "sv",
-    label: "セーブ",
-    role: "pitcher",
-    valueKey: "sv",
-    format: "int",
-    eligibility: "none",
-  },
-  {
-    id: "reliefEra",
-    label: "救援防御率（30投球回以上）",
-    role: "pitcher",
-    valueKey: "reliefEra",
-    format: "era",
-    lowerIsBetter: true,
-    eligibility: "relief_ip_30",
-    eligibilityNote:
-      "救援投球回・救援自責点が年度個人成績に未収録のため、登録データからは集計できません。",
-  },
-  {
-    id: "reliefSoRate",
-    label: "救援奪三振率（30投球回以上）",
-    role: "pitcher",
-    valueKey: "reliefSoRate",
-    format: "rate2",
-    eligibility: "relief_ip_30",
-    eligibilityNote:
-      "救援投球回・救援奪三振が年度個人成績に未収録のため、登録データからは集計できません。",
   },
 ];
 

@@ -9,6 +9,7 @@ export {
   evaluateIpQualified,
   evaluateCsRateQualified,
   evaluateWinPctQualified,
+  evaluateG30Ip30Qualified,
   isRateStatKey,
   compareStatRowsForRanking,
   rankingDisplayRank,

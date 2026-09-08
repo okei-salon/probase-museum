@@ -17,6 +17,7 @@ import {
 import { formatTitleValue } from "./format";
 import {
   buildTeamGamesContext,
+  evaluateG30Ip30Qualified,
   evaluateIpQualified,
   evaluatePaQualified,
   evaluateWinPctQualified,
@@ -25,13 +26,16 @@ import {
 } from "@/lib/stats";
 
 export type TitleRankEntry = {
-  rank: number;
+  /** 規定到達者のみ正式順位。規定外は null（UI で ―） */
+  rank: number | null;
   playerId: string;
   playerName: string;
   teamShort: string;
   value: number;
   valueText: string;
   historyLabel?: string;
+  /** 救援系など規定付きタイトル用 */
+  qualified?: boolean;
 };
 
 export type TitleLeagueBoard = {
@@ -105,6 +109,20 @@ function passesEligibility(
         ok: evaluateWinPctQualified(c.values.w),
         unknown: false,
       };
+    case "g30_ip30": {
+      if (!c.available[def.valueKey]) {
+        return { ok: false, unknown: true };
+      }
+      const ipOuts =
+        c.values.ipOuts ??
+        (c.values.ip != null && Number.isFinite(c.values.ip)
+          ? Math.round(c.values.ip * 3)
+          : null);
+      return {
+        ok: evaluateG30Ip30Qualified({ g: c.values.g, ipOuts }),
+        unknown: false,
+      };
+    }
     case "relief_ip_30": {
       if (!c.available[def.valueKey]) return { ok: false, unknown: false };
       // 救援型フラグ: values.pitcherClassReliever === 1
@@ -156,21 +174,23 @@ function top5(
   world: SeasonWorld | null | undefined,
   teamGamesCtx: TeamGamesContext,
 ): TitleRankEntry[] {
+  const showUnqualifiedBelow = def.eligibility === "g30_ip30";
+
   const pool = candidates.filter((c) => {
     if (c.league !== league) return false;
     if (!c.available[def.valueKey] && def.eligibility !== "none") {
-      // 未収録指標は除外
       if (
         def.eligibility === "risp" ||
         def.eligibility === "catcher_cs" ||
-        def.eligibility === "relief_ip_30"
+        def.eligibility === "relief_ip_30" ||
+        def.eligibility === "g30_ip30"
       ) {
         return false;
       }
     }
     if (
       !c.available[def.valueKey] &&
-      ["risp", "csRate", "reliefEra", "reliefSoRate"].includes(def.valueKey)
+      ["risp", "csRate"].includes(def.valueKey)
     ) {
       return false;
     }
@@ -178,26 +198,37 @@ function top5(
     if (def.eligibility === "none" && !c.available[def.valueKey]) {
       return false;
     }
+    if (showUnqualifiedBelow) {
+      // 救援系: 規定内外を両方プールし、後で到達優先ソート
+      return Boolean(c.available[def.valueKey]);
+    }
     const el = passesEligibility(def, c, teamGamesCtx);
     return el.ok;
   });
 
   const sorted = [...pool].sort((a, b) => {
+    if (showUnqualifiedBelow) {
+      const aq = passesEligibility(def, a, teamGamesCtx).ok;
+      const bq = passesEligibility(def, b, teamGamesCtx).ok;
+      if (aq !== bq) return aq ? -1 : 1;
+    }
     const av = a.values[def.valueKey] ?? 0;
     const bv = b.values[def.valueKey] ?? 0;
     if (av !== bv) {
       return def.lowerIsBetter ? av - bv : bv - av;
     }
-    // 同値は選手名で安定ソート（表示ゆれ防止）
     return a.playerName.localeCompare(b.playerName, "ja");
   });
 
-  const top = sorted.slice(0, 5);
-  return top.map((c, i) => {
-    const rank = i + 1;
+  const top = sorted.slice(0, showUnqualifiedBelow ? 10 : 5);
+  let qualifiedRank = 0;
+  return top.map((c) => {
     const value = c.values[def.valueKey] ?? 0;
+    const qualified = showUnqualifiedBelow
+      ? passesEligibility(def, c, teamGamesCtx).ok
+      : true;
+    const rank = qualified ? (qualifiedRank += 1) : null;
     if (rank === 1 && persistHistory) {
-      // 常に再計算結果で1位を同期（誤った手入力履歴の上書き）
       upsertTitleWinner({
         titleId: def.id,
         year,
@@ -216,6 +247,7 @@ function top5(
       teamShort: c.teamShort,
       value,
       valueText: formatTitleValue(def.format, value),
+      qualified,
       historyLabel:
         rank === 1
           ? getTitleHistoryLabel(def.id, league, c.playerId, year, world)
@@ -246,7 +278,7 @@ function collectGaps(
     );
   } else {
     gaps.push(
-      "救援防御率 / 救援奪三振率：救援投球回・救援自責点・救援奪三振が年度個人成績に未収録です。",
+      "救援防御率 / 救援奪三振率：登板30以上かつ投球回30以上を規定到達とし、到達者を上位に表示します（年度の防御率／奪三振率を使用）。",
     );
   }
   if (usingSample) {
@@ -337,7 +369,8 @@ export function buildTitleRankings(
       note:
         def.eligibility === "pa_qualify" ||
         def.eligibility === "ip_qualify" ||
-        def.eligibility === "risp"
+        def.eligibility === "risp" ||
+        def.eligibility === "g30_ip30"
           ? def.eligibilityNote
           : undefined,
     };

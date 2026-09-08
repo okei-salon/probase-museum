@@ -302,7 +302,12 @@ function titlesForPlayer(
     if (section.unavailable) continue;
     for (const league of ["central", "pacific"] as const) {
       for (const entry of section.board[league]) {
-        if (entry.playerId === playerId && entry.rank >= 1 && entry.rank <= 5) {
+        if (
+          entry.playerId === playerId &&
+          entry.rank != null &&
+          entry.rank >= 1 &&
+          entry.rank <= 5
+        ) {
           placements.push({
             titleId: section.def.id,
             titleLabel: section.def.label,

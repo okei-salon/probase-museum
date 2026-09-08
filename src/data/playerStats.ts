@@ -80,6 +80,7 @@ export function isBatterCatcherStatKey(key: string): key is BatterCatcherStatKey
 /** 投手：個人成績表示項目（ゲーム画面順に近い表示ラベル） */
 export const pitcherColumns: TeamStatColumn[] = [
   { key: "era", label: "防御率", lowerIsBetter: true },
+  { key: "reliefEra", label: "救援防御率", lowerIsBetter: true },
   { key: "ip", label: "投球回" },
   { key: "winPct", label: "勝率" },
   { key: "w", label: "勝" },
@@ -97,6 +98,7 @@ export const pitcherColumns: TeamStatColumn[] = [
   { key: "hqsRate", label: "HQS率" },
   { key: "so", label: "奪三振" },
   { key: "soRate", label: "奪三振率" },
+  { key: "reliefSoRate", label: "救援奪三振率" },
   { key: "bb", label: "与四球" },
   { key: "bbRate", label: "四球率" },
   { key: "hbp", label: "与死球" },
@@ -106,6 +108,14 @@ export const pitcherColumns: TeamStatColumn[] = [
   { key: "whip", label: "WHIP", lowerIsBetter: true },
   { key: "r", label: "失点", lowerIsBetter: true },
   { key: "er", label: "自責点", lowerIsBetter: true },
+];
+
+/** 盗塁阻止率ビュー用の短いラベル（4項目のみ） */
+export const CATCHER_CS_VIEW_COLUMNS: TeamStatColumn[] = [
+  { key: "csAttempted", label: "被盗企" },
+  { key: "csAllowed", label: "許盗数" },
+  { key: "csCaught", label: "盗塁刺" },
+  { key: "csRate", label: "盗塁阻止率" },
 ];
 export const playerStatTeams = [
   { id: "阪神", league: "central" as const },
@@ -229,6 +239,7 @@ function buildPitchers(scope: StatsScope): PlayerStatRow[] {
         league: t.league,
         values: {
           era: ip > 0 ? Number(((er * 9) / ip).toFixed(2)) : 0,
+          reliefEra: ip > 0 ? Number(((er * 9) / ip).toFixed(2)) : 0,
           ip,
           winPct: w + l > 0 ? Number((w / (w + l)).toFixed(3)) : 0,
           w,
@@ -246,6 +257,7 @@ function buildPitchers(scope: StatsScope): PlayerStatRow[] {
           hqsRate: gs > 0 ? Number((hqs / gs).toFixed(3)) : 0,
           so,
           soRate: ip > 0 ? Number(((so * 9) / ip).toFixed(2)) : 0,
+          reliefSoRate: ip > 0 ? Number(((so * 9) / ip).toFixed(2)) : 0,
           bb,
           bbRate: ip > 0 ? Number(((bb * 9) / ip).toFixed(2)) : 0,
           hbp: Math.round(n(id + "hbp", 0, 12) * factor),
@@ -307,14 +319,15 @@ export function formatPlayerStatValue(
   ) {
     return value.toFixed(3).replace(/^0\./, ".");
   }
-  // 野手三振率は 0〜1、投手奪三振率は K/9
-  if (key === "soRate") {
+  // 野手三振率は 0〜1、投手奪三振率／救援奪三振率は K/9
+  if (key === "soRate" || key === "reliefSoRate") {
     return value < 1
       ? value.toFixed(3).replace(/^0\./, ".")
       : value.toFixed(2);
   }
   if (
     key === "era" ||
+    key === "reliefEra" ||
     key === "bbRate" ||
     key === "kbb" ||
     key === "whip"

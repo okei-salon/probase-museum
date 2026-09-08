@@ -198,6 +198,26 @@ export function evaluateCsRateQualified(
   );
 }
 
+/**
+ * 救援防御率／救援奪三振率の規定：登板≥30 かつ 投球回≥30。
+ * 先発数・救援登板数は見ない。年間の登板と投球回のみ。
+ */
+export const MIN_G_FOR_RELIEF_RATE = 30;
+export const MIN_IP_FOR_RELIEF_RATE = 30;
+
+export function evaluateG30Ip30Qualified(input: {
+  g: number | null | undefined;
+  ipOuts: number | null | undefined;
+}): boolean {
+  const g = input.g;
+  const ipOuts = input.ipOuts;
+  if (g == null || !Number.isFinite(g) || g < MIN_G_FOR_RELIEF_RATE) {
+    return false;
+  }
+  if (ipOuts == null || !Number.isFinite(ipOuts)) return false;
+  return ipOuts / 3 >= MIN_IP_FOR_RELIEF_RATE;
+}
+
 export type RankableStatRow = {
   id: string;
   values: Record<string, number | null>;

@@ -149,7 +149,7 @@ function LeagueColumn({
   entries: TitleRankEntry[];
 }) {
   const first = entries.find((e) => e.rank === 1) ?? null;
-  const rest = entries.filter((e) => e.rank > 1);
+  const rest = entries.filter((e) => e !== first);
 
   return (
     <div className="min-w-0">
@@ -164,7 +164,7 @@ function LeagueColumn({
       {rest.length > 0 ? (
         <ul className="mt-2.5 space-y-1">
           {rest.map((e) => (
-            <li key={e.playerId + e.rank}>
+            <li key={`${e.playerId}-${e.rank ?? "u"}-${e.valueText}`}>
               <RankRow entry={e} />
             </li>
           ))}
@@ -203,9 +203,17 @@ function FirstPlaceCard({ entry }: { entry: TitleRankEntry }) {
 }
 
 function RankRow({ entry }: { entry: TitleRankEntry }) {
+  const muted = entry.qualified === false;
   return (
-    <div className="grid grid-cols-[2rem_minmax(0,1fr)_auto_auto] items-baseline gap-x-2 rounded-md px-1.5 py-1 text-[12px] md:grid-cols-[2.25rem_minmax(0,1fr)_7rem_4.75rem] md:gap-x-2.5 md:text-[13px]">
-      <span className="tabular-nums text-white/45">{entry.rank}位</span>
+    <div
+      className={cn(
+        "grid grid-cols-[2rem_minmax(0,1fr)_auto_auto] items-baseline gap-x-2 rounded-md px-1.5 py-1 text-[12px] md:grid-cols-[2.25rem_minmax(0,1fr)_7rem_4.75rem] md:gap-x-2.5 md:text-[13px]",
+        muted && "opacity-70",
+      )}
+    >
+      <span className="tabular-nums text-white/45">
+        {entry.rank == null ? "―" : `${entry.rank}位`}
+      </span>
       <PlayerLink
         playerId={entry.playerId}
         className="min-w-0 truncate font-medium text-white/90 hover:text-[color:var(--museum-accent,#d4af37)]"
