@@ -24,6 +24,7 @@ import {
   resolveTeamGamesForPlayer,
   type TeamGamesContext,
 } from "@/lib/stats";
+import { outsToIpDisplay } from "@/lib/manualEntry/normalizeInput";
 
 export type TitleRankEntry = {
   /** 規定到達者のみ正式順位。規定外は null（UI で ―） */
@@ -207,8 +208,8 @@ function top5(
   });
 
   const sorted = [...pool].sort((a, b) => {
-    const av = a.values[def.valueKey] ?? 0;
-    const bv = b.values[def.valueKey] ?? 0;
+    const av = titleSortValue(def, a);
+    const bv = titleSortValue(def, b);
     if (av !== bv) {
       return def.lowerIsBetter ? av - bv : bv - av;
     }
@@ -217,6 +218,7 @@ function top5(
 
   return sorted.slice(0, 5).map((c, index) => {
     const value = c.values[def.valueKey] ?? 0;
+    const valueText = titleValueText(def, c);
     const rank = index + 1;
     if (rank === 1 && persistHistory) {
       upsertTitleWinner({
@@ -227,7 +229,7 @@ function top5(
         playerId: c.playerId,
         playerName: c.playerName,
         teamShort: c.teamShort,
-        valueText: formatTitleValue(def.format, value),
+        valueText,
       });
     }
     return {
@@ -236,7 +238,7 @@ function top5(
       playerName: c.playerName,
       teamShort: c.teamShort,
       value,
-      valueText: formatTitleValue(def.format, value),
+      valueText,
       qualified: true,
       historyLabel:
         rank === 1
@@ -244,6 +246,32 @@ function top5(
           : undefined,
     };
   });
+}
+
+/** 投球回は outs で比較（小数イニングの誤差を避ける） */
+function titleSortValue(def: TitleDef, c: TitleCandidate): number {
+  if (def.format === "ip") {
+    const outs = c.values.ipOuts;
+    if (outs != null && Number.isFinite(outs)) return outs;
+    const ip = c.values.ip;
+    if (ip != null && Number.isFinite(ip)) return Math.round(ip * 3);
+  }
+  return c.values[def.valueKey] ?? 0;
+}
+
+function titleValueText(def: TitleDef, c: TitleCandidate): string {
+  if (def.format === "ip") {
+    const outs = c.values.ipOuts;
+    if (outs != null && Number.isFinite(outs)) {
+      return outsToIpDisplay(outs);
+    }
+    const ip = c.values.ip;
+    if (ip != null && Number.isFinite(ip)) {
+      return formatTitleValue("ip", ip);
+    }
+    return "—";
+  }
+  return formatTitleValue(def.format, c.values[def.valueKey] ?? 0);
 }
 
 function collectGaps(

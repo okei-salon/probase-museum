@@ -14,7 +14,6 @@ import {
   isCatcherCsRateQualified,
 } from "@/lib/manualEntry/computeSeasonStats";
 import { classifyPitcherWorkload } from "@/lib/sop/helpers";
-import { outsToIpDisplay } from "@/lib/manualEntry/normalizeInput";
 
 export type TitleCandidate = {
   playerId: string;
@@ -328,7 +327,7 @@ export function candidatesFromPlayerMasterSample(
             soRate: ip > 0 ? Number(((so * 9) / ip).toFixed(2)) : 0,
             sho: n(id + year + "sho", 0, 3),
             cg: n(id + year + "cg", 0, 4),
-            ip: Number(outsToIpDisplay(ipOuts)),
+            ip: ipOuts / 3,
             ipOuts,
             qsRate: gs > 0 ? Number((qs / gs).toFixed(3)) : 0,
             hqsRate: gs > 0 ? Number((hqs / gs).toFixed(3)) : 0,

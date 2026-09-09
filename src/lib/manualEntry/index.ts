@@ -11,6 +11,7 @@ export {
   formatWinPctDisplay,
   ipDisplayToOuts,
   outsToIpDisplay,
+  formatIpFromDecimalInnings,
 } from "./normalizeInput";
 export {
   computeBatterDerived,

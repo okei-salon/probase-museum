@@ -31,9 +31,9 @@ function pitcherIpOk(s: SopPitcherStats): boolean {
 function pitcherReliefRateOk(s: SopPitcherStats): boolean {
   const ipOuts =
     s.reliefIp != null && Number.isFinite(s.reliefIp)
-      ? s.reliefIp * 3
+      ? Math.round(s.reliefIp * 3)
       : s.ip != null && Number.isFinite(s.ip)
-        ? s.ip * 3
+        ? Math.round(s.ip * 3)
         : null;
   return evaluateG30Ip30Qualified({ g: s.g, ipOuts });
 }
@@ -71,7 +71,7 @@ function collectPitcherBasics(s: SopPitcherStats): BasicHit[] {
   }
   if (s.w != null) add("w15", s.w >= 15);
   if (s.so != null) add("so200", s.so >= 200);
-  if (s.ip != null) add("ip200", s.ip >= 200);
+  if (s.ip != null) add("ip200", Math.round(s.ip * 3) >= 600);
   if (s.winPct != null && evaluateWinPctQualified(s.w)) {
     add("winPct800", s.winPct >= 0.8);
   }
@@ -88,6 +88,7 @@ function collectPitcherCombos(s: SopPitcherStats): {
   const w = s.w;
   const so = s.so;
   const ip = s.ip;
+  const ipOuts = ip != null && Number.isFinite(ip) ? Math.round(ip * 3) : null;
   const hp = s.hp ?? s.hld;
   const sv = s.sv;
 
@@ -103,8 +104,8 @@ function collectPitcherCombos(s: SopPitcherStats): {
     w >= 15 &&
     so != null &&
     so >= 200 &&
-    ip != null &&
-    ip >= 200;
+    ipOuts != null &&
+    ipOuts >= 600;
 
   if (top) {
     out.push({
@@ -117,8 +118,8 @@ function collectPitcherCombos(s: SopPitcherStats): {
     w >= 15 &&
     so != null &&
     so >= 200 &&
-    ip != null &&
-    ip >= 200
+    ipOuts != null &&
+    ipOuts >= 600
   ) {
     out.push({
       id: "w15So200Ip200",

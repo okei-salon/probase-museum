@@ -1,5 +1,6 @@
 import type { TeamStatColumn } from "@/data/seasonViews";
 import type { TeamId } from "@/data/teams";
+import { formatIpFromDecimalInnings } from "@/lib/manualEntry/normalizeInput";
 
 /**
  * 個人成績（ペナント / 交流戦で共通UI、データはスコープ別に保持）。
@@ -227,7 +228,8 @@ function buildPitchers(scope: StatsScope): PlayerStatRow[] {
       const hqs = Math.min(qs, Math.round(qs * n(id + "hqs", 0.4, 0.8, 2)));
       const w = Math.round(n(id + "w", 1, 15) * factor);
       const l = Math.round(n(id + "l", 1, 12) * factor);
-      const ip = Number((n(id + "ip", 30, 180) * factor).toFixed(1));
+      const ipOuts = Math.max(0, Math.round(n(id + "ipo", 90, 540) * factor));
+      const ip = ipOuts / 3;
       const so = Math.round(n(id + "so", 20, 180) * factor);
       const bb = Math.round(n(id + "bb", 10, 70) * factor);
       const h = Math.round(n(id + "h", 40, 180) * factor);
@@ -237,6 +239,7 @@ function buildPitchers(scope: StatsScope): PlayerStatRow[] {
         name: `サンプル投手${ti + 1}-${slot}`,
         team: t.id,
         league: t.league,
+        ipOuts,
         values: {
           era: ip > 0 ? Number(((er * 9) / ip).toFixed(2)) : 0,
           reliefEra: ip > 0 ? Number(((er * 9) / ip).toFixed(2)) : 0,
@@ -335,11 +338,8 @@ export function formatPlayerStatValue(
     return value.toFixed(2);
   }
   if (key === "ip") {
-    // 登録データは outs/3 の実数。野球表記へ戻す。
-    const outs = Math.round(value * 3);
-    const whole = Math.floor(outs / 3);
-    const rem = outs % 3;
-    return rem === 0 ? String(whole) : `${whole}.${rem}`;
+    // 登録データは outs/3 の実数。野球表記へ戻す（.1=1/3, .2=2/3）。
+    return formatIpFromDecimalInnings(value);
   }
   return String(Math.round(value));
 }

@@ -2,6 +2,7 @@ import type { TitleValueFormat } from "./defs";
 import {
   formatAvgDisplay,
   formatEraDisplay,
+  formatIpFromDecimalInnings,
   formatWinPctDisplay,
 } from "@/lib/manualEntry/normalizeInput";
 
@@ -18,14 +19,9 @@ export function formatTitleValue(
       return formatEraDisplay(value);
     case "pct100":
       return `${(value * 100).toFixed(1)}%`;
-    case "ip": {
-      // values は 168.2 形式（.1=1/3）または小数イニング
-      const whole = Math.floor(value + 1e-9);
-      const frac = Math.round((value - whole) * 10);
-      if (frac === 1 || frac === 2) return `${whole}.${frac}`;
-      if (Math.abs(value - whole) < 1e-9) return String(whole);
-      return value.toFixed(1);
-    }
+    case "ip":
+      // candidates の ip は outs/3 の小数イニング。野球表記は outs 換算で戻す。
+      return formatIpFromDecimalInnings(value);
     case "int":
       return String(Math.round(value));
     default:

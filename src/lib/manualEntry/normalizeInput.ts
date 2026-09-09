@@ -262,9 +262,20 @@ export function ipDisplayToOuts(display: string): number | null {
 }
 
 export function outsToIpDisplay(outs: number): string {
-  const whole = Math.floor(outs / 3);
-  const rem = outs % 3;
+  if (!Number.isFinite(outs) || outs < 0) return "—";
+  const total = Math.round(outs);
+  const whole = Math.floor(total / 3);
+  const rem = total % 3;
   return rem === 0 ? String(whole) : `${whole}.${rem}`;
+}
+
+/**
+ * 小数イニング（outs / 3）を野球表記へ戻す。
+ * 例: 608/3 ≈ 202.666… → "202.2"（.2 = 2/3回。toFixed(1) の 202.7 は不正）
+ */
+export function formatIpFromDecimalInnings(innings: number): string {
+  if (!Number.isFinite(innings) || innings < 0) return "—";
+  return outsToIpDisplay(Math.round(innings * 3));
 }
 
 export function formatAvgDisplay(avg: number): string {

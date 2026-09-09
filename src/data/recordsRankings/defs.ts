@@ -2,6 +2,7 @@ import {
   requiredIpOuts,
   requiredPlateAppearances,
 } from "@/lib/stats/qualification";
+import { formatIpFromDecimalInnings } from "@/lib/manualEntry/normalizeInput";
 import type { SeasonLineScope } from "@/data/playerSeasonLines";
 
 /**
@@ -171,12 +172,9 @@ export function formatRecordsValue(
     case "era":
     case "rate2":
       return value.toFixed(2);
-    case "ip": {
-      const outs = Math.round(value * 3);
-      const whole = Math.floor(outs / 3);
-      const rem = outs % 3;
-      return rem === 0 ? String(whole) : `${whole}.${rem}`;
-    }
+    case "ip":
+      // value は outs/3 の小数イニング → 野球表記（.1=1/3, .2=2/3）
+      return formatIpFromDecimalInnings(value);
     default:
       return String(Math.round(value));
   }
