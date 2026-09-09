@@ -470,6 +470,7 @@ function formatSeasonLineHighlightStats(
   if (d.era != null) {
     rows.push({ label: "防御率", value: d.era.toFixed(2) });
   }
+  rows.push({ label: "登板", value: String(c.g ?? 0) });
   rows.push({ label: "勝", value: String(c.w ?? 0) });
   rows.push({ label: "敗", value: String(c.l ?? 0) });
   if (d.winPct != null) {

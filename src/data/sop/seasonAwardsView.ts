@@ -51,6 +51,7 @@ function toCard(
   a: RegisteredSeasonAward,
   currentYear: number,
   stats: ResolvedAwardCard["stats"] = null,
+  statSections: ResolvedAwardCard["statSections"] = null,
 ): ResolvedAwardCard {
   if (isRegisteredAwardNone(a)) {
     return {
@@ -61,6 +62,7 @@ function toCard(
       league: a.league,
       position: a.position,
       stats: null,
+      statSections: null,
     };
   }
   return {
@@ -71,6 +73,7 @@ function toCard(
     league: a.league,
     position: a.position,
     stats,
+    statSections,
   };
 }
 
@@ -86,19 +89,83 @@ function bestNineStatsFor(
   });
 }
 
-function majorAwardStatsFor(
+/** 2026 BLUE 新人王・柴田獅子（日本ハム）のみ二刀流表示 */
+const TWO_WAY_ROOKIE_2026_BLUE = {
+  year: 2026,
+  world: "BLUE" as const,
+  playerId: "nipponham_81085150_31",
+  playerName: "柴田獅子",
+  teamShort: "日本ハム",
+};
+
+function isExplicitTwoWayRookie2026Blue(
+  a: RegisteredSeasonAward,
+  identity: SeasonIdentity,
+): boolean {
+  if (identity.year !== TWO_WAY_ROOKIE_2026_BLUE.year) return false;
+  if (identity.world !== TWO_WAY_ROOKIE_2026_BLUE.world) return false;
+  if (a.kind !== "rookie") return false;
+  if (a.playerId === TWO_WAY_ROOKIE_2026_BLUE.playerId) return true;
+  return (
+    a.playerName === TWO_WAY_ROOKIE_2026_BLUE.playerName &&
+    (a.teamShort === TWO_WAY_ROOKIE_2026_BLUE.teamShort ||
+      a.teamShort === "北海道日本ハムファイターズ")
+  );
+}
+
+function majorAwardHighlight(
   a: RegisteredSeasonAward,
   identity: SeasonIdentity,
   kind: "mvp" | "rookie" | "sawamura",
-): ResolvedAwardCard["stats"] {
-  if (isRegisteredAwardNone(a)) return null;
-  return getRegisteredSeasonHighlightStats({
-    playerId: a.playerId,
-    year: identity.year,
-    world: identity.world,
-    teamShort: a.teamShort,
-    roleMode: kind === "sawamura" ? "pitcher" : "auto",
-  });
+): {
+  stats: ResolvedAwardCard["stats"];
+  statSections: ResolvedAwardCard["statSections"];
+} {
+  if (isRegisteredAwardNone(a)) {
+    return { stats: null, statSections: null };
+  }
+
+  if (kind === "rookie" && isExplicitTwoWayRookie2026Blue(a, identity)) {
+    // 明示二刀流は正規 master id で PITCHER/BATTER を独立参照（片方欠落で他方を消さない）
+    const playerId = TWO_WAY_ROOKIE_2026_BLUE.playerId;
+    const teamShort = a.teamShort ?? TWO_WAY_ROOKIE_2026_BLUE.teamShort;
+    const pitcher = getRegisteredSeasonHighlightStats({
+      playerId,
+      year: identity.year,
+      world: identity.world,
+      teamShort,
+      roleMode: "pitcher",
+    });
+    const batter = getRegisteredSeasonHighlightStats({
+      playerId,
+      year: identity.year,
+      world: identity.world,
+      teamShort,
+      roleMode: "batter",
+    });
+    const sections: NonNullable<ResolvedAwardCard["statSections"]> = [];
+    if (pitcher && pitcher.length > 0) {
+      sections.push({ title: "投手成績", stats: pitcher });
+    }
+    if (batter && batter.length > 0) {
+      sections.push({ title: "野手成績", stats: batter });
+    }
+    return {
+      stats: null,
+      statSections: sections.length > 0 ? sections : null,
+    };
+  }
+
+  return {
+    stats: getRegisteredSeasonHighlightStats({
+      playerId: a.playerId,
+      year: identity.year,
+      world: identity.world,
+      teamShort: a.teamShort,
+      roleMode: kind === "sawamura" ? "pitcher" : "auto",
+    }),
+    statSections: null,
+  };
 }
 
 function pickMajor(
@@ -132,13 +199,15 @@ function resolveMajorPair(
   );
   const formal = identity.world != null;
 
+  const toMajorCard = (reg: RegisteredSeasonAward) => {
+    const hi = majorAwardHighlight(reg, identity, kind);
+    return toCard(reg, year, hi.stats, hi.statSections);
+  };
+
   if (kind === "sawamura") {
     const reg = pickMajor(awards, kind, undefined);
     if (reg) {
-      return {
-        central: toCard(reg, year, majorAwardStatsFor(reg, identity, kind)),
-        pacific: null,
-      };
+      return { central: toMajorCard(reg), pacific: null };
     }
     if (formal) {
       return { central: emptyCard("central"), pacific: null };
@@ -151,12 +220,12 @@ function resolveMajorPair(
 
   return {
     central: cReg
-      ? toCard(cReg, year, majorAwardStatsFor(cReg, identity, kind))
+      ? toMajorCard(cReg)
       : formal
         ? emptyCard("central")
         : sample.central,
     pacific: pReg
-      ? toCard(pReg, year, majorAwardStatsFor(pReg, identity, kind))
+      ? toMajorCard(pReg)
       : formal
         ? emptyCard("pacific")
         : sample.pacific,

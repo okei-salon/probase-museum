@@ -39,6 +39,13 @@ export type ResolvedAwardCard = {
   month?: number;
   role?: "pitcher" | "batter";
   stats: { label: string; value: string }[] | null;
+  /**
+   * 二刀流など複数ブロック表示用。ある場合は stats より優先して描画する。
+   */
+  statSections?: Array<{
+    title: string;
+    stats: { label: string; value: string }[];
+  }> | null;
   league?: LeagueSide;
 };
 

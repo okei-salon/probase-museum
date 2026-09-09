@@ -38,8 +38,31 @@ export function AwardWinnerCard({
         <HistoryBadge label={card.historyLabel} className="mt-2" />
       ) : null}
 
-      {showStats && card.stats && card.stats.length > 0 ? (
-        <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+      {showStats && card.statSections && card.statSections.length > 0 ? (
+        <div className="mt-4 space-y-4">
+          {card.statSections.map((section) => (
+            <div key={section.title}>
+              <p className="mb-2 text-[11px] tracking-[0.12em] text-[color:var(--museum-accent,#d4af37)]">
+                {section.title}
+              </p>
+              <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                {section.stats.map((s) => (
+                  <div
+                    key={`${section.title}-${s.label}`}
+                    className="rounded-lg border border-white/10 bg-black/40 px-2.5 py-2"
+                  >
+                    <dt className="text-[10px] text-white/65">{s.label}</dt>
+                    <dd className="mt-0.5 text-[15px] font-semibold tabular-nums text-white">
+                      {s.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ))}
+        </div>
+      ) : showStats && card.stats && card.stats.length > 0 ? (
+        <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
           {card.stats.map((s) => (
             <div
               key={s.label}
