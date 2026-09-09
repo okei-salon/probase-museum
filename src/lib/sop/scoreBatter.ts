@@ -17,8 +17,18 @@ import {
 } from "./npbRecords";
 import type { SopBatterStats, SopFeatsInput, SopPriorYearFlags } from "./input";
 import type { SopLineItem } from "./types";
+import { evaluateCsRateQualified } from "@/lib/stats";
 
 type BasicHit = { id: string; label: string; points: number };
+
+/** 率系SOPは規定打席到達（true）のみ。未設定・未達は加点しない */
+function batterPaOk(s: SopBatterStats): boolean {
+  return s.paQualified === true;
+}
+
+function batterCsOk(s: SopBatterStats): boolean {
+  return evaluateCsRateQualified(s.csAttempted);
+}
 
 function collectBatterBasics(s: SopBatterStats): BasicHit[] {
   const hits: BasicHit[] = [];
@@ -28,17 +38,20 @@ function collectBatterBasics(s: SopBatterStats): BasicHit[] {
     hits.push({ id, label: def.label, points: def.points });
   };
 
-  if (s.avg != null) add("avg300", s.avg >= 0.3);
+  const paOk = batterPaOk(s);
+  const csOk = batterCsOk(s);
+
+  if (paOk && s.avg != null) add("avg300", s.avg >= 0.3);
   if (s.hr != null) add("hr30", s.hr >= 30);
   if (s.sb != null) add("sb30", s.sb >= 30);
   if (s.sac != null) add("sac30", s.sac >= 30);
-  if (s.rispAvg != null) add("risp300", s.rispAvg >= 0.3);
+  if (paOk && s.rispAvg != null) add("risp300", s.rispAvg >= 0.3);
   if (s.r != null) add("r100", s.r >= 100);
   if (s.rbi != null) add("rbi100", s.rbi >= 100);
   if (s.bb != null) add("bb100", s.bb >= 100);
-  if (s.csRate != null) add("csRate400", s.csRate >= 0.4);
-  if (s.obp != null) add("obp400", s.obp >= 0.4);
-  if (s.ops != null) add("ops1000", s.ops >= 1.0);
+  if (csOk && s.csRate != null) add("csRate400", s.csRate >= 0.4);
+  if (paOk && s.obp != null) add("obp400", s.obp >= 0.4);
+  if (paOk && s.ops != null) add("ops1000", s.ops >= 1.0);
   if (s.h != null) add("h200", s.h >= 200);
   return hits;
 }
@@ -66,7 +79,10 @@ function collectBatterCombos(
     }
   }
 
+  // 打率を含む複合は規定打席到達者のみ（20-20系の累積複合は上で規定不問）
+  const paOk = batterPaOk(s);
   const hasTriple =
+    paOk &&
     avg != null &&
     hr != null &&
     sb != null &&
@@ -75,6 +91,7 @@ function collectBatterCombos(
     sb >= 30;
   const hasRbi100 = rbi != null && rbi >= 100;
   const has300Hr30Rbi100 =
+    paOk &&
     avg != null &&
     hr != null &&
     hasRbi100 &&
@@ -124,10 +141,12 @@ function applyHistoricBatter(
     for (const c of def.covers) coveredBasics.add(c);
   };
 
-  if (s.avg != null) tryAdd("avg400", s.avg >= 0.4);
-  if (s.rispAvg != null) tryAdd("risp400", s.rispAvg >= 0.4);
-  if (s.ops != null) tryAdd("ops1100", s.ops >= 1.1);
-  if (s.csRate != null) tryAdd("csRate800", s.csRate >= 0.8);
+  const paOk = batterPaOk(s);
+  const csOk = batterCsOk(s);
+  if (paOk && s.avg != null) tryAdd("avg400", s.avg >= 0.4);
+  if (paOk && s.rispAvg != null) tryAdd("risp400", s.rispAvg >= 0.4);
+  if (paOk && s.ops != null) tryAdd("ops1100", s.ops >= 1.1);
+  if (csOk && s.csRate != null) tryAdd("csRate800", s.csRate >= 0.8);
   return items;
 }
 
@@ -242,7 +261,10 @@ function scoreBatterNpb(
     bb: s.bb,
     obp: s.obp,
   };
+  const paOk = batterPaOk(s);
+  const batterRateFields = new Set(["avg", "obp"]);
   for (const def of NPB_BATTER_SEASON_RECORDS) {
+    if (batterRateFields.has(def.field) && !paOk) continue;
     if (meetsNpbRecord(fieldMap[def.field], def)) {
       items.push({
         id: `npb:${def.id}`,

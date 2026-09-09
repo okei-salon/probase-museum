@@ -41,6 +41,13 @@ import {
   type SopSeasonResult,
   type SopTitlePlacement,
 } from "@/lib/sop";
+import {
+  buildTeamGamesContext,
+  evaluateIpQualified,
+  evaluatePaQualified,
+  resolveTeamGamesForPlayer,
+  type TeamGamesContext,
+} from "@/lib/stats";
 import { listRegisteredAwardsForSeason } from "./awardsRegistry";
 import { getSopFeat } from "./featsStore";
 import {
@@ -79,9 +86,18 @@ function leagueOf(line: PlayerSeasonLine) {
 
 function batterStatsFromLine(
   line: Extract<PlayerSeasonLine, { role: "batter" }>,
+  teamGamesCtx?: TeamGamesContext | null,
 ): SopBatterStats {
   const c = line.counting;
   const d = line.derived;
+  const teamGames = teamGamesCtx
+    ? resolveTeamGamesForPlayer(teamGamesCtx, line.teamId)
+    : null;
+  const paStatus = evaluatePaQualified({
+    pa: c.pa ?? null,
+    teamGames,
+    flag: c.paQualified ?? null,
+  });
   return {
     avg: d.avg,
     pa: c.pa ?? null,
@@ -99,12 +115,14 @@ function batterStatsFromLine(
     rispAvg: d.rispAvg,
     csRate: d.csRate,
     csAttempted: c.csAttempted ?? null,
-    paQualified: c.paQualified ?? null,
+    // 率系SOP用: 判定不能は false（未到達扱い）
+    paQualified: paStatus.qualified,
   };
 }
 
 function pitcherStatsFromLine(
   line: Extract<PlayerSeasonLine, { role: "pitcher" }>,
+  teamGamesCtx?: TeamGamesContext | null,
 ): SopPitcherStats {
   const c = line.counting;
   const d = line.derived;
@@ -122,6 +140,14 @@ function pitcherStatsFromLine(
     reliefIp != null && reliefIp > 0 && c.reliefSo != null
       ? (c.reliefSo * 9) / reliefIp
       : null;
+  const teamGames = teamGamesCtx
+    ? resolveTeamGamesForPlayer(teamGamesCtx, line.teamId)
+    : null;
+  const ipStatus = evaluateIpQualified({
+    ipOuts: c.ipOuts,
+    teamGames,
+    flag: c.ipQualified ?? null,
+  });
   return {
     era: d.era,
     w: c.w,
@@ -141,7 +167,7 @@ function pitcherStatsFromLine(
     reliefEra,
     reliefSoRate,
     reliefIp,
-    ipQualified: c.ipQualified ?? null,
+    ipQualified: ipStatus.qualified,
     pitcherClass,
     startRate,
   };
@@ -484,6 +510,12 @@ export function buildYearSopRankings(
   const prevLines = listSeasonLinesForSeason(priorIdentity).filter(
     (l) => l.scope === "pennant",
   );
+  const prevTeamGamesCtx = buildTeamGamesContext({
+    scope: "pennant",
+    identity: priorIdentity,
+    year: priorIdentity.year,
+    world: priorIdentity.world,
+  });
   const prevByKey = new Map<string, SopSeasonResult>();
   const prevByPlayer = groupLinesByPlayer(prevLines);
   for (const line of prevLines) {
@@ -493,6 +525,8 @@ export function buildYearSopRankings(
       priorIdentity,
       null,
       prevByPlayer.get(line.playerId),
+      undefined,
+      prevTeamGamesCtx,
     );
     prevByKey.set(key, computeSeasonSop(input));
   }
@@ -501,6 +535,12 @@ export function buildYearSopRankings(
   const byPlayer = groupLinesByPlayer(lines);
   const interleagueItemsByPlayer = buildInterleagueSopItemsForSeason(identity);
   const streakLeaders = seasonFeatLeagueLeaders(identity, lines);
+  const teamGamesCtx = buildTeamGamesContext({
+    scope: "pennant",
+    identity,
+    year: identity.year,
+    world: identity.world,
+  });
 
   for (const line of lines) {
     const key = `${line.playerId}:${line.role}`;
@@ -512,6 +552,7 @@ export function buildYearSopRankings(
         prior,
         byPlayer.get(line.playerId),
         streakLeaders,
+        teamGamesCtx,
       ),
     );
     const ilItems = (interleagueItemsByPlayer.get(line.playerId) ?? []).filter(
@@ -536,7 +577,7 @@ export function buildYearSopRankings(
   }
 
   notes.push(
-    "規定到達フラグ未設定の率系タイトルはSOPタイトル点に含めません。",
+    "率系のシーズン達成・大記録・NPB記録は規定到達者のみ加点します（打席／投球回。阻止率は被盗企、勝率は13勝）。",
   );
   notes.push(
     "特殊・連続記録は「記録・偉業」登録データ（および成績内の連続記録）から参照します。",
@@ -593,6 +634,7 @@ function lineToInput(
     abHit: Set<string>;
     gameSo: Set<string>;
   },
+  teamGamesCtx?: TeamGamesContext | null,
 ): SopPlayerYearInput {
   const name =
     getPlayerMaster(line.playerId)?.fullName ?? line.playerName;
@@ -619,15 +661,17 @@ function lineToInput(
     return {
       ...base,
       role: "batter",
-      batter: batterStatsFromLine(line),
-      pitcher: pitcherLine ? pitcherStatsFromLine(pitcherLine) : null,
+      batter: batterStatsFromLine(line, teamGamesCtx),
+      pitcher: pitcherLine
+        ? pitcherStatsFromLine(pitcherLine, teamGamesCtx)
+        : null,
     };
   }
   return {
     ...base,
     role: "pitcher",
-    batter: batterLine ? batterStatsFromLine(batterLine) : null,
-    pitcher: pitcherStatsFromLine(line),
+    batter: batterLine ? batterStatsFromLine(batterLine, teamGamesCtx) : null,
+    pitcher: pitcherStatsFromLine(line, teamGamesCtx),
   };
 }
 

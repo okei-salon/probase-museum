@@ -32,6 +32,10 @@ export {
   aggregateCareerSop,
   groupSopItemsByCategory,
 } from "./computeSeasonSop";
+export {
+  SOP_RANKING_DISPLAY_LIMIT,
+  limitSopRankingsForDisplay,
+} from "./limitSopRankingsDisplay";
 export { scoreTwoWaySop } from "./scoreTwoWay";
 
 export type {

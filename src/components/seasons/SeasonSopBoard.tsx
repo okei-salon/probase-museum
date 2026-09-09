@@ -6,6 +6,7 @@ import { buildYearSopRankings } from "@/data/sop";
 import { parseSeasonKey } from "@/data/seasons";
 import {
   groupSopItemsByCategory,
+  limitSopRankingsForDisplay,
   SOP_CATEGORY_LABELS,
   type SopCategoryId,
   type SopRankEntry,
@@ -44,6 +45,10 @@ export function SeasonSopBoard({ year, seasonKey }: SeasonSopBoardProps) {
     }
     return buildYearSopRankings(year);
   }, [year, seasonKey]);
+  const displayRankings = useMemo(
+    () => limitSopRankingsForDisplay(rankings, "all"),
+    [rankings],
+  );
   const [selected, setSelected] = useState<SopRankEntry | null>(null);
   const detailRef = useRef<HTMLTableRowElement | null>(null);
 
@@ -109,7 +114,7 @@ export function SeasonSopBoard({ year, seasonKey }: SeasonSopBoardProps) {
             </tr>
           </thead>
           <tbody>
-            {rankings.map((entry) => {
+            {displayRankings.map((entry) => {
               const r = entry.result;
               const active =
                 selected != null &&
@@ -175,7 +180,7 @@ export function SeasonSopBoard({ year, seasonKey }: SeasonSopBoardProps) {
 
       {!selected ? (
         <p className="text-[11px] text-museum-ivory-soft">
-          選手名をクリックすると、その行の直下にSOP内訳を表示します。同点は同順位です。
+          選手名をクリックすると、その行の直下にSOP内訳を表示します。同点は同順位です。野手・投手それぞれ上位50人まで表示します。
         </p>
       ) : null}
 

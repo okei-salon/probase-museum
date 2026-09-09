@@ -8,6 +8,7 @@ import {
 } from "@/data/sop";
 import { formatSeasonLineLabel, type SeasonIdentity } from "@/data/seasons";
 import type { SopRole } from "@/lib/sop";
+import { limitSopRankingsForDisplay } from "@/lib/sop";
 import { cn } from "@/lib/cn";
 
 type RoleFilter = "all" | SopRole;
@@ -35,10 +36,10 @@ export function SopSeasonHubBoard() {
     return buildYearSopRankings(identity);
   }, [ready, identity]);
 
-  const filtered = useMemo(() => {
-    if (role === "all") return rankings;
-    return rankings.filter((e) => e.result.role === role);
-  }, [rankings, role]);
+  const filtered = useMemo(
+    () => limitSopRankingsForDisplay(rankings, role),
+    [rankings, role],
+  );
 
   const display = useMemo(() => {
     const sorted = [...filtered].sort((a, b) => {

@@ -15,9 +15,28 @@ import {
 } from "./npbRecords";
 import type { SopFeatsInput, SopPitcherStats, SopPriorYearFlags } from "./input";
 import type { SopLineItem } from "./types";
-import { evaluateWinPctQualified } from "@/lib/stats";
+import {
+  evaluateG30Ip30Qualified,
+  evaluateWinPctQualified,
+} from "@/lib/stats";
 
 type BasicHit = { id: string; label: string; points: number };
+
+/** 率系SOPは規定投球回到達（true）のみ。未設定・未達は加点しない */
+function pitcherIpOk(s: SopPitcherStats): boolean {
+  return s.ipQualified === true;
+}
+
+/** 救援率系の規定（登板≥30 かつ 投球回≥30） */
+function pitcherReliefRateOk(s: SopPitcherStats): boolean {
+  const ipOuts =
+    s.reliefIp != null && Number.isFinite(s.reliefIp)
+      ? s.reliefIp * 3
+      : s.ip != null && Number.isFinite(s.ip)
+        ? s.ip * 3
+        : null;
+  return evaluateG30Ip30Qualified({ g: s.g, ipOuts });
+}
 
 function isEra1x(era: number): boolean {
   return era >= 1.0 && era < 2.0;
@@ -37,15 +56,17 @@ function collectPitcherBasics(s: SopPitcherStats): BasicHit[] {
     hits.push({ id, label: def.label, points: def.points });
   };
 
+  const ipOk = pitcherIpOk(s);
+
   if (s.cg != null) add("cg10", s.cg >= 10);
   if (s.g != null) add("g50", s.g >= 50);
   if (s.sv != null) add("sv30", s.sv >= 30);
   const hp = s.hp ?? s.hld;
   if (hp != null) add("hp30", hp >= 30);
-  if (s.soRate != null) add("soRate9", s.soRate >= 9);
-  if (s.qsRate != null) add("qsRate80", s.qsRate >= 0.8);
+  if (ipOk && s.soRate != null) add("soRate9", s.soRate >= 9);
+  if (ipOk && s.qsRate != null) add("qsRate80", s.qsRate >= 0.8);
   if (s.sho != null) add("sho5", s.sho >= 5);
-  if (s.era != null && s.pitcherClass === "starter") {
+  if (ipOk && s.era != null && s.pitcherClass === "starter") {
     add("starterEra1", isEra1x(s.era));
   }
   if (s.w != null) add("w15", s.w >= 15);
@@ -70,7 +91,11 @@ function collectPitcherCombos(s: SopPitcherStats): {
   const hp = s.hp ?? s.hld;
   const sv = s.sv;
 
+  const ipOk = pitcherIpOk(s);
+  const reliefOk = pitcherReliefRateOk(s);
+
   const top =
+    ipOk &&
     s.pitcherClass === "starter" &&
     era != null &&
     isEra1x(era) &&
@@ -103,6 +128,7 @@ function collectPitcherCombos(s: SopPitcherStats): {
   }
 
   if (
+    ipOk &&
     era != null &&
     isEra2x(era) &&
     w != null &&
@@ -122,6 +148,7 @@ function collectPitcherCombos(s: SopPitcherStats): {
   }
 
   if (
+    reliefOk &&
     s.pitcherClass === "reliever" &&
     era != null &&
     isEra1x(era) &&
@@ -154,7 +181,7 @@ function applyHistoricPitcher(
     for (const c of def.covers) covered.add(c);
   };
 
-  if (s.era != null && s.pitcherClass === "starter") {
+  if (pitcherIpOk(s) && s.era != null && s.pitcherClass === "starter") {
     tryAdd("starterEra0", isEra0x(s.era));
   }
   if (s.winPct != null && evaluateWinPctQualified(s.w)) {
@@ -262,6 +289,7 @@ function scorePitcherNpb(
   };
   for (const def of NPB_PITCHER_SEASON_RECORDS) {
     if (def.field === "winPct" && !evaluateWinPctQualified(s.w)) continue;
+    if (def.field === "era" && !pitcherIpOk(s)) continue;
     if (meetsNpbRecord(fieldMap[def.field], def)) {
       items.push({
         id: `npb:${def.id}`,
