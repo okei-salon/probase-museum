@@ -1329,7 +1329,15 @@ export function extractPartnerTextBlock(rawText: string): string {
 
 export type PartnerSeasonHighlightResult = {
   kind: "season_review";
-  type: "SEASON_REVIEW" | "SEASON_HIGHLIGHT";
+  type:
+    | "SEASON_REVIEW"
+    | "SEASON_HIGHLIGHT"
+    | "SEASON_REVIEW_GENERAL"
+    | "SEASON_REVIEW_CENTRAL"
+    | "SEASON_REVIEW_PACIFIC"
+    | "SEASON_REVIEW_TEAMS";
+  /** general | central | pacific | teams */
+  reviewKind: "general" | "central" | "pacific" | "teams";
   year: number;
   world: "BLUE" | "RED" | null;
   text: string;
@@ -1342,6 +1350,24 @@ export function parseSeasonHighlightPartner(
   fallbackWorld?: "BLUE" | "RED" | null,
 ): PartnerSeasonHighlightResult | PartnerUnsupportedResult {
   return parseSeasonReviewPartner(rawText, fallbackYear, fallbackWorld);
+}
+
+const SEASON_REVIEW_TYPES = new Set([
+  "SEASON_REVIEW",
+  "SEASON_HIGHLIGHT",
+  "SEASON_REVIEW_GENERAL",
+  "SEASON_REVIEW_CENTRAL",
+  "SEASON_REVIEW_PACIFIC",
+  "SEASON_REVIEW_TEAMS",
+]);
+
+function reviewKindFromType(
+  type: string,
+): "general" | "central" | "pacific" | "teams" {
+  if (type === "SEASON_REVIEW_CENTRAL") return "central";
+  if (type === "SEASON_REVIEW_PACIFIC") return "pacific";
+  if (type === "SEASON_REVIEW_TEAMS") return "teams";
+  return "general";
 }
 
 export function parseSeasonReviewPartner(
@@ -1374,7 +1400,7 @@ export function parseSeasonReviewPartner(
     }
   }
 
-  if (type !== "SEASON_REVIEW" && type !== "SEASON_HIGHLIGHT") {
+  if (!type || !SEASON_REVIEW_TYPES.has(type)) {
     return {
       kind: "unsupported",
       type,
@@ -1401,15 +1427,24 @@ export function parseSeasonReviewPartner(
         : null;
 
   const y = year ?? fallbackYear;
-  const formalType: "SEASON_REVIEW" | "SEASON_HIGHLIGHT" =
-    type === "SEASON_HIGHLIGHT" ? "SEASON_HIGHLIGHT" : "SEASON_REVIEW";
+  const reviewKind = reviewKindFromType(type);
+  const formalType = type as PartnerSeasonHighlightResult["type"];
+  const kindLabel =
+    reviewKind === "central"
+      ? "セ・リーグ総評"
+      : reviewKind === "pacific"
+        ? "パ・リーグ総評"
+        : reviewKind === "teams"
+          ? "12球団総評"
+          : "シーズン総評";
   return {
     kind: "season_review",
     type: formalType,
+    reviewKind,
     year: y,
     world,
     text,
-    message: `シーズン総評 ${y}${world ? ` ${world}` : ""}`,
+    message: `${kindLabel} ${y}${world ? ` ${world}` : ""}`,
   };
 }
 
@@ -1477,6 +1512,10 @@ export function parseNonSeasonPartnerPaste(
       return parseJapanSeriesPartner(rawText, fallbackYear);
     case "SEASON_REVIEW":
     case "SEASON_HIGHLIGHT":
+    case "SEASON_REVIEW_GENERAL":
+    case "SEASON_REVIEW_CENTRAL":
+    case "SEASON_REVIEW_PACIFIC":
+    case "SEASON_REVIEW_TEAMS":
       return parseSeasonReviewPartner(rawText, fallbackYear, fallbackWorld);
     default:
       if (

@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   buildYearbookSeasonContext,
-  getSeasonReviewBody,
+  getAllSeasonReviewSections,
   hydrateSeasonReviewSources,
-  upsertSeasonReview,
+  SEASON_REVIEW_KIND_LABELS,
+  upsertSeasonReviewSection,
+  type SeasonReviewKind,
 } from "@/data/yearbook";
 import {
   parseSeasonKey,
@@ -14,6 +16,7 @@ import {
   type SeasonIdentity,
 } from "@/data/seasons";
 import { SeasonReviewSourceCopyPanel } from "@/components/yearbook/SeasonReviewSourceCopyPanel";
+import { cn } from "@/lib/cn";
 
 type Props = {
   /** seasonKey（BLUE_2026 / 2023 / 2000） */
@@ -22,6 +25,20 @@ type Props = {
   year?: number;
   /** 編集 UI を出すか（サマリー経由の閲覧では false） */
   allowEdit?: boolean;
+};
+
+const TAB_ORDER: SeasonReviewKind[] = [
+  "general",
+  "central",
+  "pacific",
+  "teams",
+];
+
+const TAB_SHORT: Record<SeasonReviewKind, string> = {
+  general: "総評",
+  central: "セ・リーグ",
+  pacific: "パ・リーグ",
+  teams: "12球団",
 };
 
 export function YearbookSeasonReviewBoard({
@@ -44,7 +61,15 @@ export function YearbookSeasonReviewBoard({
   }, [seasonKey, year]);
 
   const [ready, setReady] = useState(false);
-  const [body, setBody] = useState<string | null>(null);
+  const [bodies, setBodies] = useState<Record<SeasonReviewKind, string | null>>(
+    {
+      general: null,
+      central: null,
+      pacific: null,
+      teams: null,
+    },
+  );
+  const [tab, setTab] = useState<SeasonReviewKind>("general");
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [savedFlash, setSavedFlash] = useState(false);
@@ -55,15 +80,17 @@ export function YearbookSeasonReviewBoard({
     void (async () => {
       await hydrateSeasonReviewSources();
       if (cancelled || !identity) return;
-      const text = getSeasonReviewBody(identity);
-      setBody(text);
-      setDraft(text ?? "");
+      const next = getAllSeasonReviewSections(identity);
+      setBodies(next);
+      setDraft(next[tab] ?? "");
       setEditing(false);
       setReady(true);
     })();
     return () => {
       cancelled = true;
     };
+    // tab intentionally omitted — reload on identity only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity]);
 
   const context = useMemo(
@@ -71,20 +98,30 @@ export function YearbookSeasonReviewBoard({
     [ready, identity],
   );
 
+  const body = bodies[tab];
   const hasBody = Boolean(body?.trim());
   const titleLabel = identity ? seasonDisplayTitle(identity) : seasonKey;
+
+  function selectTab(next: SeasonReviewKind) {
+    setTab(next);
+    setDraft(bodies[next] ?? "");
+    setEditing(false);
+    setError(null);
+  }
 
   function handleSave() {
     if (!identity) return;
     setError(null);
     try {
-      const next = upsertSeasonReview({
+      upsertSeasonReviewSection({
         identity,
+        kind: tab,
         body: draft,
         source: "manual",
       });
-      setBody(next.body);
-      setDraft(next.body);
+      const next = getAllSeasonReviewSections(identity);
+      setBodies(next);
+      setDraft(next[tab] ?? "");
       setEditing(false);
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1800);
@@ -117,12 +154,42 @@ export function YearbookSeasonReviewBoard({
         <p className="max-w-2xl text-[13px] leading-relaxed text-museum-ivory-soft">
           YEAR {identity.year}
           {identity.world ? ` · WORLD ${identity.world}` : null}
-          。登録データに基づくそのシーズンの長文記録です。
+          。総評・セ・パ・12球団を分けて閲覧します。
           {identity.world
             ? `（${identity.world} のみ。他WORLDは含めません）`
             : null}
         </p>
       </header>
+
+      <div
+        role="tablist"
+        aria-label="総評カテゴリ"
+        className="flex flex-wrap gap-2"
+      >
+        {TAB_ORDER.map((k) => {
+          const filled = Boolean(bodies[k]?.trim());
+          return (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={tab === k}
+              onClick={() => selectTab(k)}
+              className={cn(
+                "rounded-full border px-3.5 py-1.5 text-[12px] tracking-[0.04em]",
+                tab === k
+                  ? "border-[color:var(--museum-accent,#d4af37)] bg-[color:var(--museum-accent,#d4af37)]/15 text-[color:var(--museum-accent,#d4af37)]"
+                  : "border-white/15 text-museum-ivory-soft hover:border-white/30",
+              )}
+            >
+              {TAB_SHORT[k]}
+              {filled ? (
+                <span className="ml-1.5 text-[10px] opacity-70">●</span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
 
       <div className="flex flex-wrap gap-2">
         <Link
@@ -141,7 +208,9 @@ export function YearbookSeasonReviewBoard({
             }}
             className="rounded-full border border-[color:var(--museum-accent-border,#d4af3773)] bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.16))] px-4 py-1.5 text-[12px] tracking-[0.06em] text-[color:var(--museum-accent,#d4af37)]"
           >
-            {hasBody ? "総評を編集" : "総評を書く"}
+            {hasBody
+              ? `${SEASON_REVIEW_KIND_LABELS[tab]}を編集`
+              : `${SEASON_REVIEW_KIND_LABELS[tab]}を書く`}
           </button>
         ) : null}
         {allowEdit && editing ? (
@@ -179,21 +248,25 @@ export function YearbookSeasonReviewBoard({
         </p>
       ) : null}
 
+      <p className="text-[12px] tracking-[0.08em] text-white/45">
+        {SEASON_REVIEW_KIND_LABELS[tab]}
+      </p>
+
       {editing ? (
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          rows={18}
-          className="w-full rounded-xl border border-white/15 bg-black/50 px-4 py-3 text-[14px] leading-[1.85] text-museum-ivory outline-none focus:border-[color:var(--museum-accent,#d4af37)]/50"
-          placeholder="そのシーズンの総評を記入…"
+          rows={20}
+          className="w-full max-w-full rounded-xl border border-white/15 bg-black/50 px-4 py-3 text-[14px] leading-[1.85] text-museum-ivory outline-none focus:border-[color:var(--museum-accent,#d4af37)]/50"
+          placeholder={`${SEASON_REVIEW_KIND_LABELS[tab]}を記入…`}
         />
       ) : hasBody ? (
-        <article className="whitespace-pre-wrap rounded-xl border border-white/10 bg-black/40 px-4 py-5 text-[14px] leading-[1.9] text-museum-ivory-muted md:px-6 md:py-6 md:text-[15px]">
+        <article className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-xl border border-white/10 bg-black/40 px-4 py-5 text-[14px] leading-[1.9] text-museum-ivory-muted md:px-6 md:py-6 md:text-[15px]">
           {body}
         </article>
       ) : (
         <p className="rounded-xl border border-dashed border-white/15 bg-black/30 px-4 py-8 text-center text-[13px] text-museum-ivory-soft">
-          このシーズンの総評はまだ登録されていません
+          この項目の総評はまだ登録されていません
         </p>
       )}
 

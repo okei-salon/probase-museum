@@ -35,6 +35,12 @@ function normalizeReview(r: YearbookSeasonReview & { id?: string }): YearbookRev
     ...r,
     world,
     seasonKey,
+    body: typeof r.body === "string" ? r.body : "",
+    centralBody:
+      typeof r.centralBody === "string" ? r.centralBody : r.centralBody,
+    pacificBody:
+      typeof r.pacificBody === "string" ? r.pacificBody : r.pacificBody,
+    teamsBody: typeof r.teamsBody === "string" ? r.teamsBody : r.teamsBody,
     id: r.id || seasonKey,
   };
 }
@@ -98,12 +104,18 @@ export function upsertYearbookReview(input: {
   world?: SeasonIdentity["world"];
   seasonKey?: string;
   body: string;
+  centralBody?: string;
+  pacificBody?: string;
+  teamsBody?: string;
   source?: YearbookReviewSource;
   confirmed?: boolean;
 }): YearbookSeasonReview;
 export function upsertYearbookReview(input: {
   identity: SeasonIdentity;
   body: string;
+  centralBody?: string;
+  pacificBody?: string;
+  teamsBody?: string;
   source?: YearbookReviewSource;
   confirmed?: boolean;
 }): YearbookSeasonReview;
@@ -114,12 +126,18 @@ export function upsertYearbookReview(
         world?: SeasonIdentity["world"];
         seasonKey?: string;
         body: string;
+        centralBody?: string;
+        pacificBody?: string;
+        teamsBody?: string;
         source?: YearbookReviewSource;
         confirmed?: boolean;
       }
     | {
         identity: SeasonIdentity;
         body: string;
+        centralBody?: string;
+        pacificBody?: string;
+        teamsBody?: string;
         source?: YearbookReviewSource;
         confirmed?: boolean;
       },
@@ -137,6 +155,16 @@ export function upsertYearbookReview(
     world: identity.world,
     seasonKey: identity.seasonKey,
     body: input.body,
+    centralBody:
+      input.centralBody !== undefined
+        ? input.centralBody
+        : prev?.centralBody,
+    pacificBody:
+      input.pacificBody !== undefined
+        ? input.pacificBody
+        : prev?.pacificBody,
+    teamsBody:
+      input.teamsBody !== undefined ? input.teamsBody : prev?.teamsBody,
     source: input.source ?? prev?.source ?? "manual",
     confirmed: input.confirmed ?? prev?.confirmed ?? true,
     createdAt: prev?.createdAt ?? now,

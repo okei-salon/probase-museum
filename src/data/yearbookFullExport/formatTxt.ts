@@ -110,10 +110,31 @@ export function formatYearbookFullExportTxt(
   lines.push(section("PLAYER_PROFILES"));
   lines.push(dump(payload.playerProfiles).trimEnd());
 
-  lines.push(section("SEASON_REVIEW"));
+  lines.push(section("SEASON REVIEW / GENERAL"));
   lines.push(
-    payload.seasonReview?.trim()
-      ? payload.seasonReview.trim()
+    payload.seasonReviews?.general?.trim()
+      ? payload.seasonReviews.general.trim()
+      : "(なし)",
+  );
+  lines.push("");
+  lines.push(section("SEASON REVIEW / CENTRAL"));
+  lines.push(
+    payload.seasonReviews?.central?.trim()
+      ? payload.seasonReviews.central.trim()
+      : "(なし)",
+  );
+  lines.push("");
+  lines.push(section("SEASON REVIEW / PACIFIC"));
+  lines.push(
+    payload.seasonReviews?.pacific?.trim()
+      ? payload.seasonReviews.pacific.trim()
+      : "(なし)",
+  );
+  lines.push("");
+  lines.push(section("SEASON REVIEW / 12 TEAMS"));
+  lines.push(
+    payload.seasonReviews?.teams?.trim()
+      ? payload.seasonReviews.teams.trim()
       : "(なし)",
   );
   lines.push("");

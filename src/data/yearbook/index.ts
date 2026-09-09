@@ -14,7 +14,10 @@ export type {
   YearbookReviewSource,
   YearbookSeasonContext,
   YearbookSeasonReview,
+  SeasonReviewKind,
 } from "./types";
+
+export { SEASON_REVIEW_KIND_LABELS } from "./types";
 
 export {
   clearYearbookReview,
@@ -27,11 +30,16 @@ export {
 export { buildYearbookSeasonContext } from "./context";
 
 export {
+  getAllSeasonReviewSections,
   getSeasonReviewBody,
   getSeasonReviewRecord,
+  getSeasonReviewSection,
   hasSeasonReview,
+  hasSeasonReviewSection,
   hydrateSeasonReviewSources,
+  SEASON_REVIEW_KINDS,
   upsertSeasonReview,
+  upsertSeasonReviewSection,
 } from "@/data/seasonReview";
 
 /** YEARBOOK ハブ: BLUE / RED / 旧年度 / DEMO を別カードで列挙 */
@@ -73,7 +81,7 @@ export const yearbookSections = [
   {
     id: "overview",
     title: "シーズン総評",
-    description: "その年全体を文章で振り返る入口",
+    description: "総評・セ／パ・12球団を分けて読む入口",
     icon: "book" as const,
   },
 ] as const;

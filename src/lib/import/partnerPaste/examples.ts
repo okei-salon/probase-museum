@@ -219,12 +219,44 @@ MVP_NOTE=シリーズ通算`,
 
   SEASON_REVIEW: `YEAR=2026
 WORLD=BLUE
-TYPE=SEASON_REVIEW
+TYPE=SEASON_REVIEW_GENERAL
 
 TEXT=
 2026年はセ・リーグで阪神が優勝争いを制し、パ・リーグは日本ハムがリーグを支配した。
 交流戦・クライマックスシリーズを経て、日本シリーズではソフトバンクが巨人を破り日本一。
 佐藤輝明のセ・リーグMVP、柳田悠岐の日本シリーズMVPなど、記録と物語の多いシーズンとなった。`,
+
+  SEASON_REVIEW_GENERAL: `YEAR=2026
+WORLD=BLUE
+TYPE=SEASON_REVIEW_GENERAL
+
+TEXT=
+（全体総評本文）`,
+
+  SEASON_REVIEW_CENTRAL: `YEAR=2026
+WORLD=BLUE
+TYPE=SEASON_REVIEW_CENTRAL
+
+TEXT=
+（セ・リーグ総評本文）`,
+
+  SEASON_REVIEW_PACIFIC: `YEAR=2026
+WORLD=BLUE
+TYPE=SEASON_REVIEW_PACIFIC
+
+TEXT=
+（パ・リーグ総評本文）`,
+
+  SEASON_REVIEW_TEAMS: `YEAR=2026
+WORLD=BLUE
+TYPE=SEASON_REVIEW_TEAMS
+
+TEXT=
+阪神
+……
+
+巨人
+……`,
 
   /** @deprecated 正式は SEASON_REVIEW。貼り付け互換のため残す */
   SEASON_HIGHLIGHT: `YEAR=2026

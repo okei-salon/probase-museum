@@ -15,7 +15,7 @@ import {
   type PitcherSeasonLine,
 } from "@/data/playerSeasonLines";
 import { getJapanSeriesMvp, getPostseasonView } from "@/data/postseason";
-import { getSeasonReviewBody } from "@/data/seasonReview";
+import { getAllSeasonReviewSections } from "@/data/seasonReview";
 import { buildYearFeats } from "@/data/seasonAchievements";
 import { ACHIEVEMENT_CATEGORY_LABELS } from "@/data/seasonAchievements/types";
 import {
@@ -716,8 +716,9 @@ export function buildYearbookFullExport(
     })
     .filter(Boolean);
 
-  // —— Season review ——
-  const seasonReview = getSeasonReviewBody(identity);
+  // —— Season reviews (4 sections) ——
+  const seasonReviews = getAllSeasonReviewSections(identity);
+  const seasonReview = seasonReviews.general;
 
   const summary: YearbookFullExportSummary = {
     teams: new Set([
@@ -744,7 +745,18 @@ export function buildYearbookFullExport(
     hasMonthlyStandings: monthlyStandings.length > 0,
     hasInterleague,
     hasPostseason: postseason != null,
-    hasSeasonReview: Boolean(seasonReview && seasonReview.trim()),
+    hasSeasonReview: Boolean(
+      seasonReviews.general ||
+        seasonReviews.central ||
+        seasonReviews.pacific ||
+        seasonReviews.teams,
+    ),
+    seasonReviewSections: {
+      general: Boolean(seasonReviews.general),
+      central: Boolean(seasonReviews.central),
+      pacific: Boolean(seasonReviews.pacific),
+      teams: Boolean(seasonReviews.teams),
+    },
     missingNotes,
   };
 
@@ -779,6 +791,12 @@ export function buildYearbookFullExport(
     twoWayPlayers,
     playerProfiles,
     seasonReview: seasonReview?.trim() ? seasonReview : null,
+    seasonReviews: {
+      general: seasonReviews.general,
+      central: seasonReviews.central,
+      pacific: seasonReviews.pacific,
+      teams: seasonReviews.teams,
+    },
   };
 
   const base = filenameBase(identity);

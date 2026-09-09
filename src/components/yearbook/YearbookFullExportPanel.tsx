@@ -184,7 +184,19 @@ export function YearbookFullExportPanel({ seasonKey, className }: Props) {
           <li>月次順位 {summary.hasMonthlyStandings ? "あり" : "なし"}</li>
           <li>交流戦 {summary.hasInterleague ? "あり" : "なし"}</li>
           <li>ポストシーズン {summary.hasPostseason ? "あり" : "なし"}</li>
-          <li>SEASON_REVIEW {summary.hasSeasonReview ? "あり" : "なし"}</li>
+          <li>
+            SEASON_REVIEW{" "}
+            {summary.hasSeasonReview
+              ? [
+                  summary.seasonReviewSections?.general ? "総評" : null,
+                  summary.seasonReviewSections?.central ? "セ" : null,
+                  summary.seasonReviewSections?.pacific ? "パ" : null,
+                  summary.seasonReviewSections?.teams ? "12球団" : null,
+                ]
+                  .filter(Boolean)
+                  .join("・") || "あり"
+              : "なし"}
+          </li>
         </ul>
       ) : null}
 

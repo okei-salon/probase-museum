@@ -23,6 +23,12 @@ export type YearbookFullExportSummary = {
   hasInterleague: boolean;
   hasPostseason: boolean;
   hasSeasonReview: boolean;
+  seasonReviewSections: {
+    general: boolean;
+    central: boolean;
+    pacific: boolean;
+    teams: boolean;
+  };
   missingNotes: string[];
 };
 
@@ -60,6 +66,12 @@ export type YearbookFullExportPayload = {
   twoWayPlayers: unknown[];
   playerProfiles: unknown[];
   seasonReview: string | null;
+  seasonReviews: {
+    general: string | null;
+    central: string | null;
+    pacific: string | null;
+    teams: string | null;
+  };
 };
 
 export type YearbookFullExportBundle = {
