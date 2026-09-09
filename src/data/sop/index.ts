@@ -3,6 +3,11 @@ export {
   getPlayerYearSopDetail,
 } from "./buildYearSop";
 export {
+  auditAnnualAwardsSopConsistency,
+  buildFormalAnnualAwardsByPlayer,
+  type AnnualAwardSopAuditFinding,
+} from "./formalAnnualAwards";
+export {
   buildAllInterleagueTitleBoards,
   buildInterleagueSopCareerRankings,
   buildInterleagueSopFourKings,

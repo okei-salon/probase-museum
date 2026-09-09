@@ -6,20 +6,11 @@
  * 連続ボーナスは同一 WORLD の前年のみ参照する。
  */
 
-import {
-  getBestNineAwards,
-  getGoldenGloveAwards,
-  getMvpAwards,
-  getRookieAwards,
-  getSawamuraAwards,
-} from "@/data/awards";
-import { listSavedMonthlyMvpForSeason } from "@/data/import/store";
 import { getPlayerMaster } from "@/data/playerMaster";
 import {
   listSeasonLinesForSeason,
   type PlayerSeasonLine,
 } from "@/data/playerSeasonLines";
-import { getJapanSeriesMvp } from "@/data/postseason";
 import { buildTitleRankings } from "@/data/titleRankings/buildRankings";
 import { getTeam } from "@/data/teams";
 import {
@@ -48,7 +39,7 @@ import {
   resolveTeamGamesForPlayer,
   type TeamGamesContext,
 } from "@/lib/stats";
-import { listRegisteredAwardsForSeason } from "./awardsRegistry";
+import { buildFormalAnnualAwardsByPlayer } from "./formalAnnualAwards";
 import { getSopFeat } from "./featsStore";
 import {
   achievementsToSopFeats,
@@ -319,108 +310,18 @@ function seasonFeatLeagueLeaders(
   };
 }
 
-/** レジストリ + 月間MVP（WORLD 厳密）。レガシーのみハードコード表彰フォールバック */
+/**
+ * 年間表彰SOP。
+ * 画面と同じ正式受賞者（枠解決後）だけを加点する。
+ * レジストリの余剰・重複行からの推測加点はしない。
+ */
 function collectAwardsForPlayer(
   identity: SeasonIdentity,
   playerId: string,
+  awardsByPlayer?: Map<string, SopAwardInput[]>,
 ): SopAwardInput[] {
-  const out: SopAwardInput[] = [];
-  const year = identity.year;
-  const registered = listRegisteredAwardsForSeason(identity).filter(
-    (a) => a.playerId === playerId,
-  );
-
-  if (registered.length > 0) {
-    const monthly = registered.filter((a) => a.kind === "monthlyMvp");
-    const others = registered.filter((a) => a.kind !== "monthlyMvp");
-    for (const a of others) {
-      out.push({ kind: a.kind, label: undefined });
-    }
-    if (monthly.length > 0) {
-      out.push({ kind: "monthlyMvp", count: monthly.length });
-    }
-    return out;
-  }
-
-  // 月間MVP（実保存・WORLD 分離）
-  try {
-    const monthly = listSavedMonthlyMvpForSeason(identity);
-    let count = 0;
-    for (const r of monthly) {
-      if (r.batter?.playerId === playerId) count += 1;
-      if (r.pitcher?.playerId === playerId) count += 1;
-    }
-    if (count > 0) out.push({ kind: "monthlyMvp", count });
-  } catch {
-    /* ignore */
-  }
-
-  // 正式 WORLD: ハードコード表彰は使わない（BLUE/RED に同一サンプルが付かない）
-  if (identity.world != null) {
-    return out;
-  }
-
-  // フォールバック: 既存ハードコード（レガシー／DEMO のみ）
-  const y = String(year);
-  try {
-    const mvp = getMvpAwards(y);
-    if (mvp.central.playerId === playerId || mvp.pacific.playerId === playerId) {
-      out.push({ kind: "mvp" });
-    }
-  } catch {
-    /* ignore */
-  }
-  try {
-    const rook = getRookieAwards(y);
-    if (
-      rook.central.playerId === playerId ||
-      rook.pacific.playerId === playerId
-    ) {
-      out.push({ kind: "rookie" });
-    }
-  } catch {
-    /* ignore */
-  }
-  try {
-    const saw = getSawamuraAwards(y);
-    if (
-      saw.central?.playerId === playerId ||
-      saw.pacific?.playerId === playerId
-    ) {
-      out.push({ kind: "sawamura" });
-    }
-  } catch {
-    /* ignore */
-  }
-  try {
-    const b9 = getBestNineAwards(y);
-    const hit = [...b9.central, ...b9.pacific].some(
-      (c) => c.playerId === playerId,
-    );
-    if (hit) out.push({ kind: "bestNine" });
-  } catch {
-    /* ignore */
-  }
-  try {
-    const gg = getGoldenGloveAwards(y);
-    const hit = [...gg.central, ...gg.pacific].some(
-      (c) => c.playerId === playerId,
-    );
-    if (hit) out.push({ kind: "goldenGlove" });
-  } catch {
-    /* ignore */
-  }
-
-  try {
-    const js = getJapanSeriesMvp(identity);
-    if (js?.playerId === playerId) {
-      out.push({ kind: "japanSeriesMvp" });
-    }
-  } catch {
-    /* ignore */
-  }
-
-  return out;
+  const index = awardsByPlayer ?? buildFormalAnnualAwardsByPlayer(identity);
+  return index.get(playerId) ?? [];
 }
 
 function titlesForPlayer(
@@ -516,6 +417,7 @@ export function buildYearSopRankings(
     year: priorIdentity.year,
     world: priorIdentity.world,
   });
+  const prevAwardsByPlayer = buildFormalAnnualAwardsByPlayer(priorIdentity);
   const prevByKey = new Map<string, SopSeasonResult>();
   const prevByPlayer = groupLinesByPlayer(prevLines);
   for (const line of prevLines) {
@@ -527,6 +429,7 @@ export function buildYearSopRankings(
       prevByPlayer.get(line.playerId),
       undefined,
       prevTeamGamesCtx,
+      prevAwardsByPlayer,
     );
     prevByKey.set(key, computeSeasonSop(input));
   }
@@ -541,6 +444,7 @@ export function buildYearSopRankings(
     year: identity.year,
     world: identity.world,
   });
+  const awardsByPlayer = buildFormalAnnualAwardsByPlayer(identity);
 
   for (const line of lines) {
     const key = `${line.playerId}:${line.role}`;
@@ -553,6 +457,7 @@ export function buildYearSopRankings(
         byPlayer.get(line.playerId),
         streakLeaders,
         teamGamesCtx,
+        awardsByPlayer,
       ),
     );
     const ilItems = (interleagueItemsByPlayer.get(line.playerId) ?? []).filter(
@@ -587,6 +492,9 @@ export function buildYearSopRankings(
   );
   notes.push(
     "交流戦SOP（10部門）は通常部分SOPへ加算し、最終SOPとして集計します（二重加算なし）。",
+  );
+  notes.push(
+    "年間表彰SOPは画面と同じ正式受賞者（ポジション枠解決後）のみ加点します。",
   );
   if (identity.world) {
     notes.push(
@@ -635,6 +543,7 @@ function lineToInput(
     gameSo: Set<string>;
   },
   teamGamesCtx?: TeamGamesContext | null,
+  awardsByPlayer?: Map<string, SopAwardInput[]>,
 ): SopPlayerYearInput {
   const name =
     getPlayerMaster(line.playerId)?.fullName ?? line.playerName;
@@ -650,7 +559,11 @@ function lineToInput(
     teamId: line.teamId,
     teamShort: teamShortOf(line),
     league: leagueOf(line) as "central" | "pacific",
-    awards: collectAwardsForPlayer(identity, line.playerId),
+    awards: collectAwardsForPlayer(
+      identity,
+      line.playerId,
+      awardsByPlayer,
+    ),
     titles: titlesForPlayer(identity, line.playerId, line.role),
     feats: featsFor(identity, line.playerId, line.role, line, streakLeaders),
     priorYear: prior,
