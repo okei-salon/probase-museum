@@ -86,6 +86,7 @@ function batterStatsFromLine(
     : null;
   const paStatus = evaluatePaQualified({
     pa: c.pa ?? null,
+    ab: c.ab ?? null,
     teamGames,
     flag: c.paQualified ?? null,
   });
@@ -483,6 +484,9 @@ export function buildYearSopRankings(
 
   notes.push(
     "率系のシーズン達成・大記録・NPB記録は規定到達者のみ加点します（打席／投球回。阻止率は被盗企、勝率は13勝）。",
+  );
+  notes.push(
+    "二刀流SOPの打率・防御率も率系として規定到達者のみ加点します（累積項目は従来どおり）。",
   );
   notes.push(
     "特殊・連続記録は「記録・偉業」登録データ（および成績内の連続記録）から参照します。",

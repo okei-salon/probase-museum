@@ -111,6 +111,7 @@ function eligible(
       c.ab + c.bb + (c.hbp ?? 0) + (c.sf ?? 0) + (c.sac ?? 0);
     return evaluatePaQualified({
       pa,
+      ab: c.ab ?? null,
       teamGames: resolveTeamGamesForPlayer(teamGamesCtx, line.teamId),
       flag: c.paQualified,
     }).qualified;

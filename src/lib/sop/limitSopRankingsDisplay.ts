@@ -18,7 +18,7 @@ export function limitSopRankingsForDisplay(
   limit: number = SOP_RANKING_DISPLAY_LIMIT,
 ): SopRankEntry[] {
   const filtered = rankings
-    .filter((e) => e.result.role === role)
+    .filter((e) => e.result.role === role && e.result.total > 0)
     .map((e) => e.result);
   return rankSopResults(filtered).slice(0, limit);
 }

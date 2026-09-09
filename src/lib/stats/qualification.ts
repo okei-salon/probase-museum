@@ -71,9 +71,12 @@ export type QualifyStatus = {
 /**
  * 野手：規定打席到達。
  * チーム試合数が取れるときは計算を優先。なければ保存フラグを使う。
+ * PA が無くても、打数（AB）が規定未満なら未到達確定（PA ≥ AB のため）。
  */
 export function evaluatePaQualified(input: {
   pa: number | null | undefined;
+  /** 打席未入力時の未到達確定用（任意） */
+  ab?: number | null | undefined;
   teamGames: number | null | undefined;
   flag?: boolean | null;
 }): QualifyStatus {
@@ -83,14 +86,29 @@ export function evaluatePaQualified(input: {
     input.teamGames > 0
       ? input.teamGames
       : null;
-  if (teamGames != null && input.pa != null && Number.isFinite(input.pa)) {
+  if (teamGames != null) {
     const threshold = requiredPlateAppearances(teamGames);
-    return {
-      qualified: input.pa >= threshold,
-      known: true,
-      teamGames,
-      threshold,
-    };
+    if (input.pa != null && Number.isFinite(input.pa)) {
+      return {
+        qualified: input.pa >= threshold,
+        known: true,
+        teamGames,
+        threshold,
+      };
+    }
+    // PA ≥ AB なので、打数が規定未満なら規定打席未到達で確定
+    if (
+      input.ab != null &&
+      Number.isFinite(input.ab) &&
+      input.ab < threshold
+    ) {
+      return {
+        qualified: false,
+        known: true,
+        teamGames,
+        threshold,
+      };
+    }
   }
   if (input.flag === true) {
     return { qualified: true, known: true, teamGames, threshold: null };

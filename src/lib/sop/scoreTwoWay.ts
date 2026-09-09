@@ -49,7 +49,8 @@ function scoreBatterSide(s: SopBatterStats): SideHit[] {
   };
 
   addMin("pa", resolvePa(s));
-  addMin("avg", s.avg);
+  // 打率は率系：既存SOPと同じく規定打席到達者のみ（数打席の高打率で二刀流を成立させない）
+  if (s.paQualified === true) addMin("avg", s.avg);
   addMin("h", s.h);
   addMin("rbi", s.rbi);
   addMin("hr", s.hr);
@@ -85,21 +86,24 @@ function scorePitcherSide(p: SopPitcherStats): SideHit[] {
   addMin("so", p.so);
   addMin("svHp", resolveSvHp(p));
 
-  const eraHit = bestCeilingTierPoints(
-    p.era,
-    TWO_WAY_PITCHER_TIERS.era.map((t) => ({ max: t.max, points: t.points })),
-  );
-  if (eraHit) {
-    const def = TWO_WAY_PITCHER_TIERS.era.find(
-      (t) => t.max === eraHit.max && t.points === eraHit.points,
+  // 防御率は率系：既存SOPと同じく規定投球回到達者のみ
+  if (p.ipQualified === true) {
+    const eraHit = bestCeilingTierPoints(
+      p.era,
+      TWO_WAY_PITCHER_TIERS.era.map((t) => ({ max: t.max, points: t.points })),
     );
-    if (def) {
-      hits.push({
-        id: "two_way:pitcher:era",
-        label: def.label,
-        points: eraHit.points,
-        side: "pitcher",
-      });
+    if (eraHit) {
+      const def = TWO_WAY_PITCHER_TIERS.era.find(
+        (t) => t.max === eraHit.max && t.points === eraHit.points,
+      );
+      if (def) {
+        hits.push({
+          id: "two_way:pitcher:era",
+          label: def.label,
+          points: eraHit.points,
+          side: "pitcher",
+        });
+      }
     }
   }
 
