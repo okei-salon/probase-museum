@@ -1,25 +1,34 @@
+/**
+ * シーズンサマリー — 既存 Museum データの読み取り専用ビュー。
+ * 専用保存は持たない。YEAR × WORLD の登録済みデータのみ参照する。
+ */
+
+import type { StandingRow } from "@/components/views/StandingsTable";
+import { getInterleagueChampion } from "@/data/interleague";
+import { getPlayerFullName, getPlayerMaster } from "@/data/playerMaster";
+import { getJapanSeriesMvp, getPostseason } from "@/data/postseason";
+import { isRegisteredAwardNone } from "@/lib/import/partnerPaste/awardOutcome";
+import {
+  listRegisteredAwardsForSeason,
+  type RegisteredSeasonAward,
+} from "@/data/sop/awardsRegistry";
+import {
+  allowsLayoutSampleFallback,
+  formatSeasonLineLabel,
+  identityFromWorldYear,
+  parseSeasonKey,
+  type SeasonIdentity,
+} from "@/data/seasons";
 import {
   centralStandings,
   pacificStandings,
 } from "@/data/seasonViews";
-import { getJapanSeriesMvp, getPostseason } from "@/data/postseason";
-import {
-  getInterleagueChampion,
-  getInterleagueMvp,
-} from "@/data/interleague";
+import { getTeam, npbTeams } from "@/data/teams";
 import {
   getStandingsForSeason,
   getYearStandings,
+  type StandingEntry,
 } from "@/data/teamStandings";
-import type { SeasonIdentity } from "@/data/seasons";
-import { allowsLayoutSampleFallback, parseSeasonKey } from "@/data/seasons";
-import type { StandingRow } from "@/components/views/StandingsTable";
-
-/**
- * シーズンサマリー用データ。
- * 今後のデータ登録機能と差し替えやすいよう、年単位で取得する構造にする。
- * ※実在するNPB公式結果を勝手に記入しない（プレースホルダー／既存ダミーのみ）。
- */
 
 export type SummaryChampion = {
   id: string;
@@ -61,7 +70,7 @@ export type SeasonSummaryData = {
   tagline: string;
   champions: SummaryChampion[];
   awards: SummaryAward[];
-  /** その年に該当する記録・出来事のみ */
+  /** その年に該当する記録・出来事のみ（現状は専用登録なし） */
   highlights: SummaryHighlight[];
   standings: {
     central: StandingRow[];
@@ -69,263 +78,252 @@ export type SeasonSummaryData = {
   };
 };
 
-const placeholderTeam = "登録待ち";
-const placeholderPlayer = "登録待ち";
+const PLACEHOLDER = "登録待ち";
+const AWARD_NONE_LABEL = "該当なし";
 
-/** 年ごとのサマリー登録テーブル（将来はDB/登録機能へ置換） */
-const seasonSummaryRegistry: Record<string, Partial<SeasonSummaryData>> = {
-  "2023": {
-    tagline: "2023年の記録と栄光を振り返る",
-    champions: [
-      {
-        id: "central",
-        title: "セ・リーグ優勝",
-        teamName: placeholderTeam,
-        note: "データ登録後に表示",
-      },
-      {
-        id: "pacific",
-        title: "パ・リーグ優勝",
-        teamName: placeholderTeam,
-        note: "データ登録後に表示",
-      },
-      {
-        id: "japan",
-        title: "日本一",
-        teamName: placeholderTeam,
-        note: "日本シリーズ優勝",
-        featured: true,
-      },
-      {
-        id: "interleague",
-        title: "交流戦優勝",
-        teamName: placeholderTeam,
-        note: "データ登録後に表示",
-      },
-    ],
-    awards: [
-      {
-        id: "mvp-c",
-        title: "セ・リーグ MVP",
-        playerName: placeholderPlayer,
-        teamName: placeholderTeam,
-        playerId: null,
-      },
-      {
-        id: "mvp-p",
-        title: "パ・リーグ MVP",
-        playerName: placeholderPlayer,
-        teamName: placeholderTeam,
-        playerId: null,
-      },
-      {
-        id: "rookie-c",
-        title: "セ・リーグ 新人王",
-        playerName: placeholderPlayer,
-        teamName: placeholderTeam,
-        playerId: null,
-      },
-      {
-        id: "rookie-p",
-        title: "パ・リーグ 新人王",
-        playerName: placeholderPlayer,
-        teamName: placeholderTeam,
-        playerId: null,
-      },
-      {
-        id: "sawamura",
-        title: "沢村賞",
-        playerName: placeholderPlayer,
-        teamName: placeholderTeam,
-        playerId: null,
-      },
-      {
-        id: "js-mvp",
-        title: "日本シリーズMVP",
-        playerName: placeholderPlayer,
-        teamName: placeholderTeam,
-        playerId: null,
-      },
-      {
-        id: "il-mvp",
-        title: "交流戦MVP",
-        playerName: placeholderPlayer,
-        teamName: placeholderTeam,
-        playerId: null,
-      },
-    ],
-    // 該当する展示のみ（未確定の記録は載せない）
-    highlights: [
-      {
-        id: "symbol-2023",
-        kind: "symbol",
-        title: "そのシーズンを象徴する出来事",
-        description:
-          "シーズンを象徴する物語・出来事は、データ登録後にここに展示されます。",
-        meta: "展示準備中",
-      },
-      {
-        id: "sop-2023",
-        kind: "sop-1st",
-        title: "SOP年間1位",
-        description: "独自評価SOPのシーズン1位選手を展示します。",
-        meta: "登録待ち",
-      },
-    ],
+function resolveIdentity(
+  year: string,
+  seasonKeyOrIdentity?: string | SeasonIdentity | null,
+): SeasonIdentity {
+  if (typeof seasonKeyOrIdentity === "object" && seasonKeyOrIdentity != null) {
+    return seasonKeyOrIdentity;
+  }
+  if (typeof seasonKeyOrIdentity === "string") {
+    const parsed = parseSeasonKey(seasonKeyOrIdentity);
+    if (parsed) return parsed;
+  }
+  const yearNum = Number(year);
+  return identityFromWorldYear(
+    Number.isFinite(yearNum) ? yearNum : 0,
+    null,
+  );
+}
+
+function isPlaceholder(name: string | null | undefined): boolean {
+  if (!name) return true;
+  return name === PLACEHOLDER || name.includes(PLACEHOLDER);
+}
+
+/** 球団表示名（正式名を優先。teamId / 短縮名 / 正式名から解決） */
+function resolveTeamDisplayName(input: {
+  teamId?: string | null;
+  teamName?: string | null;
+  teamShort?: string | null;
+}): string {
+  if (input.teamId) {
+    const t = getTeam(input.teamId);
+    if (t) return t.name;
+  }
+  const raw = (input.teamName ?? input.teamShort ?? "").trim();
+  if (!raw || isPlaceholder(raw)) return PLACEHOLDER;
+  const hit =
+    npbTeams.find((t) => t.name === raw) ??
+    npbTeams.find((t) => t.short === raw) ??
+    npbTeams.find((t) => raw.includes(t.short) || t.name.includes(raw));
+  return hit?.name ?? raw;
+}
+
+function leagueChampionFromStandings(
+  entries: StandingEntry[] | undefined,
+): string {
+  if (!entries?.length) return PLACEHOLDER;
+  const top =
+    entries.find((e) => e.rank === 1) ??
+    [...entries].sort((a, b) => a.rank - b.rank)[0];
+  if (!top) return PLACEHOLDER;
+  return resolveTeamDisplayName({
+    teamId: top.teamId,
+    teamName: top.team,
+  });
+}
+
+/**
+ * 表彰の表示名。
+ * playerId → 選手マスタの fullName（日本人フルネーム／外国人は登録名）を優先。
+ */
+export function resolveSummaryAwardPlayerName(
+  award: RegisteredSeasonAward | null | undefined,
+  fallbackPlayerId?: string | null,
+  fallbackName?: string | null,
+): string {
+  if (award && isRegisteredAwardNone(award)) return AWARD_NONE_LABEL;
+  const playerId = award?.playerId || fallbackPlayerId || null;
+  if (playerId) {
+    const full = getPlayerFullName(playerId) ?? getPlayerMaster(playerId)?.fullName;
+    if (full) return full;
+  }
+  const name = (award?.playerName ?? fallbackName ?? "").trim();
+  if (!name || isPlaceholder(name)) return PLACEHOLDER;
+  if (name === AWARD_NONE_LABEL) return AWARD_NONE_LABEL;
+  return name;
+}
+
+function awardTeamDisplay(award: RegisteredSeasonAward | null): string {
+  if (!award || isRegisteredAwardNone(award)) return "—";
+  return resolveTeamDisplayName({ teamShort: award.teamShort });
+}
+
+function pickAward(
+  awards: RegisteredSeasonAward[],
+  kind: RegisteredSeasonAward["kind"],
+  league?: "central" | "pacific",
+): RegisteredSeasonAward | null {
+  return (
+    awards.find(
+      (a) =>
+        a.kind === kind &&
+        (league == null || a.league === league),
+    ) ?? null
+  );
+}
+
+function toAwardCard(
+  id: string,
+  title: string,
+  award: RegisteredSeasonAward | null,
+  jsFallback?: {
+    playerId: string | null;
+    playerName: string;
+    teamName: string;
   },
-};
+): SummaryAward {
+  if (award) {
+    const none = isRegisteredAwardNone(award);
+    return {
+      id,
+      title,
+      playerName: resolveSummaryAwardPlayerName(award),
+      teamName: none ? "—" : awardTeamDisplay(award),
+      playerId: none ? null : award.playerId || null,
+    };
+  }
+  if (jsFallback && !isPlaceholder(jsFallback.playerName)) {
+    const playerName = resolveSummaryAwardPlayerName(
+      null,
+      jsFallback.playerId,
+      jsFallback.playerName,
+    );
+    return {
+      id,
+      title,
+      playerName,
+      teamName: resolveTeamDisplayName({ teamName: jsFallback.teamName }),
+      playerId: jsFallback.playerId,
+    };
+  }
+  return {
+    id,
+    title,
+    playerName: PLACEHOLDER,
+    teamName: PLACEHOLDER,
+    playerId: null,
+  };
+}
 
-function defaultChampions(): SummaryChampion[] {
+function buildChampions(identity: SeasonIdentity): SummaryChampion[] {
+  const stored = getStandingsForSeason(identity);
+  const central = leagueChampionFromStandings(stored?.central);
+  const pacific = leagueChampionFromStandings(stored?.pacific);
+
+  const japanRaw = getPostseason(identity).japanSeries.champion;
+  const japan = isPlaceholder(japanRaw)
+    ? PLACEHOLDER
+    : resolveTeamDisplayName({ teamName: japanRaw });
+
+  const ilRaw = getInterleagueChampion(identity);
+  const interleague = isPlaceholder(ilRaw)
+    ? PLACEHOLDER
+    : resolveTeamDisplayName({ teamName: ilRaw });
+
   return [
-    {
-      id: "central",
-      title: "セ・リーグ優勝",
-      teamName: placeholderTeam,
-    },
-    {
-      id: "pacific",
-      title: "パ・リーグ優勝",
-      teamName: placeholderTeam,
-    },
+    { id: "central", title: "セ・リーグ優勝", teamName: central },
+    { id: "pacific", title: "パ・リーグ優勝", teamName: pacific },
     {
       id: "japan",
       title: "日本一",
-      teamName: placeholderTeam,
+      teamName: japan,
       featured: true,
+      note: japan !== PLACEHOLDER ? "日本シリーズ優勝" : undefined,
     },
-    {
-      id: "interleague",
-      title: "交流戦優勝",
-      teamName: placeholderTeam,
-    },
+    { id: "interleague", title: "交流戦優勝", teamName: interleague },
   ];
 }
 
-function defaultAwards(): SummaryAward[] {
+function buildAwards(identity: SeasonIdentity): SummaryAward[] {
+  let registered: RegisteredSeasonAward[] = [];
+  try {
+    registered = listRegisteredAwardsForSeason(identity);
+  } catch {
+    registered = [];
+  }
+
+  const jsMvp = getJapanSeriesMvp(identity);
+  const jsFallback =
+    jsMvp.playerId || !isPlaceholder(jsMvp.playerName)
+      ? {
+          playerId: jsMvp.playerId,
+          playerName: jsMvp.playerName,
+          teamName: jsMvp.teamName,
+        }
+      : undefined;
+
   return [
-    {
-      id: "mvp-c",
-      title: "セ・リーグ MVP",
-      playerName: placeholderPlayer,
-      teamName: placeholderTeam,
-      playerId: null,
-    },
-    {
-      id: "mvp-p",
-      title: "パ・リーグ MVP",
-      playerName: placeholderPlayer,
-      teamName: placeholderTeam,
-      playerId: null,
-    },
-    {
-      id: "rookie-c",
-      title: "セ・リーグ 新人王",
-      playerName: placeholderPlayer,
-      teamName: placeholderTeam,
-      playerId: null,
-    },
-    {
-      id: "rookie-p",
-      title: "パ・リーグ 新人王",
-      playerName: placeholderPlayer,
-      teamName: placeholderTeam,
-      playerId: null,
-    },
-    {
-      id: "sawamura",
-      title: "沢村賞",
-      playerName: placeholderPlayer,
-      teamName: placeholderTeam,
-      playerId: null,
-    },
-    {
-      id: "js-mvp",
-      title: "日本シリーズMVP",
-      playerName: placeholderPlayer,
-      teamName: placeholderTeam,
-      playerId: null,
-    },
-    {
-      id: "il-mvp",
-      title: "交流戦MVP",
-      playerName: placeholderPlayer,
-      teamName: placeholderTeam,
-      playerId: null,
-    },
+    toAwardCard(
+      "mvp-c",
+      "セ・リーグ MVP",
+      pickAward(registered, "mvp", "central"),
+    ),
+    toAwardCard(
+      "mvp-p",
+      "パ・リーグ MVP",
+      pickAward(registered, "mvp", "pacific"),
+    ),
+    toAwardCard(
+      "rookie-c",
+      "セ・リーグ 新人王",
+      pickAward(registered, "rookie", "central"),
+    ),
+    toAwardCard(
+      "rookie-p",
+      "パ・リーグ 新人王",
+      pickAward(registered, "rookie", "pacific"),
+    ),
+    toAwardCard(
+      "sawamura",
+      "沢村賞",
+      pickAward(registered, "sawamura"),
+    ),
+    toAwardCard(
+      "js-mvp",
+      "日本シリーズMVP",
+      pickAward(registered, "japanSeriesMvp"),
+      jsFallback,
+    ),
   ];
 }
 
+/**
+ * 指定シーズンのサマリーを既存データから構築する（書き込みなし）。
+ */
 export function getSeasonSummary(
   year: string,
   seasonKeyOrIdentity?: string | SeasonIdentity | null,
 ): SeasonSummaryData {
-  const yearNum = Number(year);
-  const identity =
-    typeof seasonKeyOrIdentity === "string"
-      ? parseSeasonKey(seasonKeyOrIdentity)
-      : seasonKeyOrIdentity ?? null;
-  const postseasonIdentity =
-    identity ??
-    (Number.isFinite(yearNum)
-      ? ({
-          seasonKey: String(yearNum),
-          year: yearNum,
-          world: null,
-          kind: "legacy" as const,
-        } satisfies SeasonIdentity)
-      : null);
+  const identity = resolveIdentity(year, seasonKeyOrIdentity);
+  const yearStr = String(identity.year);
+  const label = formatSeasonLineLabel(identity);
 
-  const registered = seasonSummaryRegistry[year] ?? {};
-  const jsMvp = postseasonIdentity
-    ? getJapanSeriesMvp(postseasonIdentity)
-    : getJapanSeriesMvp(year);
-  const japanChampion = postseasonIdentity
-    ? getPostseason(postseasonIdentity).japanSeries.champion
-    : getPostseason(year).japanSeries.champion;
-  const ilChampion = postseasonIdentity
-    ? getInterleagueChampion(postseasonIdentity)
-    : getInterleagueChampion(year);
-  const ilMvp = postseasonIdentity
-    ? getInterleagueMvp(postseasonIdentity)
-    : getInterleagueMvp(year);
-
-  const champions = (registered.champions ?? defaultChampions()).map((c) => {
-    if (c.id === "japan" && japanChampion !== "登録待ち") {
-      return { ...c, teamName: japanChampion };
-    }
-    if (c.id === "interleague" && ilChampion !== "登録待ち") {
-      return { ...c, teamName: ilChampion };
-    }
-    return c;
-  });
-
-  const awards = (registered.awards ?? defaultAwards()).map((a) => {
-    if (a.id === "js-mvp") {
-      return {
-        ...a,
-        playerName: jsMvp.playerName,
-        teamName: jsMvp.teamName,
-        playerId: jsMvp.playerId,
-      };
-    }
-    if (a.id === "il-mvp") {
-      return {
-        ...a,
-        playerName: ilMvp.playerName,
-        teamName: ilMvp.teamName,
-        playerId: ilMvp.playerId,
-      };
-    }
-    return a;
-  });
-
-  const stored = identity
-    ? getStandingsForSeason(identity)
-    : Number.isFinite(yearNum)
-      ? getYearStandings(yearNum)
+  const stored = getStandingsForSeason(identity);
+  const legacy =
+    identity.world == null && Number.isFinite(identity.year)
+      ? getYearStandings(identity.year)
       : null;
-  const toRows = (entries: { rank: number; team: string; w: number; l: number; d: number; pct: string; gb: string }[]): StandingRow[] =>
-    entries.map((e) => ({
+  const standingsSource = stored ?? legacy;
+
+  const toRows = (
+    entries: StandingEntry[] | undefined,
+  ): StandingRow[] =>
+    (entries ?? []).map((e) => ({
       rank: e.rank,
       team: e.team,
       w: e.w,
@@ -335,27 +333,25 @@ export function getSeasonSummary(
       gb: e.gb,
     }));
 
+  const hasCentral = Boolean(standingsSource?.central?.length);
+  const hasPacific = Boolean(standingsSource?.pacific?.length);
   const allowSample = allowsLayoutSampleFallback(identity);
-  const hasCentral = Boolean(stored?.central?.length);
-  const hasPacific = Boolean(stored?.pacific?.length);
   const useFullSample = allowSample && !hasCentral && !hasPacific;
 
   return {
-    year,
-    tagline: registered.tagline ?? `${year}年の記録と栄光を振り返る`,
-    champions,
-    awards,
-    highlights: registered.highlights ?? [],
+    year: yearStr,
+    tagline: `${label}の記録と栄光を振り返る`,
+    champions: buildChampions(identity),
+    awards: buildAwards(identity),
+    highlights: [],
     standings: {
-      // 取込済み順位があれば優先。正式 WORLD では未登録リーグを空にする。
-      // DEMO／レガシーで両リーグ未登録のときのみ既存ダミー。
       central: hasCentral
-        ? toRows(stored!.central)
+        ? toRows(standingsSource!.central)
         : useFullSample
           ? centralStandings
           : [],
       pacific: hasPacific
-        ? toRows(stored!.pacific)
+        ? toRows(standingsSource!.pacific)
         : useFullSample
           ? pacificStandings
           : [],

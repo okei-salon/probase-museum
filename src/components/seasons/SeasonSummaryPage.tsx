@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   CategoryShell,
@@ -8,11 +11,18 @@ import { cn } from "@/lib/cn";
 import type { CategoryThemeId } from "@/config/categoryThemes";
 import {
   getSeasonSummary,
+  type SeasonSummaryData,
   type SummaryAward,
   type SummaryChampion,
   type SummaryHighlight,
 } from "@/data/seasonSummary";
 import { FinalStandingsBoard } from "@/components/seasons/FinalStandingsBoard";
+import { hydrateInterleagueFromCloud } from "@/data/interleague";
+import { hydratePlayerMasterFromCloud } from "@/data/playerMaster";
+import { hydratePostseasonFromCloud } from "@/data/postseason";
+import { hydrateSopAwardsFromCloud } from "@/data/sop";
+import { hydrateTeamStandingsFromCloud } from "@/data/teamStandings";
+import { parseSeasonKey } from "@/data/seasons";
 
 type SeasonSummaryPageProps = {
   year: string;
@@ -22,14 +32,33 @@ type SeasonSummaryPageProps = {
   backLabel?: string;
 };
 
-/** シーズン年鑑の表紙・展示入口としてのサマリー */
+/** シーズン年鑑の表紙・展示入口としてのサマリー（既存データの読み取り専用） */
 export function SeasonSummaryPage({
   year,
   seasonKey = year,
   theme = "seasonHub",
   backLabel,
 }: SeasonSummaryPageProps) {
-  const data = getSeasonSummary(year, seasonKey);
+  const [data, setData] = useState<SeasonSummaryData | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      await Promise.allSettled([
+        hydrateTeamStandingsFromCloud(),
+        hydrateSopAwardsFromCloud(),
+        hydratePostseasonFromCloud(),
+        hydrateInterleagueFromCloud(),
+        hydratePlayerMasterFromCloud(),
+      ]);
+      if (cancelled) return;
+      const identity = parseSeasonKey(seasonKey);
+      setData(getSeasonSummary(year, identity ?? seasonKey));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [year, seasonKey]);
 
   return (
     <CategoryShell
@@ -45,7 +74,9 @@ export function SeasonSummaryPage({
         icon="book"
       />
       <p className="mb-6 -mt-2 text-[13px] tracking-[0.04em] text-museum-ivory-soft md:text-sm">
-        「{data.tagline}」
+        {data
+          ? `「${data.tagline}」`
+          : "登録済みのシーズンデータを読み込み中…"}
       </p>
 
       <div className="space-y-8 md:space-y-10">
@@ -55,7 +86,7 @@ export function SeasonSummaryPage({
           description="シーズンを代表する4つの優勝"
         >
           <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-3">
-            {data.champions.map((item) => (
+            {(data?.champions ?? emptyChampions()).map((item) => (
               <ChampionCard key={item.id} item={item} />
             ))}
           </div>
@@ -67,7 +98,7 @@ export function SeasonSummaryPage({
           description="その年を代表する個人表彰"
         >
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {data.awards.map((item) => (
+            {(data?.awards ?? emptyAwards()).map((item) => (
               <AwardCard key={item.id} item={item} />
             ))}
           </div>
@@ -78,7 +109,7 @@ export function SeasonSummaryPage({
           title="SEASON HIGHLIGHTS"
           description="その年を象徴する記録・出来事"
         >
-          {data.highlights.length > 0 ? (
+          {data && data.highlights.length > 0 ? (
             <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
               {data.highlights.map((item) => (
                 <HighlightCard key={item.id} item={item} />
@@ -111,6 +142,62 @@ export function SeasonSummaryPage({
       </div>
     </CategoryShell>
   );
+}
+
+function emptyChampions(): SummaryChampion[] {
+  return [
+    { id: "central", title: "セ・リーグ優勝", teamName: "…" },
+    { id: "pacific", title: "パ・リーグ優勝", teamName: "…" },
+    { id: "japan", title: "日本一", teamName: "…", featured: true },
+    { id: "interleague", title: "交流戦優勝", teamName: "…" },
+  ];
+}
+
+function emptyAwards(): SummaryAward[] {
+  return [
+    {
+      id: "mvp-c",
+      title: "セ・リーグ MVP",
+      playerName: "…",
+      teamName: "…",
+      playerId: null,
+    },
+    {
+      id: "mvp-p",
+      title: "パ・リーグ MVP",
+      playerName: "…",
+      teamName: "…",
+      playerId: null,
+    },
+    {
+      id: "rookie-c",
+      title: "セ・リーグ 新人王",
+      playerName: "…",
+      teamName: "…",
+      playerId: null,
+    },
+    {
+      id: "rookie-p",
+      title: "パ・リーグ 新人王",
+      playerName: "…",
+      teamName: "…",
+      playerId: null,
+    },
+    {
+      id: "sawamura",
+      title: "沢村賞",
+      playerName: "…",
+      teamName: "…",
+      playerId: null,
+    },
+    {
+      id: "js-mvp",
+      title: "日本シリーズMVP",
+      playerName: "…",
+      teamName: "…",
+      playerId: null,
+    },
+  ];
 }
 
 function SummarySection({
