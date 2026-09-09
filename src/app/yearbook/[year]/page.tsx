@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { CategoryShell, LinkList, PageHeading } from "@/components/category";
+import { SeasonReviewSourceCopyPanel } from "@/components/yearbook/SeasonReviewSourceCopyPanel";
 import {
   parseSeasonKey,
   seasonDisplaySubtitle,
@@ -24,6 +25,9 @@ export default async function YearbookYearPage({ params }: Props) {
         subtitle={seasonDisplaySubtitle(identity)}
         icon="book"
       />
+      <div className="mb-6">
+        <SeasonReviewSourceCopyPanel seasonKey={identity.seasonKey} />
+      </div>
       <LinkList items={getYearbookSectionLinks(identity.seasonKey)} />
     </CategoryShell>
   );

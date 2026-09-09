@@ -13,6 +13,7 @@ import {
   seasonDisplayTitle,
   type SeasonIdentity,
 } from "@/data/seasons";
+import { SeasonReviewSourceCopyPanel } from "@/components/yearbook/SeasonReviewSourceCopyPanel";
 
 type Props = {
   /** seasonKey（BLUE_2026 / 2023 / 2000） */
@@ -230,6 +231,10 @@ export function YearbookSeasonReviewBoard({
             ) : null}
           </div>
         </details>
+      ) : null}
+
+      {allowEdit ? (
+        <SeasonReviewSourceCopyPanel seasonKey={seasonKey} />
       ) : null}
     </div>
   );
