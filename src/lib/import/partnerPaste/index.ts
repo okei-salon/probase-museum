@@ -21,6 +21,8 @@ export {
   parseSpecialRecordPartner,
   parseClimaxSeriesPartner,
   parseJapanSeriesPartner,
+  parseSeasonHighlightPartner,
+  extractPartnerTextBlock,
   type PartnerNonSeasonResult,
   type PartnerMonthlyMvpResult,
   type PartnerStandingsResult,
@@ -34,6 +36,7 @@ export {
   type PartnerSpecialResult,
   type PartnerClimaxSeriesResult,
   type PartnerJapanSeriesResult,
+  type PartnerSeasonHighlightResult,
 } from "./parsers";
 
 export { PARTNER_PASTE_EXAMPLES } from "./examples";

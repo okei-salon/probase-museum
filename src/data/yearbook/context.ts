@@ -70,8 +70,8 @@ export function buildYearbookSeasonContext(
         factLines.push(`${a.title}: ${a.playerName}（${a.teamName}）`);
       }
     }
-    for (const h of summary.highlights) {
-      factLines.push(`ハイライト: ${h.title} — ${h.description}`);
+    if (summary.seasonHighlightText?.trim()) {
+      factLines.push(`シーズンハイライト:\n${summary.seasonHighlightText}`);
     }
   } catch {
     missing.push("サマリー");

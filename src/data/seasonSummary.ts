@@ -1,13 +1,15 @@
 /**
  * シーズンサマリー — 既存 Museum データの読み取り専用ビュー。
- * 専用保存は持たない。YEAR × WORLD の登録済みデータのみ参照する。
+ * 表彰・優勝などは専用保存せず既存データを参照。
+ * シーズンハイライト本文のみ YEAR×WORLD ストアを参照する。
  */
 
 import type { StandingRow } from "@/components/views/StandingsTable";
 import { getInterleagueChampion } from "@/data/interleague";
-import { getPlayerFullName, getPlayerMaster } from "@/data/playerMaster";
 import { getJapanSeriesMvp, getPostseason } from "@/data/postseason";
+import { getSeasonHighlightText } from "@/data/seasonHighlights";
 import { isRegisteredAwardNone } from "@/lib/import/partnerPaste/awardOutcome";
+import { resolveMuseumPlayerName } from "@/lib/playerMaster";
 import {
   listRegisteredAwardsForSeason,
   type RegisteredSeasonAward,
@@ -70,8 +72,11 @@ export type SeasonSummaryData = {
   tagline: string;
   champions: SummaryChampion[];
   awards: SummaryAward[];
-  /** その年に該当する記録・出来事のみ（現状は専用登録なし） */
-  highlights: SummaryHighlight[];
+  /**
+   * 登録済みシーズンハイライト本文（改行保持）。
+   * 未登録は null（UI は「登録待ち」）。
+   */
+  seasonHighlightText: string | null;
   standings: {
     central: StandingRow[];
     pacific: StandingRow[];
@@ -139,7 +144,7 @@ function leagueChampionFromStandings(
 
 /**
  * 表彰の表示名。
- * playerId → 選手マスタの fullName（日本人フルネーム／外国人は登録名）を優先。
+ * 選手マスタ共通処理（playerId / 正式登録名）でフルネームを解決する。
  */
 export function resolveSummaryAwardPlayerName(
   award: RegisteredSeasonAward | null | undefined,
@@ -148,14 +153,16 @@ export function resolveSummaryAwardPlayerName(
 ): string {
   if (award && isRegisteredAwardNone(award)) return AWARD_NONE_LABEL;
   const playerId = award?.playerId || fallbackPlayerId || null;
-  if (playerId) {
-    const full = getPlayerFullName(playerId) ?? getPlayerMaster(playerId)?.fullName;
-    if (full) return full;
-  }
   const name = (award?.playerName ?? fallbackName ?? "").trim();
-  if (!name || isPlaceholder(name)) return PLACEHOLDER;
+  if (!name || isPlaceholder(name)) {
+    if (playerId) {
+      const full = resolveMuseumPlayerName(playerId, "");
+      if (full) return full;
+    }
+    return PLACEHOLDER;
+  }
   if (name === AWARD_NONE_LABEL) return AWARD_NONE_LABEL;
-  return name;
+  return resolveMuseumPlayerName(playerId, name);
 }
 
 function awardTeamDisplay(award: RegisteredSeasonAward | null): string {
@@ -343,7 +350,7 @@ export function getSeasonSummary(
     tagline: `${label}の記録と栄光を振り返る`,
     champions: buildChampions(identity),
     awards: buildAwards(identity),
-    highlights: [],
+    seasonHighlightText: getSeasonHighlightText(identity),
     standings: {
       central: hasCentral
         ? toRows(standingsSource!.central)

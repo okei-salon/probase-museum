@@ -216,4 +216,14 @@ MVP_AVG=.320
 MVP_HR=2
 MVP_RBI=6
 MVP_NOTE=シリーズ通算`,
+
+  SEASON_HIGHLIGHT: `YEAR=2026
+WORLD=BLUE
+TYPE=SEASON_HIGHLIGHT
+
+TEXT=
+阪神がセ・リーグを制覇。
+パ・リーグは日本ハムが優勝した。
+日本シリーズではソフトバンクが巨人を破り日本一。
+佐藤輝明がセ・リーグMVPを獲得するなど、記録の多いシーズンとなった。`,
 };

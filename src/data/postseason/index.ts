@@ -17,6 +17,7 @@ import {
   listRegisteredAwardsForSeason,
   type RegisteredSeasonAward,
 } from "@/data/sop/awardsRegistry";
+import { resolveMuseumPlayerName } from "@/lib/playerMaster";
 import { postseasonByYear, placeholderSeason } from "./catalog";
 import {
   getStoredPostseasonForSeason,
@@ -117,7 +118,7 @@ function awardToJapanSeriesMvp(
     year: String(a.year),
     world: normalizeSeasonWorld(a.world),
     playerId: a.playerId,
-    playerName: a.playerName,
+    playerName: resolveMuseumPlayerName(a.playerId, a.playerName),
     teamId: (team?.id as TeamId | undefined) ?? null,
     teamName: team?.name ?? a.teamShort ?? "登録待ち",
   };
@@ -145,6 +146,7 @@ export function getJapanSeriesMvp(
   const fromPs = getPostseason(identity).japanSeries.mvp;
   return {
     ...fromPs,
+    playerName: resolveMuseumPlayerName(fromPs.playerId, fromPs.playerName),
     world: normalizeSeasonWorld(fromPs.world ?? identity.world),
   };
 }

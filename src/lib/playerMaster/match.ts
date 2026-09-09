@@ -297,12 +297,41 @@ export function resolveDisplayNameFromMatch(
   return fallback;
 }
 
+/**
+ * Museum 表示用の正式選手名。
+ * playerId → マスタ fullName（日本人フルネーム／外国人は登録名）を優先。
+ * playerId が無い／未解決のときは、fallback 名をマスタの fullName /
+ * gameDisplayName / alias から一意に解決する。
+ */
 export function resolveMuseumPlayerName(
   playerId: string | null | undefined,
   fallback: string,
 ): string {
-  if (!playerId || playerId === UNKNOWN_PLAYER_STATUS) return fallback;
-  return getPlayerMaster(playerId)?.fullName ?? fallback;
+  if (playerId && playerId !== UNKNOWN_PLAYER_STATUS) {
+    const full = getPlayerMaster(playerId)?.fullName;
+    if (full) return full;
+  }
+
+  const name = (fallback ?? "").trim();
+  if (!name) return fallback;
+
+  const token = normalizePlayerToken(name);
+  if (!token) return fallback;
+
+  const masters = listPlayerMasters();
+  const byFullName = masters.filter(
+    (p) => normalizePlayerToken(p.fullName) === token,
+  );
+  if (byFullName.length === 1) return byFullName[0]!.fullName;
+
+  const byDisplay = masters.filter(
+    (p) =>
+      normalizePlayerToken(p.gameDisplayName) === token ||
+      p.aliases.some((a) => normalizePlayerToken(a) === token),
+  );
+  if (byDisplay.length === 1) return byDisplay[0]!.fullName;
+
+  return fallback;
 }
 
 export function resolveNameFromPlayerRef(

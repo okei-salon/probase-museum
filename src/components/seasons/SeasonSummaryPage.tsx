@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   CategoryShell,
@@ -14,12 +14,12 @@ import {
   type SeasonSummaryData,
   type SummaryAward,
   type SummaryChampion,
-  type SummaryHighlight,
 } from "@/data/seasonSummary";
 import { FinalStandingsBoard } from "@/components/seasons/FinalStandingsBoard";
 import { hydrateInterleagueFromCloud } from "@/data/interleague";
 import { hydratePlayerMasterFromCloud } from "@/data/playerMaster";
 import { hydratePostseasonFromCloud } from "@/data/postseason";
+import { hydrateSeasonHighlightsFromCloud } from "@/data/seasonHighlights";
 import { hydrateSopAwardsFromCloud } from "@/data/sop";
 import { hydrateTeamStandingsFromCloud } from "@/data/teamStandings";
 import { parseSeasonKey } from "@/data/seasons";
@@ -50,6 +50,7 @@ export function SeasonSummaryPage({
         hydratePostseasonFromCloud(),
         hydrateInterleagueFromCloud(),
         hydratePlayerMasterFromCloud(),
+        hydrateSeasonHighlightsFromCloud(),
       ]);
       if (cancelled) return;
       const identity = parseSeasonKey(seasonKey);
@@ -109,19 +110,15 @@ export function SeasonSummaryPage({
           title="SEASON HIGHLIGHTS"
           description="その年を象徴する記録・出来事"
         >
-          {data && data.highlights.length > 0 ? (
-            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-              {data.highlights.map((item) => (
-                <HighlightCard key={item.id} item={item} />
-              ))}
-            </div>
-          ) : (
-            <DataPanel>
-              <p className="text-[13px] text-museum-ivory-soft">
-                このシーズンに展示するハイライトはまだ登録されていません。
+          <DataPanel>
+            {data?.seasonHighlightText ? (
+              <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-museum-ivory md:text-[14px]">
+                {data.seasonHighlightText}
               </p>
-            </DataPanel>
-          )}
+            ) : (
+              <p className="text-[13px] text-museum-ivory-soft">登録待ち</p>
+            )}
+          </DataPanel>
         </SummarySection>
 
         <SummarySection
@@ -231,6 +228,52 @@ function SummarySection({
   );
 }
 
+/** カード幅を超える長い球団名を1行に収める（フォント自動縮小） */
+function AutoFitOneLineText({
+  text,
+  className,
+  maxPx = 17,
+  minPx = 9,
+}: {
+  text: string;
+  className?: string;
+  maxPx?: number;
+  minPx?: number;
+}) {
+  const ref = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const fit = () => {
+      let size = maxPx;
+      el.style.whiteSpace = "nowrap";
+      el.style.fontSize = `${size}px`;
+      while (size > minPx && el.scrollWidth > el.clientWidth + 0.5) {
+        size -= 0.5;
+        el.style.fontSize = `${size}px`;
+      }
+    };
+
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    if (el.parentElement) ro.observe(el.parentElement);
+    return () => ro.disconnect();
+  }, [text, maxPx, minPx]);
+
+  return (
+    <p
+      ref={ref}
+      className={cn("overflow-hidden whitespace-nowrap", className)}
+      title={text}
+    >
+      {text}
+    </p>
+  );
+}
+
 function ChampionCard({ item }: { item: SummaryChampion }) {
   return (
     <article
@@ -249,15 +292,16 @@ function ChampionCard({ item }: { item: SummaryChampion }) {
       >
         {item.title}
       </p>
-      <div>
-        <p
+      <div className="min-w-0">
+        <AutoFitOneLineText
+          text={item.teamName}
+          maxPx={item.featured ? 18 : 16}
+          minPx={9}
           className={cn(
-            "font-display text-[clamp(1.05rem,2vw,1.35rem)] leading-tight",
+            "font-display leading-none",
             item.featured ? "text-museum-gold-soft" : "text-museum-ivory",
           )}
-        >
-          {item.teamName}
-        </p>
+        />
         {item.note ? (
           <p className="mt-1 text-[10px] text-museum-ivory-soft">{item.note}</p>
         ) : null}
@@ -289,26 +333,4 @@ function AwardCard({ item }: { item: SummaryAward }) {
   }
 
   return <article className={className}>{content}</article>;
-}
-
-function HighlightCard({ item }: { item: SummaryHighlight }) {
-  return (
-    <article className="relative overflow-hidden rounded-xl border border-museum-gold/30 bg-black/86 px-4 py-4 backdrop-blur-md">
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-museum-gold/70 to-transparent" />
-      <p className="text-[10px] tracking-[0.16em] text-museum-gold/85">
-        EXHIBIT
-      </p>
-      <h3 className="mt-1.5 text-[15px] font-medium text-museum-ivory">
-        {item.title}
-      </h3>
-      <p className="mt-2 text-[12px] leading-relaxed text-museum-ivory-soft">
-        {item.description}
-      </p>
-      {item.meta ? (
-        <p className="mt-3 text-[10px] tracking-[0.08em] text-museum-gold">
-          {item.meta}
-        </p>
-      ) : null}
-    </article>
-  );
 }

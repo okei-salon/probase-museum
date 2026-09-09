@@ -13,6 +13,7 @@ export const MUSEUM_SYNC_COLLECTIONS = [
   "interleague",
   "postseason",
   "yearbook_reviews",
+  "season_highlights",
   "season_achievements",
   "sop_awards_registry",
   "title_win_history",

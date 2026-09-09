@@ -18,6 +18,7 @@ export const KNOWN_MUSEUM_STORAGE_KEYS = [
   "probase-museum.interleague.v1",
   "probase-museum.postseason.v1",
   "probase-museum.yearbook-reviews.v1",
+  "probase-museum.season-highlights.v1",
   "probase-museum.season-achievements.v1",
   "probase-museum.sop-feats.v1",
   "probase-museum.sop-awards-registry.v1",

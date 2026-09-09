@@ -1313,6 +1313,96 @@ export function parseJapanSeriesPartner(
   };
 }
 
+/**
+ * TEXT= 以降の本文を抽出（改行保持）。
+ * TEXT= だけの行の場合は次行以降を本文とする。
+ */
+export function extractPartnerTextBlock(rawText: string): string {
+  const raw = rawText.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+  const re = /(?:^|\n)TEXT\s*=/i;
+  const m = re.exec(raw);
+  if (!m) return "";
+  let body = raw.slice(m.index + m[0].length);
+  if (body.startsWith("\n")) body = body.slice(1);
+  return body.replace(/\s+$/, "");
+}
+
+export type PartnerSeasonHighlightResult = {
+  kind: "season_highlight";
+  type: "SEASON_HIGHLIGHT";
+  year: number;
+  world: "BLUE" | "RED" | null;
+  text: string;
+  message: string;
+};
+
+export function parseSeasonHighlightPartner(
+  rawText: string,
+  fallbackYear: number,
+  fallbackWorld?: "BLUE" | "RED" | null,
+): PartnerSeasonHighlightResult | PartnerUnsupportedResult {
+  const raw = rawText.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+  const lines = raw
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#"));
+
+  let year: number | null = null;
+  let type: string | null = null;
+  let worldRaw = "";
+
+  for (const line of lines) {
+    const m = line.match(/^([A-Z0-9_]+)\s*=\s*(.*)$/i);
+    if (!m) continue;
+    const key = m[1]!.toUpperCase();
+    const val = m[2]!.trim();
+    if (key === "YEAR") {
+      const n = Number(val);
+      if (Number.isFinite(n)) year = n;
+    } else if (key === "TYPE") {
+      type = val.toUpperCase();
+    } else if (key === "WORLD") {
+      worldRaw = val.toUpperCase();
+    }
+  }
+
+  if (type !== "SEASON_HIGHLIGHT") {
+    return {
+      kind: "unsupported",
+      type,
+      message: type
+        ? `未対応フォーマット: TYPE=${type}`
+        : "未対応フォーマット: TYPE=SEASON_HIGHLIGHT が必要です",
+    };
+  }
+
+  const text = extractPartnerTextBlock(rawText);
+  if (!text.trim()) {
+    return {
+      kind: "unsupported",
+      type,
+      message: "TEXT= にシーズンハイライト本文がありません",
+    };
+  }
+
+  const world: "BLUE" | "RED" | null =
+    worldRaw === "BLUE" || worldRaw === "RED"
+      ? worldRaw
+      : fallbackWorld === "BLUE" || fallbackWorld === "RED"
+        ? fallbackWorld
+        : null;
+
+  const y = year ?? fallbackYear;
+  return {
+    kind: "season_highlight",
+    type: "SEASON_HIGHLIGHT",
+    year: y,
+    world,
+    text,
+    message: `シーズンハイライト ${y}${world ? ` ${world}` : ""}`,
+  };
+}
+
 export type PartnerNonSeasonResult =
   | PartnerMonthlyMvpResult
   | PartnerStandingsResult
@@ -1326,11 +1416,13 @@ export type PartnerNonSeasonResult =
   | PartnerSpecialResult
   | PartnerClimaxSeriesResult
   | PartnerJapanSeriesResult
+  | PartnerSeasonHighlightResult
   | PartnerUnsupportedResult;
 
 export function parseNonSeasonPartnerPaste(
   rawText: string,
   fallbackYear: number,
+  fallbackWorld?: "BLUE" | "RED" | null,
 ): PartnerNonSeasonResult {
   const lines = splitPartnerLines(rawText);
   const meta = parsePartnerMeta(lines);
@@ -1373,6 +1465,8 @@ export function parseNonSeasonPartnerPaste(
       return parseClimaxSeriesPartner(rawText, fallbackYear);
     case "JAPAN_SERIES":
       return parseJapanSeriesPartner(rawText, fallbackYear);
+    case "SEASON_HIGHLIGHT":
+      return parseSeasonHighlightPartner(rawText, fallbackYear, fallbackWorld);
     default:
       if (
         type.includes("BATTER_SEASON") ||

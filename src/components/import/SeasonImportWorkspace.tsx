@@ -12,6 +12,10 @@ import {
 } from "@/data/import/categories";
 import { parseNonSeasonPartnerPaste } from "@/lib/import/partnerPaste";
 import {
+  getSeasonHighlight,
+  upsertSeasonHighlight,
+} from "@/data/seasonHighlights";
+import {
   findConflictingTeamStats,
   saveTeamSeasonStatsRows,
 } from "@/lib/import/saveTeamSeasonStatsRows";
@@ -28,6 +32,7 @@ import { appendImportHistory } from "@/data/import/store";
 import {
   formatSeasonLineLabel,
   FORMAL_SEASON_START_YEAR,
+  identityFromWorldYear,
   listEntrySeasonIdentities,
   makeSeasonKey,
   parseSeasonKey,
@@ -143,6 +148,15 @@ export function SeasonImportWorkspace() {
     [],
   );
 
+  // season highlight
+  const [highlightText, setHighlightText] = useState("");
+  const [highlightPreviewYear, setHighlightPreviewYear] = useState<number | null>(
+    null,
+  );
+  const [highlightPreviewWorld, setHighlightPreviewWorld] = useState<
+    SeasonWorld | null
+  >(null);
+
   const existingStandings = useMemo(() => {
     if (checkpoint === "final") {
       return getStandingsForSeason(identity);
@@ -171,7 +185,7 @@ export function SeasonImportWorkspace() {
     setError(null);
     setMessage(null);
     try {
-      const parsed = parseNonSeasonPartnerPaste(partnerText, year);
+      const parsed = parseNonSeasonPartnerPaste(partnerText, year, world);
       if (parsed.kind === "unsupported") {
         setError(parsed.message);
         return;
@@ -256,10 +270,102 @@ export function SeasonImportWorkspace() {
         setMessage(parsed.message);
         return;
       }
+      if (sub === "highlight") {
+        if (parsed.kind !== "season_highlight") {
+          setError(
+            "シーズンハイライトは TYPE=SEASON_HIGHLIGHT を指定してください",
+          );
+          return;
+        }
+        const nextKey = seasonKeyFromYearHint(
+          parsed.year,
+          parsed.world ?? world,
+        );
+        setSeasonKey(nextKey);
+        setHighlightText(parsed.text);
+        setHighlightPreviewYear(parsed.year);
+        setHighlightPreviewWorld(parsed.world ?? world);
+        setMessage(parsed.message);
+        return;
+      }
       setError("このサブ項目では未対応のTYPEです");
     } catch (e) {
       setError(e instanceof Error ? e.message : "解析に失敗しました");
     }
+  }
+
+  function loadExistingHighlight() {
+    const existing = getSeasonHighlight(identity);
+    if (existing?.text) {
+      setHighlightText(existing.text);
+      setHighlightPreviewYear(identity.year);
+      setHighlightPreviewWorld(identity.world);
+      setMessage(
+        `${formatSeasonLineLabel(identity)} の既存ハイライトを読み込みました`,
+      );
+    } else {
+      setHighlightText("");
+      setMessage("このシーズンのハイライトは未登録です");
+    }
+  }
+
+  function prepareHighlightFromTextarea() {
+    setError(null);
+    setMessage(null);
+    const body = highlightText.trimEnd();
+    if (!body.trim()) {
+      setError("シーズンハイライト本文を入力してください");
+      return;
+    }
+    setHighlightPreviewYear(year);
+    setHighlightPreviewWorld(world);
+    setMessage(
+      `確認準備: ${formatSeasonLineLabel(identity)}（登録ボタンで保存）`,
+    );
+  }
+
+  function saveHighlight(force: boolean) {
+    const body = highlightText.replace(/\s+$/, "");
+    if (!body.trim()) {
+      setError("シーズンハイライト本文が空です");
+      return;
+    }
+    const targetYear = highlightPreviewYear ?? year;
+    const targetWorld = highlightPreviewWorld ?? world;
+    const targetIdentity = identityFromWorldYear(targetYear, targetWorld);
+
+    const existing = getSeasonHighlight(targetIdentity);
+    if (existing && !force) {
+      setConfirmOpen(true);
+      return;
+    }
+
+    const saved = upsertSeasonHighlight({
+      identity: targetIdentity,
+      text: body,
+      source: inputMode === "partner" ? "partner" : "manual",
+    });
+
+    const hist = {
+      id: `hist-hl-${Date.now()}`,
+      at: new Date().toISOString(),
+      year: targetIdentity.year,
+      fileName: "season-highlight",
+      screenType: "unknown" as const,
+      summary: `${formatSeasonLineLabel(targetIdentity)} シーズンハイライトを登録（${body.length}文字）`,
+      recordIds: [saved.seasonKey ?? targetIdentity.seasonKey],
+    };
+    if (shouldUseIsolatedDemoStore(targetIdentity.year, targetIdentity.world)) {
+      appendDemoImportHistory(hist);
+    } else {
+      appendImportHistory(hist);
+    }
+    notifyImportStoreChanged();
+    setConfirmOpen(false);
+    setError(null);
+    setMessage(
+      `${formatSeasonLineLabel(targetIdentity)} のシーズンハイライトを登録しました`,
+    );
   }
 
   async function handleStandingsFiles(files: File[]) {
@@ -715,9 +821,13 @@ export function SeasonImportWorkspace() {
           setSub(id as SeasonImportSubId);
           setTeamRows([]);
           setMatchupDrafts([]);
+          setHighlightText("");
+          setHighlightPreviewYear(null);
+          setHighlightPreviewWorld(null);
           setMessage(null);
           setError(null);
           setConfirmOpen(false);
+          if (id === "highlight") setInputMode("partner");
         }}
       />
 
@@ -740,13 +850,21 @@ export function SeasonImportWorkspace() {
         </select>
       </label>
 
-      <ImportModeTabs
-        value={inputMode}
-        onChange={setInputMode}
-        modes={["image", "partner"]}
-      />
+      {sub !== "highlight" ? (
+        <ImportModeTabs
+          value={inputMode}
+          onChange={setInputMode}
+          modes={["image", "partner"]}
+        />
+      ) : (
+        <ImportModeTabs
+          value={inputMode === "image" ? "partner" : inputMode}
+          onChange={setInputMode}
+          modes={["partner"]}
+        />
+      )}
 
-      {inputMode === "partner" ? (
+      {inputMode === "partner" || sub === "highlight" ? (
         <PartnerPastePanel
           value={partnerText}
           onChange={setPartnerText}
@@ -758,7 +876,9 @@ export function SeasonImportWorkspace() {
                 ? "TEAM_BATTING"
                 : sub === "team_pitching"
                   ? "TEAM_PITCHING"
-                  : "TEAM_MATCHUPS"
+                  : sub === "highlight"
+                    ? "SEASON_HIGHLIGHT"
+                    : "TEAM_MATCHUPS"
           }
         />
       ) : null}
@@ -937,6 +1057,81 @@ export function SeasonImportWorkspace() {
             {matchupDrafts.length}カードを登録…
           </button>
         </>
+      ) : sub === "highlight" ? (
+        <>
+          <p className="text-[12px] text-white/55">
+            相棒データ（TYPE=SEASON_HIGHLIGHT）を展開するか、下のテキストエリアに本文を直接貼り付けて登録します。画像解析・選手照合は不要です。同じ
+            YEAR×WORLD への再登録は上書き更新になります。
+            <button
+              type="button"
+              onClick={loadExistingHighlight}
+              className="ml-2 text-[color:var(--museum-accent,#d4af37)] underline"
+            >
+              既存データを表示
+            </button>
+          </p>
+          <label className="block">
+            <span className="mb-1 block text-[11px] text-white/55">
+              シーズンハイライト本文
+            </span>
+            <textarea
+              value={highlightText}
+              onChange={(e) => {
+                setHighlightText(e.target.value);
+                setHighlightPreviewYear(year);
+                setHighlightPreviewWorld(world);
+              }}
+              rows={10}
+              placeholder={
+                "例：\n阪神がセ・リーグを制覇。\nパ・リーグは日本ハムが優勝した。"
+              }
+              className="w-full rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-[13px] leading-relaxed text-white placeholder:text-white/30"
+            />
+          </label>
+          {highlightText.trim() ? (
+            <div className="rounded-xl border border-white/10 bg-black/40 px-3 py-3">
+              <p className="text-[11px] text-white/45">
+                確認プレビュー（
+                {formatSeasonLineLabel({
+                  year: highlightPreviewYear ?? year,
+                  world: highlightPreviewWorld ?? world,
+                })}
+                ）
+              </p>
+              <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-white/85">
+                {highlightText}
+              </p>
+            </div>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={prepareHighlightFromTextarea}
+              disabled={!highlightText.trim()}
+              className={cn(
+                "rounded-md border px-3 py-2 text-[12px]",
+                !highlightText.trim()
+                  ? "border-white/10 text-white/30"
+                  : "border-white/20 text-white/75",
+              )}
+            >
+              確認
+            </button>
+            <button
+              type="button"
+              disabled={!highlightText.trim()}
+              onClick={() => saveHighlight(false)}
+              className={cn(
+                "rounded-md border px-3 py-2 text-[12px]",
+                !highlightText.trim()
+                  ? "border-white/10 text-white/30"
+                  : "border-[color:var(--museum-accent,#d4af37)] bg-[color:var(--museum-accent,#d4af37)]/15 text-[color:var(--museum-accent,#d4af37)]",
+              )}
+            >
+              登録…
+            </button>
+          </div>
+        </>
       ) : (
         <>
           <p className="text-[12px] text-white/55">
@@ -1012,7 +1207,9 @@ export function SeasonImportWorkspace() {
             <p className="mt-2 text-[12px] text-white/60">
               {sub === "matchups"
                 ? "入力カードだけ更新します。未入力の既存カード・他リーグ・他YEAR/WORLDは保持されます。"
-                : "既存データがある場合は上書き更新します。重複新規作成はしません。"}
+                : sub === "highlight"
+                  ? "同じ YEAR×WORLD のシーズンハイライトのみ上書きします。他年度・他WORLDには影響しません。"
+                  : "既存データがある場合は上書き更新します。重複新規作成はしません。"}
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
@@ -1029,7 +1226,9 @@ export function SeasonImportWorkspace() {
                     ? void saveStandings(true)
                     : sub === "matchups"
                       ? void saveMatchups(true)
-                      : void saveTeamStats(true)
+                      : sub === "highlight"
+                        ? saveHighlight(true)
+                        : void saveTeamStats(true)
                 }
                 className="rounded-md border border-[color:var(--museum-accent,#d4af37)] bg-[color:var(--museum-accent,#d4af37)]/20 px-3 py-2 text-[12px] text-[color:var(--museum-accent,#d4af37)]"
               >

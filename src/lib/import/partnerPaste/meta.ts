@@ -22,7 +22,8 @@ export type PartnerTypeId =
   | "AWARD"
   | "BEST_NINE"
   | "GOLD_GLOVE"
-  | "SPECIAL_RECORD";
+  | "SPECIAL_RECORD"
+  | "SEASON_HIGHLIGHT";
 
 const KNOWN = new Set<string>([
   "BATTER_SEASON",
@@ -45,6 +46,7 @@ const KNOWN = new Set<string>([
   "BEST_NINE",
   "GOLD_GLOVE",
   "SPECIAL_RECORD",
+  "SEASON_HIGHLIGHT",
 ]);
 
 export function isKnownPartnerType(type: string): type is PartnerTypeId {
