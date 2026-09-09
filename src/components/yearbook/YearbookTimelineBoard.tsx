@@ -13,6 +13,7 @@ import {
   seasonDisplayTitle,
   type SeasonIdentity,
 } from "@/data/seasons";
+import { useMuseumBack } from "@/hooks/useMuseumBack";
 
 type Props = {
   seasonKey: string;
@@ -30,6 +31,7 @@ type TimelineEntry = {
  * 総評本文とは別。同じ YEAR×WORLD に紐付く。
  */
 export function YearbookTimelineBoard({ seasonKey, year }: Props) {
+  const { onBackClick } = useMuseumBack();
   const identity: SeasonIdentity | null = useMemo(() => {
     const parsed = parseSeasonKey(seasonKey);
     if (parsed) return parsed;
@@ -143,6 +145,9 @@ export function YearbookTimelineBoard({ seasonKey, year }: Props) {
       <p className="text-[12px]">
         <Link
           href={`/seasons/${identity.seasonKey}/summary`}
+          onClick={(e) =>
+            onBackClick(`/seasons/${identity.seasonKey}/summary`, e)
+          }
           className="text-museum-gold hover:text-museum-gold-soft"
         >
           ← サマリーへ戻る

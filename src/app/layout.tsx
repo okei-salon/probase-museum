@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Noto_Sans_JP, Noto_Serif_JP } from "next/font/google";
 import { MuseumCloudBootstrap } from "@/components/museum/MuseumCloudBootstrap";
+import { MuseumNavHistoryTracker } from "@/components/navigation/MuseumNavHistoryTracker";
 import "./globals.css";
 
 /**
@@ -57,6 +58,7 @@ export default function RootLayout({
     >
       <body className="min-h-full font-sans">
         <MuseumCloudBootstrap />
+        <MuseumNavHistoryTracker />
         {children}
       </body>
     </html>
