@@ -103,6 +103,9 @@ export function mergeSopFeats(
     ),
     scorelessIp: maxOr(primary.scorelessIp, fallback.scorelessIp),
     gameSo: maxOr(primary.gameSo, fallback.gameSo),
+    gameSoLeagueLeader: Boolean(
+      primary.gameSoLeagueLeader || fallback.gameSoLeagueLeader,
+    ),
     winStreak: maxOr(primary.winStreak, fallback.winStreak),
   };
 }

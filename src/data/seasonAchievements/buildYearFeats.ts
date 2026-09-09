@@ -2,7 +2,7 @@
  * 年度の記録・偉業一覧を構築。
  * 手動登録 + 自動判定 + （任意）デモ。同一キーは手動優先。
  *
- * 連続系5種の画面表示はリーグ最高のみ（SOP加点とは別）。
+ * 連続系5種＋1試合奪三振の画面表示はリーグ最高のみ（SOP加点とは別）。
  */
 
 import { listSeasonLinesForSeason } from "@/data/playerSeasonLines";

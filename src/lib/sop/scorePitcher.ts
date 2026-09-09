@@ -211,6 +211,16 @@ function scorePitcherFeats(
       points: gso.points,
     });
   }
+  // リーグ1位ボーナス（基準未達でも付与。基準点とは別加算）
+  if (feats.gameSoLeagueLeader) {
+    items.push({
+      id: "feat:gameSoLeagueLeader",
+      category: "feats_streaks",
+      label: PITCHER_FEATS.gameSoLeagueLeader.label,
+      points: PITCHER_FEATS.gameSoLeagueLeader.points,
+      detail: feats.gameSo != null ? `${feats.gameSo}奪三振` : undefined,
+    });
+  }
   const ws = bestTierPoints(feats.winStreak ?? null, PITCHER_FEATS.winStreak);
   if (ws) {
     items.push({

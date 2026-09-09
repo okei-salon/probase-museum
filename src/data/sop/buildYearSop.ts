@@ -46,10 +46,11 @@ import { getSopFeat } from "./featsStore";
 import {
   achievementsToSopFeats,
   collectYearAchievementsRaw,
-  FEATS_DISPLAY_STREAK_TYPES,
+  FEATS_LEAGUE_LEADER_TYPES,
   leagueSideFromTeamShort,
   listAchievementsForPlayer,
   mergeSopFeats,
+  pickLeagueLeaderPlayerIds,
 } from "@/data/seasonAchievements";
 import {
   buildInterleagueSopItemsForSeason,
@@ -157,6 +158,7 @@ function featsFor(
     hr: Set<string>;
     paHr: Set<string>;
     abHit: Set<string>;
+    gameSo: Set<string>;
   },
 ): SopFeatsInput {
   const fromAchievements = achievementsToSopFeats(
@@ -195,7 +197,9 @@ function featsFor(
           paHrStreakLeagueLeader: streakLeaders?.paHr.has(playerId) ?? false,
           abHitStreakLeagueLeader: streakLeaders?.abHit.has(playerId) ?? false,
         }
-      : {};
+      : {
+          gameSoLeagueLeader: streakLeaders?.gameSo.has(playerId) ?? false,
+        };
 
   return mergeSopFeats(
     fromAchievements,
@@ -204,25 +208,32 @@ function featsFor(
 }
 
 /**
- * 連続系5種のリーグ1位（同率含む）playerId 集合。
+ * 連続系5種＋1試合奪三振のリーグ1位（同率含む）playerId 集合。
  * SOP +5 ボーナス専用（表示フィルタとは別経路）。
- * 判定は記録・偉業と同じ生達成データで「年度×リーグ×項目の最大値」。
+ *
+ * 判定単位: YEAR × WORLD × リーグ（セ／パ）× 記録項目
+ * 値の出どころ: ペナント成績行 + 記録・偉業生データ（大きい方を採用）
  */
-function batterStreakLeagueLeaders(identity: SeasonIdentity): {
+function seasonFeatLeagueLeaders(
+  identity: SeasonIdentity,
+  lines: PlayerSeasonLine[],
+): {
   hit: Set<string>;
   onBase: Set<string>;
   hr: Set<string>;
   paHr: Set<string>;
   abHit: Set<string>;
+  gameSo: Set<string>;
 } {
   type Row = { playerId: string; league: "central" | "pacific"; value: number };
-  type Bucket = "hit" | "onBase" | "hr" | "paHr" | "abHit";
+  type Bucket = "hit" | "onBase" | "hr" | "paHr" | "abHit" | "gameSo";
   const buckets: Record<Bucket, Row[]> = {
     hit: [],
     onBase: [],
     hr: [],
     paHr: [],
     abHit: [],
+    gameSo: [],
   };
   const typeToBucket: Record<string, Bucket> = {
     hit_streak: "hit",
@@ -230,42 +241,55 @@ function batterStreakLeagueLeaders(identity: SeasonIdentity): {
     hr_streak: "hr",
     pa_hr_streak: "paHr",
     ab_hit_streak: "abHit",
+    game_so: "gameSo",
   };
 
-  for (const a of collectYearAchievementsRaw(identity)) {
-    if (a.source === "demo") continue;
-    if (a.category !== "streak") continue;
-    if (!FEATS_DISPLAY_STREAK_TYPES.has(a.recordType)) continue;
-    const bucket = typeToBucket[a.recordType];
-    if (!bucket) continue;
-    const value = a.value;
-    if (value == null || !Number.isFinite(value) || value < 1) continue;
-    buckets[bucket].push({
-      playerId: a.playerId,
-      league: leagueSideFromTeamShort(a.teamShort),
-      value,
-    });
+  const push = (
+    bucket: Bucket,
+    playerId: string,
+    league: "central" | "pacific",
+    value: number | null | undefined,
+  ) => {
+    if (value == null || !Number.isFinite(value) || value < 1) return;
+    buckets[bucket].push({ playerId, league, value });
+  };
+
+  // 1) ペナント成績行（teamId でリーグ確定）
+  for (const line of lines) {
+    if (line.scope !== "pennant") continue;
+    const league = leagueOf(line) as "central" | "pacific";
+    if (line.role === "batter") {
+      const c = line.counting;
+      push("hit", line.playerId, league, c.hitStreak);
+      push("onBase", line.playerId, league, c.onBaseStreak);
+      push("hr", line.playerId, league, c.hrStreak);
+      push("paHr", line.playerId, league, c.paHrStreak);
+      push("abHit", line.playerId, league, c.abHitStreak);
+    }
   }
 
-  const pick = (rows: Row[]) => {
-    const out = new Set<string>();
-    for (const league of ["central", "pacific"] as const) {
-      const list = rows.filter((r) => r.league === league);
-      if (list.length === 0) continue;
-      const max = Math.max(...list.map((r) => r.value));
-      for (const r of list) {
-        if (r.value === max) out.add(r.playerId);
-      }
-    }
-    return out;
-  };
+  // 2) 記録・偉業（手動含む）。成績行に無い値も拾う
+  for (const a of collectYearAchievementsRaw(identity)) {
+    if (a.source === "demo") continue;
+    if (!FEATS_LEAGUE_LEADER_TYPES.has(a.recordType)) continue;
+    if (a.category !== "streak" && a.category !== "single_game") continue;
+    const bucket = typeToBucket[a.recordType];
+    if (!bucket) continue;
+    push(
+      bucket,
+      a.playerId,
+      leagueSideFromTeamShort(a.teamShort),
+      a.value,
+    );
+  }
 
   return {
-    hit: pick(buckets.hit),
-    onBase: pick(buckets.onBase),
-    hr: pick(buckets.hr),
-    paHr: pick(buckets.paHr),
-    abHit: pick(buckets.abHit),
+    hit: pickLeagueLeaderPlayerIds(buckets.hit),
+    onBase: pickLeagueLeaderPlayerIds(buckets.onBase),
+    hr: pickLeagueLeaderPlayerIds(buckets.hr),
+    paHr: pickLeagueLeaderPlayerIds(buckets.paHr),
+    abHit: pickLeagueLeaderPlayerIds(buckets.abHit),
+    gameSo: pickLeagueLeaderPlayerIds(buckets.gameSo),
   };
 }
 
@@ -476,7 +500,7 @@ export function buildYearSopRankings(
   const results: SopSeasonResult[] = [];
   const byPlayer = groupLinesByPlayer(lines);
   const interleagueItemsByPlayer = buildInterleagueSopItemsForSeason(identity);
-  const streakLeaders = batterStreakLeagueLeaders(identity);
+  const streakLeaders = seasonFeatLeagueLeaders(identity, lines);
 
   for (const line of lines) {
     const key = `${line.playerId}:${line.role}`;
@@ -567,6 +591,7 @@ function lineToInput(
     hr: Set<string>;
     paHr: Set<string>;
     abHit: Set<string>;
+    gameSo: Set<string>;
   },
 ): SopPlayerYearInput {
   const name =

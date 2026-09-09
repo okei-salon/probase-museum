@@ -32,6 +32,9 @@ export {
 } from "./buildYearFeats";
 export {
   FEATS_DISPLAY_STREAK_TYPES,
+  FEATS_LEAGUE_LEADER_TYPES,
   filterStreaksToLeagueLeaders,
+  leagueLeaderDisplaySopPoints,
   leagueSideFromTeamShort,
+  pickLeagueLeaderPlayerIds,
 } from "./streakDisplay";

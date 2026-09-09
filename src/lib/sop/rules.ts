@@ -215,6 +215,11 @@ export const PITCHER_FEATS = {
     { min: 18, points: 10 },
     { min: 15, points: 5 },
   ],
+  /** 1試合奪三振：セ／パ各リーグ1位ボーナス（基準点とは別加算） */
+  gameSoLeagueLeader: {
+    points: 5,
+    label: "1試合奪三振 リーグ1位",
+  },
   winStreak: [
     { min: 20, points: 15 },
     { min: 15, points: 10 },

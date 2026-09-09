@@ -204,6 +204,10 @@ export function buildSopRulesCatalog(): SopRuleSection[] {
         },
         ...tierLines("連続無失点イニング", PITCHER_FEATS.scorelessIp, "回"),
         ...tierLines("1試合奪三振", PITCHER_FEATS.gameSo, "奪三振"),
+        {
+          label: PITCHER_FEATS.gameSoLeagueLeader.label,
+          pointsText: `+${PITCHER_FEATS.gameSoLeagueLeader.points}点（基準点とは別加算）`,
+        },
         ...tierLines("連勝", PITCHER_FEATS.winStreak, "連勝"),
       ],
     },
