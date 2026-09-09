@@ -19,10 +19,10 @@ import { FinalStandingsBoard } from "@/components/seasons/FinalStandingsBoard";
 import { hydrateInterleagueFromCloud } from "@/data/interleague";
 import { hydratePlayerMasterFromCloud } from "@/data/playerMaster";
 import { hydratePostseasonFromCloud } from "@/data/postseason";
-import { hydrateSeasonHighlightsFromCloud } from "@/data/seasonHighlights";
+import { hydrateSeasonReviewSources } from "@/data/seasonReview";
 import { hydrateSopAwardsFromCloud } from "@/data/sop";
 import { hydrateTeamStandingsFromCloud } from "@/data/teamStandings";
-import { parseSeasonKey } from "@/data/seasons";
+import { formatSeasonLineLabel, parseSeasonKey } from "@/data/seasons";
 
 type SeasonSummaryPageProps = {
   year: string;
@@ -50,7 +50,7 @@ export function SeasonSummaryPage({
         hydratePostseasonFromCloud(),
         hydrateInterleagueFromCloud(),
         hydratePlayerMasterFromCloud(),
-        hydrateSeasonHighlightsFromCloud(),
+        hydrateSeasonReviewSources(),
       ]);
       if (cancelled) return;
       const identity = parseSeasonKey(seasonKey);
@@ -60,6 +60,12 @@ export function SeasonSummaryPage({
       cancelled = true;
     };
   }, [year, seasonKey]);
+
+  const identity = parseSeasonKey(seasonKey);
+  const seasonLabel = identity
+    ? formatSeasonLineLabel(identity)
+    : backLabel ?? `${year}`;
+  const reviewHref = `/yearbook/${seasonKey}/overview?from=summary`;
 
   return (
     <CategoryShell
@@ -107,18 +113,32 @@ export function SeasonSummaryPage({
 
         <SummarySection
           eyebrow="03"
-          title="SEASON HIGHLIGHTS"
-          description="その年を象徴する記録・出来事"
+          title="SEASON REVIEW"
+          description="その年全体を文章で振り返る"
         >
-          <DataPanel>
-            {data?.seasonHighlightText ? (
-              <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-museum-ivory md:text-[14px]">
-                {data.seasonHighlightText}
+          {data?.hasSeasonReview ? (
+            <Link
+              href={reviewHref}
+              className="block rounded-xl border border-museum-gold/35 bg-black/86 px-4 py-4 backdrop-blur-md transition-colors hover:border-museum-gold/60"
+            >
+              <p className="text-[10px] tracking-[0.16em] text-museum-gold/85">
+                シーズン総評
               </p>
-            ) : (
+              <p className="mt-1.5 font-display text-[18px] tracking-[0.04em] text-museum-ivory">
+                {seasonLabel}
+              </p>
+              <p className="mt-1 text-[13px] text-museum-ivory-soft">
+                そのシーズンを振り返る
+              </p>
+              <p className="mt-4 text-[12px] tracking-[0.08em] text-museum-gold">
+                総評を読む →
+              </p>
+            </Link>
+          ) : (
+            <DataPanel>
               <p className="text-[13px] text-museum-ivory-soft">登録待ち</p>
-            )}
-          </DataPanel>
+            </DataPanel>
+          )}
         </SummarySection>
 
         <SummarySection

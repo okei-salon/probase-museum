@@ -61,7 +61,7 @@ export type SeasonImportSubId =
   | "team_batting"
   | "team_pitching"
   | "matchups"
-  | "highlight";
+  | "review";
 
 export const SEASON_IMPORT_SUBS: Array<{
   id: SeasonImportSubId;
@@ -71,7 +71,7 @@ export const SEASON_IMPORT_SUBS: Array<{
   { id: "team_batting", label: "チーム打撃成績" },
   { id: "team_pitching", label: "チーム投手成績" },
   { id: "matchups", label: "対戦表" },
-  { id: "highlight", label: "シーズンハイライト" },
+  { id: "review", label: "シーズン総評" },
 ];
 
 /** 表彰内サブ種別 */

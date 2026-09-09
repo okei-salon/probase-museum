@@ -1,3 +1,7 @@
+/**
+ * YEARBOOK セクション定義と SEASON_REVIEW 公開 API。
+ */
+
 import type { LinkListItemData } from "@/components/category/LinkList";
 import type { SelectGridItem } from "@/components/category/SelectGrid";
 import {
@@ -22,6 +26,14 @@ export {
 
 export { buildYearbookSeasonContext } from "./context";
 
+export {
+  getSeasonReviewBody,
+  getSeasonReviewRecord,
+  hasSeasonReview,
+  hydrateSeasonReviewSources,
+  upsertSeasonReview,
+} from "@/data/seasonReview";
+
 /** YEARBOOK ハブ: BLUE / RED / 旧年度 / DEMO を別カードで列挙 */
 export function getYearbookYearItems(): SelectGridItem[] {
   return listEntrySeasonIdentities().map((identity) => ({
@@ -41,15 +53,32 @@ export function getYearbookYearItems(): SelectGridItem[] {
   }));
 }
 
-/** YEARBOOK 年度内はシーズン総評のみ */
+/**
+ * YEARBOOK 年度内セクション。
+ * サマリー / 年表 / シーズン総評は同じ YEAR×WORLD に紐付く。
+ */
 export const yearbookSections = [
+  {
+    id: "summary",
+    title: "サマリー",
+    description: "優勝・表彰・最終順位を俯瞰する入口",
+    icon: "trophy" as const,
+  },
+  {
+    id: "timeline",
+    title: "年表",
+    description: "その年の主要出来事を時系列で見る入口",
+    icon: "calendar" as const,
+  },
   {
     id: "overview",
     title: "シーズン総評",
-    description: "その年の流れを文章で振り返る年鑑記事",
+    description: "その年全体を文章で振り返る入口",
     icon: "book" as const,
   },
 ] as const;
+
+export type YearbookSectionId = (typeof yearbookSections)[number]["id"];
 
 /** 廃止セクション → シーズン総評へ誘導 */
 export const yearbookSectionAliases: Record<string, string> = {
@@ -62,6 +91,8 @@ export const yearbookSectionAliases: Record<string, string> = {
   feats: "overview",
   spotlight: "overview",
   symbol: "overview",
+  review: "overview",
+  highlight: "overview",
 };
 
 export function resolveYearbookSection(section: string): string {
@@ -71,7 +102,10 @@ export function resolveYearbookSection(section: string): string {
 export function getYearbookSectionLinks(seasonKey: string): LinkListItemData[] {
   return yearbookSections.map((section) => ({
     id: section.id,
-    href: `/yearbook/${seasonKey}/${section.id}`,
+    href:
+      section.id === "summary"
+        ? `/seasons/${seasonKey}/summary`
+        : `/yearbook/${seasonKey}/${section.id}`,
     title: section.title,
     description: section.description,
     icon: section.icon,

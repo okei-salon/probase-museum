@@ -1,13 +1,13 @@
 /**
  * シーズンサマリー — 既存 Museum データの読み取り専用ビュー。
  * 表彰・優勝などは専用保存せず既存データを参照。
- * シーズンハイライト本文のみ YEAR×WORLD ストアを参照する。
+ * シーズン総評（SEASON_REVIEW）の有無のみ YEAR×WORLD ストアを参照する。
  */
 
 import type { StandingRow } from "@/components/views/StandingsTable";
 import { getInterleagueChampion } from "@/data/interleague";
 import { getJapanSeriesMvp, getPostseason } from "@/data/postseason";
-import { getSeasonHighlightText } from "@/data/seasonHighlights";
+import { getSeasonReviewBody } from "@/data/seasonReview";
 import { isRegisteredAwardNone } from "@/lib/import/partnerPaste/awardOutcome";
 import { resolveMuseumPlayerName } from "@/lib/playerMaster";
 import {
@@ -73,10 +73,10 @@ export type SeasonSummaryData = {
   champions: SummaryChampion[];
   awards: SummaryAward[];
   /**
-   * 登録済みシーズンハイライト本文（改行保持）。
-   * 未登録は null（UI は「登録待ち」）。
+   * 登録済みシーズン総評があるか（本文は詳細画面で表示）。
+   * 正本は SEASON_REVIEW / yearbook-reviews。旧ハイライトは読み取り互換。
    */
-  seasonHighlightText: string | null;
+  hasSeasonReview: boolean;
   standings: {
     central: StandingRow[];
     pacific: StandingRow[];
@@ -350,7 +350,7 @@ export function getSeasonSummary(
     tagline: `${label}の記録と栄光を振り返る`,
     champions: buildChampions(identity),
     awards: buildAwards(identity),
-    seasonHighlightText: getSeasonHighlightText(identity),
+    hasSeasonReview: getSeasonReviewBody(identity) != null,
     standings: {
       central: hasCentral
         ? toRows(standingsSource!.central)

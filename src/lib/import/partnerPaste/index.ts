@@ -22,6 +22,7 @@ export {
   parseClimaxSeriesPartner,
   parseJapanSeriesPartner,
   parseSeasonHighlightPartner,
+  parseSeasonReviewPartner,
   extractPartnerTextBlock,
   type PartnerNonSeasonResult,
   type PartnerMonthlyMvpResult,

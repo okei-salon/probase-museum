@@ -70,8 +70,8 @@ export function buildYearbookSeasonContext(
         factLines.push(`${a.title}: ${a.playerName}（${a.teamName}）`);
       }
     }
-    if (summary.seasonHighlightText?.trim()) {
-      factLines.push(`シーズンハイライト:\n${summary.seasonHighlightText}`);
+    if (summary.hasSeasonReview) {
+      factLines.push("シーズン総評: 登録済み");
     }
   } catch {
     missing.push("サマリー");

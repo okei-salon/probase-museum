@@ -1328,8 +1328,8 @@ export function extractPartnerTextBlock(rawText: string): string {
 }
 
 export type PartnerSeasonHighlightResult = {
-  kind: "season_highlight";
-  type: "SEASON_HIGHLIGHT";
+  kind: "season_review";
+  type: "SEASON_REVIEW" | "SEASON_HIGHLIGHT";
   year: number;
   world: "BLUE" | "RED" | null;
   text: string;
@@ -1337,6 +1337,14 @@ export type PartnerSeasonHighlightResult = {
 };
 
 export function parseSeasonHighlightPartner(
+  rawText: string,
+  fallbackYear: number,
+  fallbackWorld?: "BLUE" | "RED" | null,
+): PartnerSeasonHighlightResult | PartnerUnsupportedResult {
+  return parseSeasonReviewPartner(rawText, fallbackYear, fallbackWorld);
+}
+
+export function parseSeasonReviewPartner(
   rawText: string,
   fallbackYear: number,
   fallbackWorld?: "BLUE" | "RED" | null,
@@ -1366,13 +1374,13 @@ export function parseSeasonHighlightPartner(
     }
   }
 
-  if (type !== "SEASON_HIGHLIGHT") {
+  if (type !== "SEASON_REVIEW" && type !== "SEASON_HIGHLIGHT") {
     return {
       kind: "unsupported",
       type,
       message: type
         ? `未対応フォーマット: TYPE=${type}`
-        : "未対応フォーマット: TYPE=SEASON_HIGHLIGHT が必要です",
+        : "未対応フォーマット: TYPE=SEASON_REVIEW が必要です",
     };
   }
 
@@ -1381,7 +1389,7 @@ export function parseSeasonHighlightPartner(
     return {
       kind: "unsupported",
       type,
-      message: "TEXT= にシーズンハイライト本文がありません",
+      message: "TEXT= にシーズン総評本文がありません",
     };
   }
 
@@ -1393,13 +1401,15 @@ export function parseSeasonHighlightPartner(
         : null;
 
   const y = year ?? fallbackYear;
+  const formalType: "SEASON_REVIEW" | "SEASON_HIGHLIGHT" =
+    type === "SEASON_HIGHLIGHT" ? "SEASON_HIGHLIGHT" : "SEASON_REVIEW";
   return {
-    kind: "season_highlight",
-    type: "SEASON_HIGHLIGHT",
+    kind: "season_review",
+    type: formalType,
     year: y,
     world,
     text,
-    message: `シーズンハイライト ${y}${world ? ` ${world}` : ""}`,
+    message: `シーズン総評 ${y}${world ? ` ${world}` : ""}`,
   };
 }
 
@@ -1465,8 +1475,9 @@ export function parseNonSeasonPartnerPaste(
       return parseClimaxSeriesPartner(rawText, fallbackYear);
     case "JAPAN_SERIES":
       return parseJapanSeriesPartner(rawText, fallbackYear);
+    case "SEASON_REVIEW":
     case "SEASON_HIGHLIGHT":
-      return parseSeasonHighlightPartner(rawText, fallbackYear, fallbackWorld);
+      return parseSeasonReviewPartner(rawText, fallbackYear, fallbackWorld);
     default:
       if (
         type.includes("BATTER_SEASON") ||

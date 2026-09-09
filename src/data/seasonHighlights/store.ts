@@ -1,6 +1,8 @@
 /**
- * シーズンハイライトストア（localStorage）
- * YEAR × WORLD ごとに1本文。同スロットへの再登録は上書き。
+ * シーズンハイライトストア（localStorage）— 読み取り互換専用。
+ * 正式な新規保存は SEASON_REVIEW（yearbook-reviews）を使う。
+ * 既存データを削除・初期化しない。
+ * YEAR × WORLD ごとに1本文。
  * + museum_documents(collection=season_highlights) 同期（id = seasonKey）
  */
 

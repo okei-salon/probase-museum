@@ -217,13 +217,21 @@ MVP_HR=2
 MVP_RBI=6
 MVP_NOTE=シリーズ通算`,
 
-  SEASON_HIGHLIGHT: `YEAR=2026
+  SEASON_REVIEW: `YEAR=2026
 WORLD=BLUE
-TYPE=SEASON_HIGHLIGHT
+TYPE=SEASON_REVIEW
 
 TEXT=
-阪神がセ・リーグを制覇。
-パ・リーグは日本ハムが優勝した。
-日本シリーズではソフトバンクが巨人を破り日本一。
-佐藤輝明がセ・リーグMVPを獲得するなど、記録の多いシーズンとなった。`,
+2026年はセ・リーグで阪神が優勝争いを制し、パ・リーグは日本ハムがリーグを支配した。
+交流戦・クライマックスシリーズを経て、日本シリーズではソフトバンクが巨人を破り日本一。
+佐藤輝明のセ・リーグMVP、柳田悠岐の日本シリーズMVPなど、記録と物語の多いシーズンとなった。`,
+
+  /** @deprecated 正式は SEASON_REVIEW。貼り付け互換のため残す */
+  SEASON_HIGHLIGHT: `YEAR=2026
+WORLD=BLUE
+TYPE=SEASON_REVIEW
+
+TEXT=
+2026年はセ・リーグで阪神が優勝争いを制し、パ・リーグは日本ハムがリーグを支配した。
+交流戦・クライマックスシリーズを経て、日本シリーズではソフトバンクが巨人を破り日本一。`,
 };
