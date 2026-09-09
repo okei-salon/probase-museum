@@ -15,6 +15,8 @@ import {
   seasonDisplayTitle,
   type SeasonIdentity,
 } from "@/data/seasons";
+import { hydratePlayerMasterFromCloud } from "@/data/playerMaster";
+import { SeasonReviewArticle } from "@/components/yearbook/SeasonReviewArticle";
 import { SeasonReviewSourceCopyPanel } from "@/components/yearbook/SeasonReviewSourceCopyPanel";
 import { cn } from "@/lib/cn";
 
@@ -78,7 +80,10 @@ export function YearbookSeasonReviewBoard({
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      await hydrateSeasonReviewSources();
+      await Promise.allSettled([
+        hydrateSeasonReviewSources(),
+        hydratePlayerMasterFromCloud(),
+      ]);
       if (cancelled || !identity) return;
       const next = getAllSeasonReviewSections(identity);
       setBodies(next);
@@ -143,7 +148,7 @@ export function YearbookSeasonReviewBoard({
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto w-full max-w-[960px] space-y-6">
       <header className="space-y-2 border-b border-[color:var(--museum-accent,#d4af37)]/25 pb-4">
         <p className="text-[10px] tracking-[0.22em] text-[color:var(--museum-accent,#d4af37)]">
           SEASON REVIEW · {context?.seasonLabel ?? seasonKey}
@@ -257,15 +262,13 @@ export function YearbookSeasonReviewBoard({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={20}
-          className="w-full max-w-full rounded-xl border border-white/15 bg-black/50 px-4 py-3 text-[14px] leading-[1.85] text-museum-ivory outline-none focus:border-[color:var(--museum-accent,#d4af37)]/50"
+          className="mx-auto block w-full max-w-[900px] rounded-xl border border-white/15 bg-black/50 px-4 py-3 text-[14px] leading-[1.85] text-museum-ivory outline-none focus:border-[color:var(--museum-accent,#d4af37)]/50"
           placeholder={`${SEASON_REVIEW_KIND_LABELS[tab]}を記入…`}
         />
-      ) : hasBody ? (
-        <article className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-xl border border-white/10 bg-black/40 px-4 py-5 text-[14px] leading-[1.9] text-museum-ivory-muted md:px-6 md:py-6 md:text-[15px]">
-          {body}
-        </article>
+      ) : hasBody && body ? (
+        <SeasonReviewArticle text={body} />
       ) : (
-        <p className="rounded-xl border border-dashed border-white/15 bg-black/30 px-4 py-8 text-center text-[13px] text-museum-ivory-soft">
+        <p className="mx-auto max-w-[900px] rounded-xl border border-dashed border-white/15 bg-black/30 px-4 py-8 text-center text-[13px] text-museum-ivory-soft">
           この項目の総評はまだ登録されていません
         </p>
       )}
