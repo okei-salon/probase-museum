@@ -72,6 +72,7 @@ import { parsePennantMatchupsOcrText } from "@/lib/import/parsePennantMatchupsOc
 import { normalizeTeamShort } from "@/lib/import/seasonBatchMerge";
 import { cn } from "@/lib/cn";
 import { SeasonReviewSourceCopyPanel } from "@/components/yearbook/SeasonReviewSourceCopyPanel";
+import { YearbookFullExportPanel } from "@/components/yearbook/YearbookFullExportPanel";
 
 const CENTRAL = npbTeams.filter((t) => t.league === "セ");
 const PACIFIC = npbTeams.filter((t) => t.league === "パ");
@@ -1064,6 +1065,9 @@ export function SeasonImportWorkspace() {
       ) : sub === "review" ? (
         <>
           <SeasonReviewSourceCopyPanel seasonKey={seasonKey} />
+          <div className="mt-4">
+            <YearbookFullExportPanel seasonKey={seasonKey} />
+          </div>
           <p className="text-[12px] text-white/55">
             相棒データ（TYPE=SEASON_REVIEW）を展開するか、下のテキストエリアに本文を直接貼り付けて登録します。画像解析・選手照合は不要です。同じ
             YEAR×WORLD への再登録は上書き更新になります。

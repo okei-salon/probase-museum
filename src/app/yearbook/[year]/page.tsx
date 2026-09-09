@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { CategoryShell, LinkList, PageHeading } from "@/components/category";
 import { SeasonReviewSourceCopyPanel } from "@/components/yearbook/SeasonReviewSourceCopyPanel";
+import { YearbookFullExportPanel } from "@/components/yearbook/YearbookFullExportPanel";
 import {
   parseSeasonKey,
   seasonDisplaySubtitle,
@@ -25,8 +26,9 @@ export default async function YearbookYearPage({ params }: Props) {
         subtitle={seasonDisplaySubtitle(identity)}
         icon="book"
       />
-      <div className="mb-6">
+      <div className="mb-6 space-y-4">
         <SeasonReviewSourceCopyPanel seasonKey={identity.seasonKey} />
+        <YearbookFullExportPanel seasonKey={identity.seasonKey} />
       </div>
       <LinkList items={getYearbookSectionLinks(identity.seasonKey)} />
     </CategoryShell>
