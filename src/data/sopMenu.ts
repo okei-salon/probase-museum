@@ -6,7 +6,7 @@ export const sopMenu: LinkListItemData[] = [
     id: "season",
     href: "/sop/season",
     title: "シーズンSOP",
-    description: "年度ごとの総合／野手／投手ランキング（最終SOP）",
+    description: "年度ごとの総合（二刀流合算）／野手／投手ランキング",
     icon: "calendar",
     iconClassName: "text-sky-300",
   },

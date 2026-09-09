@@ -35,6 +35,10 @@ export {
 export {
   SOP_RANKING_DISPLAY_LIMIT,
   limitSopRankingsForDisplay,
+  buildOverallSeasonSopRankings,
+  overallClassificationLabel,
+  type SopOverallRankEntry,
+  type SopOverallClassification,
 } from "./limitSopRankingsDisplay";
 export { scoreTwoWaySop } from "./scoreTwoWay";
 

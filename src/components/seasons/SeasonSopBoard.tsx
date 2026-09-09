@@ -4,12 +4,14 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { buildYearSopRankings } from "@/data/sop";
 import { parseSeasonKey } from "@/data/seasons";
+import { RoleTabs } from "@/components/sop/RoleTabs";
 import {
   groupSopItemsByCategory,
   limitSopRankingsForDisplay,
   SOP_CATEGORY_LABELS,
   type SopCategoryId,
   type SopRankEntry,
+  type SopRole,
   type SopSeasonResult,
 } from "@/lib/sop";
 import { cn } from "@/lib/cn";
@@ -45,16 +47,18 @@ export function SeasonSopBoard({ year, seasonKey }: SeasonSopBoardProps) {
     }
     return buildYearSopRankings(year);
   }, [year, seasonKey]);
+
+  const [role, setRole] = useState<SopRole>("batter");
   const displayRankings = useMemo(
-    () => limitSopRankingsForDisplay(rankings, "all"),
-    [rankings],
+    () => limitSopRankingsForDisplay(rankings, role),
+    [rankings, role],
   );
   const [selected, setSelected] = useState<SopRankEntry | null>(null);
   const detailRef = useRef<HTMLTableRowElement | null>(null);
 
   useEffect(() => {
     setSelected(null);
-  }, [year, seasonKey]);
+  }, [year, seasonKey, role]);
 
   useEffect(() => {
     if (!selected || !detailRef.current) return;
@@ -102,85 +106,103 @@ export function SeasonSopBoard({ year, seasonKey }: SeasonSopBoardProps) {
 
   return (
     <div className="space-y-4">
-      <div className="overflow-x-auto rounded-lg border border-white/10">
-        <table className="w-full min-w-[560px] border-collapse text-left text-[12px] md:text-[13px]">
-          <thead>
-            <tr className="border-b border-[color:var(--museum-accent-border,#d4af3773)] bg-black/50 text-[11px] text-[color:var(--museum-accent,#d4af37)]">
-              <th className="px-2.5 py-2 font-medium">順位</th>
-              <th className="px-2.5 py-2 font-medium">選手</th>
-              <th className="px-2.5 py-2 font-medium">球団</th>
-              <th className="px-2.5 py-2 font-medium">区分</th>
-              <th className="px-2.5 py-2 font-medium">SOP</th>
-            </tr>
-          </thead>
-          <tbody>
-            {displayRankings.map((entry) => {
-              const r = entry.result;
-              const active =
-                selected != null &&
-                selected.result.playerId === r.playerId &&
-                selected.result.role === r.role;
-              return (
-                <Fragment key={entryKey(entry)}>
-                  <tr
-                    className={cn(
-                      "border-b border-white/8 transition-colors",
-                      active
-                        ? "bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.12))]"
-                        : "hover:bg-white/5",
-                    )}
-                  >
-                    <td className="px-2.5 py-2 tabular-nums text-[color:var(--museum-accent,#d4af37)]">
-                      {entry.rank}
-                    </td>
-                    <td className="px-2.5 py-2 font-medium text-museum-ivory">
-                      <button
-                        type="button"
-                        onClick={() => toggleEntry(entry)}
-                        className={cn(
-                          "min-h-9 cursor-pointer text-left underline-offset-2",
-                          "hover:text-[color:var(--museum-accent,#d4af37)] hover:underline",
-                          active &&
-                            "text-[color:var(--museum-accent,#d4af37)] underline",
-                        )}
-                      >
-                        {r.playerName}
-                      </button>
-                    </td>
-                    <td className="px-2.5 py-2 text-museum-ivory-soft">
-                      {r.teamShort}
-                    </td>
-                    <td className="px-2.5 py-2 text-museum-ivory-soft">
-                      {r.role === "batter" ? "野手" : "投手"}
-                    </td>
-                    <td className="px-2.5 py-2 tabular-nums font-medium text-museum-ivory">
-                      {r.total}
-                    </td>
-                  </tr>
-                  {active ? (
+      <RoleTabs
+        role={role}
+        onChange={(r) => {
+          if (r === "batter" || r === "pitcher") setRole(r);
+        }}
+        labels={[
+          { id: "batter", label: "野手" },
+          { id: "pitcher", label: "投手" },
+        ]}
+      />
+
+      {displayRankings.length === 0 ? (
+        <p className="text-[13px] text-museum-ivory-soft">
+          この区分のSOPはありません。
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-white/10">
+          <table className="w-full min-w-[560px] border-collapse text-left text-[12px] md:text-[13px]">
+            <thead>
+              <tr className="border-b border-[color:var(--museum-accent-border,#d4af3773)] bg-black/50 text-[11px] text-[color:var(--museum-accent,#d4af37)]">
+                <th className="px-2.5 py-2 font-medium">順位</th>
+                <th className="px-2.5 py-2 font-medium">選手</th>
+                <th className="px-2.5 py-2 font-medium">球団</th>
+                <th className="px-2.5 py-2 font-medium">区分</th>
+                <th className="px-2.5 py-2 font-medium">SOP</th>
+              </tr>
+            </thead>
+            <tbody>
+              {displayRankings.map((entry) => {
+                const r = entry.result;
+                const active =
+                  selected != null &&
+                  selected.result.playerId === r.playerId &&
+                  selected.result.role === r.role;
+                return (
+                  <Fragment key={entryKey(entry)}>
                     <tr
-                      ref={detailRef}
-                      className="border-b border-white/8 bg-black/55"
+                      className={cn(
+                        "border-b border-white/8 transition-colors",
+                        active
+                          ? "bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.12))]"
+                          : "hover:bg-white/5",
+                      )}
                     >
-                      <td colSpan={5} className="px-2 py-3 sm:px-3">
-                        <SopDetailPanel
-                          result={selected!.result}
-                          rank={selected!.rank}
-                          onClose={() => setSelected(null)}
-                        />
+                      <td className="px-2.5 py-2 tabular-nums text-[color:var(--museum-accent,#d4af37)]">
+                        {entry.rank}
+                      </td>
+                      <td className="px-2.5 py-2 font-medium text-museum-ivory">
+                        <button
+                          type="button"
+                          onClick={() => toggleEntry(entry)}
+                          className={cn(
+                            "min-h-9 cursor-pointer text-left underline-offset-2",
+                            "hover:text-[color:var(--museum-accent,#d4af37)] hover:underline",
+                            active &&
+                              "text-[color:var(--museum-accent,#d4af37)] underline",
+                          )}
+                        >
+                          {r.playerName}
+                        </button>
+                      </td>
+                      <td className="px-2.5 py-2 text-museum-ivory-soft">
+                        {r.teamShort}
+                      </td>
+                      <td className="px-2.5 py-2 text-museum-ivory-soft">
+                        {r.role === "batter" ? "野手" : "投手"}
+                      </td>
+                      <td className="px-2.5 py-2 tabular-nums font-medium text-museum-ivory">
+                        {r.total}
                       </td>
                     </tr>
-                  ) : null}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                    {active ? (
+                      <tr
+                        ref={detailRef}
+                        className="border-b border-white/8 bg-black/55"
+                      >
+                        <td colSpan={5} className="px-2 py-3 sm:px-3">
+                          <SopDetailPanel
+                            result={selected!.result}
+                            rank={selected!.rank}
+                            onClose={() => setSelected(null)}
+                          />
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {!selected ? (
         <p className="text-[11px] text-museum-ivory-soft">
-          選手名をクリックすると、その行の直下にSOP内訳を表示します。同点は同順位です。野手・投手それぞれ上位50人まで表示します。
+          選手名をクリックすると、その行の直下にSOP内訳を表示します。同点は同順位です。
+          {role === "batter" ? "野手" : "投手"}上位50人まで表示します。
         </p>
       ) : null}
 
@@ -193,14 +215,16 @@ export function SeasonSopBoard({ year, seasonKey }: SeasonSopBoardProps) {
   );
 }
 
-function SopDetailPanel({
+export function SopDetailPanel({
   result,
   rank,
   onClose,
+  headingSuffix,
 }: {
   result: SopSeasonResult;
   rank: number | null;
   onClose: () => void;
+  headingSuffix?: string;
 }) {
   const groups = groupSopItemsByCategory(result);
 
@@ -211,7 +235,9 @@ function SopDetailPanel({
           <h3 className="text-[14px] font-medium text-museum-ivory">
             {result.playerName}
             <span className="ml-2 text-[12px] text-museum-ivory-soft">
-              {result.teamShort}・{result.role === "batter" ? "野手" : "投手"}
+              {result.teamShort}・
+              {headingSuffix ??
+                (result.role === "batter" ? "野手" : "投手")}
             </span>
           </h3>
           <p className="mt-1 text-[13px] text-[color:var(--museum-accent,#d4af37)]">
@@ -234,12 +260,14 @@ function SopDetailPanel({
           ) : null}
         </div>
         <div className="flex gap-2">
-          <Link
-            href={`/players/${result.playerId}/yearly`}
-            className="rounded-md border border-white/15 px-2.5 py-1 text-[11px] text-museum-ivory-soft hover:border-white/30"
-          >
-            選手詳細
-          </Link>
+          {result.playerId ? (
+            <Link
+              href={`/players/${result.playerId}/yearly`}
+              className="rounded-md border border-white/15 px-2.5 py-1 text-[11px] text-museum-ivory-soft hover:border-white/30"
+            >
+              選手詳細
+            </Link>
+          ) : null}
           <button
             type="button"
             onClick={onClose}
@@ -251,99 +279,115 @@ function SopDetailPanel({
       </div>
 
       <div className="mt-4 space-y-3">
-        {CATEGORY_ORDER.map((cat) => {
-          const items = groups.get(cat);
-          if (!items || items.length === 0) return null;
-          const sub = items.reduce((s, it) => s + it.points, 0);
-          if (cat === "two_way") {
-            const batterItems = items.filter((it) => it.detail === "野手側");
-            const pitcherItems = items.filter((it) => it.detail === "投手側");
-            const batterSub = batterItems.reduce((s, it) => s + it.points, 0);
-            const pitcherSub = pitcherItems.reduce((s, it) => s + it.points, 0);
-            return (
-              <div key={cat}>
-                <h4 className="text-[11px] tracking-[0.12em] text-[color:var(--museum-accent,#d4af37)]">
-                  {SOP_CATEGORY_LABELS[cat]}
-                  <span className="ml-2 text-museum-ivory-soft">{sub}pt</span>
-                </h4>
-                {batterItems.length > 0 ? (
-                  <div className="mt-1.5">
-                    <p className="text-[11px] text-museum-ivory-soft">
-                      【野手側 {batterSub}pt】
-                    </p>
-                    <ul className="mt-0.5 space-y-0.5 text-[12px] text-museum-ivory-muted">
-                      {batterItems.map((it) => (
-                        <li
-                          key={it.id}
-                          className="flex justify-between gap-3 border-b border-white/5 py-1"
-                        >
-                          <span>{it.label}</span>
-                          <span className="shrink-0 tabular-nums text-museum-ivory">
-                            +{it.points}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-                {pitcherItems.length > 0 ? (
-                  <div className="mt-1.5">
-                    <p className="text-[11px] text-museum-ivory-soft">
-                      【投手側 {pitcherSub}pt】
-                    </p>
-                    <ul className="mt-0.5 space-y-0.5 text-[12px] text-museum-ivory-muted">
-                      {pitcherItems.map((it) => (
-                        <li
-                          key={it.id}
-                          className="flex justify-between gap-3 border-b border-white/5 py-1"
-                        >
-                          <span>{it.label}</span>
-                          <span className="shrink-0 tabular-nums text-museum-ivory">
-                            +{it.points}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
-            );
-          }
-          return (
-            <div key={cat}>
-              <h4 className="text-[11px] tracking-[0.12em] text-[color:var(--museum-accent,#d4af37)]">
-                {SOP_CATEGORY_LABELS[cat]}
-                <span className="ml-2 text-museum-ivory-soft">+{sub}</span>
-              </h4>
-              <ul className="mt-1 space-y-0.5 text-[12px] text-museum-ivory-muted">
-                {items.map((it) => (
-                  <li
-                    key={it.id}
-                    className="flex justify-between gap-3 border-b border-white/5 py-1"
-                  >
-                    <span>
-                      {it.label}
-                      {it.detail ? (
-                        <span className="ml-1 text-[10px] text-museum-ivory-soft">
-                          （{it.detail}）
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="shrink-0 tabular-nums text-museum-ivory">
-                      +{it.points}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })}
-        {result.items.length === 0 ? (
-          <p className="text-[12px] text-museum-ivory-soft">
-            加点項目はありません（判定に必要なデータが不足している可能性があります）。
-          </p>
-        ) : null}
+        <SopCategoryBlocks groups={groups} empty={result.items.length === 0} />
       </div>
     </section>
+  );
+}
+
+export function SopCategoryBlocks({
+  groups,
+  empty,
+  idPrefix = "",
+}: {
+  groups: ReturnType<typeof groupSopItemsByCategory>;
+  empty?: boolean;
+  idPrefix?: string;
+}) {
+  return (
+    <>
+      {CATEGORY_ORDER.map((cat) => {
+        const items = groups.get(cat);
+        if (!items || items.length === 0) return null;
+        const sub = items.reduce((s, it) => s + it.points, 0);
+        if (cat === "two_way") {
+          const batterItems = items.filter((it) => it.detail === "野手側");
+          const pitcherItems = items.filter((it) => it.detail === "投手側");
+          const batterSub = batterItems.reduce((s, it) => s + it.points, 0);
+          const pitcherSub = pitcherItems.reduce((s, it) => s + it.points, 0);
+          return (
+            <div key={`${idPrefix}${cat}`}>
+              <h4 className="text-[11px] tracking-[0.12em] text-[color:var(--museum-accent,#d4af37)]">
+                {SOP_CATEGORY_LABELS[cat]}
+                <span className="ml-2 text-museum-ivory-soft">{sub}pt</span>
+              </h4>
+              {batterItems.length > 0 ? (
+                <div className="mt-1.5">
+                  <p className="text-[11px] text-museum-ivory-soft">
+                    【野手側 {batterSub}pt】
+                  </p>
+                  <ul className="mt-0.5 space-y-0.5 text-[12px] text-museum-ivory-muted">
+                    {batterItems.map((it) => (
+                      <li
+                        key={`${idPrefix}${it.id}`}
+                        className="flex justify-between gap-3 border-b border-white/5 py-1"
+                      >
+                        <span>{it.label}</span>
+                        <span className="shrink-0 tabular-nums text-museum-ivory">
+                          +{it.points}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {pitcherItems.length > 0 ? (
+                <div className="mt-1.5">
+                  <p className="text-[11px] text-museum-ivory-soft">
+                    【投手側 {pitcherSub}pt】
+                  </p>
+                  <ul className="mt-0.5 space-y-0.5 text-[12px] text-museum-ivory-muted">
+                    {pitcherItems.map((it) => (
+                      <li
+                        key={`${idPrefix}${it.id}`}
+                        className="flex justify-between gap-3 border-b border-white/5 py-1"
+                      >
+                        <span>{it.label}</span>
+                        <span className="shrink-0 tabular-nums text-museum-ivory">
+                          +{it.points}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          );
+        }
+        return (
+          <div key={`${idPrefix}${cat}`}>
+            <h4 className="text-[11px] tracking-[0.12em] text-[color:var(--museum-accent,#d4af37)]">
+              {SOP_CATEGORY_LABELS[cat]}
+              <span className="ml-2 text-museum-ivory-soft">+{sub}</span>
+            </h4>
+            <ul className="mt-1 space-y-0.5 text-[12px] text-museum-ivory-muted">
+              {items.map((it) => (
+                <li
+                  key={`${idPrefix}${it.id}`}
+                  className="flex justify-between gap-3 border-b border-white/5 py-1"
+                >
+                  <span>
+                    {it.label}
+                    {it.detail ? (
+                      <span className="ml-1 text-[10px] text-museum-ivory-soft">
+                        （{it.detail}）
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="shrink-0 tabular-nums text-museum-ivory">
+                    +{it.points}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+      {empty ? (
+        <p className="text-[12px] text-museum-ivory-soft">
+          加点項目はありません（判定に必要なデータが不足している可能性があります）。
+        </p>
+      ) : null}
+    </>
   );
 }

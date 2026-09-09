@@ -5,7 +5,7 @@ import {
   buildSopCareerRankings,
   type SopRoleFilter,
 } from "@/data/sop";
-import { RoleTabs } from "@/components/sop/SopSeasonHubBoard";
+import { RoleTabs } from "@/components/sop/RoleTabs";
 
 export function SopCareerHubBoard() {
   const [ready, setReady] = useState(false);
