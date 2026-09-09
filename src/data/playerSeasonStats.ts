@@ -8,14 +8,14 @@ import {
   type PlayerSeasonLine,
   type SeasonLineRole,
 } from "@/data/playerSeasonLines";
-import {
-  type SeasonWorld,
-} from "@/data/seasons";
+import { type SeasonWorld } from "@/data/seasons";
+import { npbTeams } from "@/data/teams";
 import {
   formatAvgDisplay,
   formatWinPctDisplay,
 } from "@/lib/manualEntry/normalizeInput";
 import { formatWhipDisplay } from "@/lib/manualEntry/computeSeasonStats";
+import { normalizeTeamShort } from "@/lib/import/seasonBatchMerge";
 
 export type BatterHighlightStats = {
   kind: "batter";
@@ -334,24 +334,111 @@ export function getRegisteredSeasonHighlightStats(params: {
   playerId: string;
   year: number;
   world?: SeasonWorld | null;
-  /** 守備位置。投手以外は野手成績を参照 */
+  /** 守備位置。投手以外は野手成績を参照（ベストナイン用） */
   position?: string | null;
+  /**
+   * auto: 保存済み pennant 行から野手/投手を判定（MVP・新人王）。
+   * batter / pitcher: 強制。省略時は position から判定（従来の B9 互換）。
+   */
+  roleMode?: "auto" | "batter" | "pitcher";
+  /** 受賞時の球団（短縮名）。指定時は同一球団の行のみ採用 */
+  teamShort?: string | null;
 }): { label: string; value: string }[] | null {
   if (!params.playerId) return null;
-  const role: SeasonLineRole =
-    (params.position ?? "").trim() === "投手" ? "pitcher" : "batter";
   const world = params.world;
   const year = Number(params.year);
 
-  const line = getSeasonLine(
-    params.playerId,
-    year,
-    role,
-    "pennant",
-    world,
-  );
+  const role = resolveHighlightRole(params);
+  if (!role) return null;
+
+  const line = getSeasonLine(params.playerId, year, role, "pennant", world);
   if (!line) return null;
+  if (!seasonLineMatchesTeam(line, params.teamShort)) return null;
   return formatSeasonLineHighlightStats(line);
+}
+
+function resolveHighlightRole(params: {
+  playerId: string;
+  year: number;
+  world?: SeasonWorld | null;
+  position?: string | null;
+  roleMode?: "auto" | "batter" | "pitcher";
+  teamShort?: string | null;
+}): SeasonLineRole | null {
+  if (params.roleMode === "batter" || params.roleMode === "pitcher") {
+    return params.roleMode;
+  }
+  if (params.roleMode === "auto") {
+    return detectSeasonRoleFromLines(
+      params.playerId,
+      Number(params.year),
+      params.world,
+      params.teamShort,
+    );
+  }
+  // 従来: ベストナインは守備位置で判定
+  return (params.position ?? "").trim() === "投手" ? "pitcher" : "batter";
+}
+
+function seasonLineMatchesTeam(
+  line: PlayerSeasonLine,
+  teamShort?: string | null,
+): boolean {
+  const want = normalizeTeamShort((teamShort ?? "").trim());
+  if (!want) return true;
+  const lineShort =
+    npbTeams.find((t) => t.id === line.teamId)?.short ??
+    normalizeTeamShort(line.teamName);
+  if (lineShort && lineShort === want) return true;
+  if (line.teamName === want) return true;
+  return false;
+}
+
+/** 同一 YEAR×WORLD の pennant 行から野手/投手を判定（名前推測なし） */
+function detectSeasonRoleFromLines(
+  playerId: string,
+  year: number,
+  world?: SeasonWorld | null,
+  teamShort?: string | null,
+): SeasonLineRole | null {
+  const batter = getSeasonLine(playerId, year, "batter", "pennant", world);
+  const pitcher = getSeasonLine(playerId, year, "pitcher", "pennant", world);
+  const batterOk =
+    batter &&
+    seasonLineMatchesTeam(batter, teamShort) &&
+    hasMeaningfulBatterLine(batter)
+      ? batter
+      : null;
+  const pitcherOk =
+    pitcher &&
+    seasonLineMatchesTeam(pitcher, teamShort) &&
+    hasMeaningfulPitcherLine(pitcher)
+      ? pitcher
+      : null;
+
+  if (pitcherOk && !batterOk) return "pitcher";
+  if (batterOk && !pitcherOk) return "batter";
+  if (pitcherOk && batterOk) {
+    // 両方ある場合は投球回がある方を投手、なければ野手
+    const ip = pitcherOk.role === "pitcher" ? pitcherOk.counting.ipOuts ?? 0 : 0;
+    return ip > 0 ? "pitcher" : "batter";
+  }
+  // 意味あるカウントが無くても行自体があれば表示用に返す
+  if (pitcher && seasonLineMatchesTeam(pitcher, teamShort)) return "pitcher";
+  if (batter && seasonLineMatchesTeam(batter, teamShort)) return "batter";
+  return null;
+}
+
+function hasMeaningfulBatterLine(line: PlayerSeasonLine): boolean {
+  if (line.role !== "batter") return false;
+  const c = line.counting;
+  return (c.ab ?? 0) > 0 || (c.pa ?? 0) > 0 || (c.h ?? 0) > 0;
+}
+
+function hasMeaningfulPitcherLine(line: PlayerSeasonLine): boolean {
+  if (line.role !== "pitcher") return false;
+  const c = line.counting;
+  return (c.ipOuts ?? 0) > 0 || (c.g ?? 0) > 0 || (c.w ?? 0) + (c.l ?? 0) > 0;
 }
 
 function formatSeasonLineHighlightStats(

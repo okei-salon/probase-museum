@@ -31,8 +31,12 @@ export function AwardWinnerCard({
       >
         {card.playerName}
       </h3>
-      <p className="mt-1 text-[13px] text-white/80">{card.teamName}</p>
-      <HistoryBadge label={card.historyLabel} className="mt-2" />
+      {card.teamName ? (
+        <p className="mt-1 text-[13px] text-white/80">{card.teamName}</p>
+      ) : null}
+      {card.historyLabel ? (
+        <HistoryBadge label={card.historyLabel} className="mt-2" />
+      ) : null}
 
       {showStats && card.stats && card.stats.length > 0 ? (
         <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">

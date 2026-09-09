@@ -56,8 +56,8 @@ function toCard(
     return {
       playerId: AWARD_NONE_PLAYER_ID,
       playerName: "該当なし",
-      teamName: "—",
-      historyLabel: "—",
+      teamName: "",
+      historyLabel: "",
       league: a.league,
       position: a.position,
       stats: null,
@@ -83,6 +83,21 @@ function bestNineStatsFor(
     year: identity.year,
     world: identity.world,
     position: a.position,
+  });
+}
+
+function majorAwardStatsFor(
+  a: RegisteredSeasonAward,
+  identity: SeasonIdentity,
+  kind: "mvp" | "rookie" | "sawamura",
+): ResolvedAwardCard["stats"] {
+  if (isRegisteredAwardNone(a)) return null;
+  return getRegisteredSeasonHighlightStats({
+    playerId: a.playerId,
+    year: identity.year,
+    world: identity.world,
+    teamShort: a.teamShort,
+    roleMode: kind === "sawamura" ? "pitcher" : "auto",
   });
 }
 
@@ -120,7 +135,10 @@ function resolveMajorPair(
   if (kind === "sawamura") {
     const reg = pickMajor(awards, kind, undefined);
     if (reg) {
-      return { central: toCard(reg, year), pacific: null };
+      return {
+        central: toCard(reg, year, majorAwardStatsFor(reg, identity, kind)),
+        pacific: null,
+      };
     }
     if (formal) {
       return { central: emptyCard("central"), pacific: null };
@@ -133,12 +151,12 @@ function resolveMajorPair(
 
   return {
     central: cReg
-      ? toCard(cReg, year)
+      ? toCard(cReg, year, majorAwardStatsFor(cReg, identity, kind))
       : formal
         ? emptyCard("central")
         : sample.central,
     pacific: pReg
-      ? toCard(pReg, year)
+      ? toCard(pReg, year, majorAwardStatsFor(pReg, identity, kind))
       : formal
         ? emptyCard("pacific")
         : sample.pacific,
