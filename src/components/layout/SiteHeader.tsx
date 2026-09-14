@@ -3,11 +3,19 @@ import { Container } from "@/components/ui/Container";
 import { MuseumIcon } from "@/components/ui/MuseumIcon";
 import { MuseumLogo } from "@/components/ui/MuseumLogo";
 import { AuthUserMenu } from "@/components/auth/AuthUserMenu";
+import { SectionJumpMenu } from "@/components/layout/SectionJumpMenu";
+import { cn } from "@/lib/cn";
 
-/** 添付完成デザインのヘッダーを忠実再現 */
+/** ホーム用ヘッダー。スクロール中も固定し、セクション移動を常時操作可能にする。 */
 export function SiteHeader() {
   return (
-    <header className="relative z-30 pt-4 md:pt-5">
+    <header
+      className={cn(
+        "sticky top-0 z-50 border-b border-white/10",
+        "bg-black/78 backdrop-blur-md",
+        "pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 md:pb-3.5",
+      )}
+    >
       <Container className="flex items-start justify-between gap-3">
         <MuseumLogo />
 
@@ -15,15 +23,7 @@ export function SiteHeader() {
           aria-label="ユーティリティ"
           className="flex shrink-0 items-center gap-1.5 sm:gap-2"
         >
-          <Button
-            variant="ghost"
-            size="sm"
-            href="/news"
-            className="h-8 rounded-md border-white/25 bg-black/55 px-2.5 text-[11px] text-museum-ivory"
-          >
-            <MuseumIcon name="bell" size={13} className="text-museum-ivory" />
-            <span className="hidden sm:inline">お知らせ</span>
-          </Button>
+          <SectionJumpMenu variant="button" />
           <Button
             variant="ghost"
             size="sm"
