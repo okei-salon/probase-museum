@@ -9,7 +9,22 @@ type Props = { teamId: TeamId };
 export function TeamYearlyBoard({ teamId }: Props) {
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    setReady(true);
+    let cancelled = false;
+    void (async () => {
+      const [{ hydrateTeamSeasonStatsFromCloud }, { hydrateTeamStandingsFromCloud }] =
+        await Promise.all([
+          import("@/data/teamSeasonStats"),
+          import("@/data/teamStandings"),
+        ]);
+      await Promise.all([
+        hydrateTeamSeasonStatsFromCloud(),
+        hydrateTeamStandingsFromCloud(),
+      ]);
+      if (!cancelled) setReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [teamId]);
 
   const board = useMemo(
@@ -77,20 +92,25 @@ export function TeamYearlyBoard({ teamId }: Props) {
               <td className="px-2.5 py-2.5 tabular-nums">
                 {board.career.l ?? "—"}
               </td>
-              <td className="px-2.5 py-2.5 tabular-nums">—</td>
+              <td className="px-2.5 py-2.5 tabular-nums">
+                {board.career.t ?? "—"}
+              </td>
               <td className="px-2.5 py-2.5 tabular-nums font-medium text-white">
                 {board.career.winPctText ?? "—"}
               </td>
               <td className="px-2.5 py-2.5 tabular-nums">
                 {board.career.runsScored ?? "—"}
               </td>
-              <td className="px-2.5 py-2.5 tabular-nums">—</td>
+              <td className="px-2.5 py-2.5 tabular-nums">
+                {board.career.runsAllowed ?? "—"}
+              </td>
             </tr>
           ) : null}
         </tbody>
       </table>
       <p className="border-t border-white/8 px-2.5 py-2 text-[10px] text-museum-ivory-soft">
-        順位は同リーグ内の登録チーム勝率から算出。分・失点は正式データ未整備のため「—」表示です。
+        順位は同リーグ内の登録チーム勝率から算出。引分は最終順位表、失点はチーム投手成績の登録値を参照します（YEAR×WORLD
+        厳密一致）。
       </p>
     </div>
   );

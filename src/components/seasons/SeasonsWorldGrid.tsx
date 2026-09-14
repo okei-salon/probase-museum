@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import {
-  getDemoSeasonItem,
   getWorldSeasonItems,
   type SeasonWorld,
 } from "@/data/seasons";
@@ -9,24 +8,13 @@ import type { SelectGridItem } from "@/components/category/SelectGrid";
 
 /**
  * SEASONS トップ：BLUE / RED 二列レイアウト。
- * 博物館の黒×ゴールドを基調に、WORLD を薄い色で区別する。
+ * 正式年度（formalSeasonYears）のみ表示。2000 DEMO は内部テスト用のため通常一覧には出さない。
  */
 export function SeasonsWorldGrid() {
   return (
-    <div className="space-y-8">
-      <div className="grid gap-5 md:grid-cols-2 md:gap-6">
-        <WorldColumn world="BLUE" items={getWorldSeasonItems("BLUE")} />
-        <WorldColumn world="RED" items={getWorldSeasonItems("RED")} />
-      </div>
-
-      <div className="border-t border-white/10 pt-6">
-        <p className="mb-3 text-[11px] tracking-[0.16em] text-museum-ivory-muted">
-          DEMO / 連携テスト
-        </p>
-        <div className="max-w-xs">
-          <SeasonYearCard item={getDemoSeasonItem()} tone="demo" />
-        </div>
-      </div>
+    <div className="grid gap-5 md:grid-cols-2 md:gap-6">
+      <WorldColumn world="BLUE" items={getWorldSeasonItems("BLUE")} />
+      <WorldColumn world="RED" items={getWorldSeasonItems("RED")} />
     </div>
   );
 }
@@ -79,7 +67,7 @@ function SeasonYearCard({
   tone,
 }: {
   item: SelectGridItem;
-  tone: "blue" | "red" | "demo";
+  tone: "blue" | "red";
 }) {
   return (
     <Link
@@ -90,8 +78,6 @@ function SeasonYearCard({
           "border-[color:rgba(130,175,220,0.28)] bg-black/78 hover:border-[color:rgba(130,175,220,0.55)] hover:bg-[radial-gradient(ellipse_at_center,rgba(110,160,210,0.16),rgba(0,0,0,0.88)_70%)]",
         tone === "red" &&
           "border-[color:rgba(200,120,110,0.26)] bg-black/78 hover:border-[color:rgba(200,120,110,0.52)] hover:bg-[radial-gradient(ellipse_at_center,rgba(190,110,100,0.15),rgba(0,0,0,0.88)_70%)]",
-        tone === "demo" &&
-          "border-museum-gold/55 bg-[radial-gradient(ellipse_at_center,rgba(212,175,55,0.22),rgba(0,0,0,0.86)_70%)] hover:border-museum-gold/70",
       )}
     >
       <p className="text-[18px] font-semibold tracking-[0.06em] text-museum-ivory md:text-[20px]">
@@ -103,7 +89,6 @@ function SeasonYearCard({
             "mt-1.5 text-[11px] tracking-[0.14em]",
             tone === "blue" && "text-[#a8c4e0]",
             tone === "red" && "text-[#d8b8ac]",
-            tone === "demo" && "text-museum-gold/90",
           )}
         >
           {item.subtitle}

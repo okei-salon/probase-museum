@@ -42,22 +42,16 @@ export {
   upsertSeasonReviewSection,
 } from "@/data/seasonReview";
 
-/** YEARBOOK ハブ: BLUE / RED / 旧年度 / DEMO を別カードで列挙 */
+/** YEARBOOK ハブ: 正式 BLUE / RED 年度を列挙（レガシー・DEMO は通常一覧に出さない） */
 export function getYearbookYearItems(): SelectGridItem[] {
   return listEntrySeasonIdentities().map((identity) => ({
     id: identity.seasonKey,
     href: `/yearbook/${identity.seasonKey}`,
     title: formatSeasonLineLabel(identity),
-    subtitle:
-      identity.kind === "demo"
-        ? "DEMO YEARBOOK"
-        : identity.world
-          ? `${identity.world} YEARBOOK`
-          : "YEARBOOK",
-    featured:
-      identity.year === 2023 ||
-      identity.kind === "demo" ||
-      identity.world === "BLUE",
+    subtitle: identity.world
+      ? `${identity.world} YEARBOOK`
+      : "YEARBOOK",
+    featured: identity.year === 2026 || identity.world === "BLUE",
   }));
 }
 

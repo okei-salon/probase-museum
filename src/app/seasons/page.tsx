@@ -9,8 +9,8 @@ export default function SeasonsPage() {
         subtitle="シーズン一覧 · BLUE / RED"
       />
       <p className="mb-5 -mt-2 max-w-2xl text-[12px] leading-relaxed text-museum-ivory-soft md:text-[13px]">
-        同じ年度でも BLUE と RED は独立したシーズン世界です。正式運用は 2026
-        年から。各ワールドの年度を選んでください。
+        同じ年度でも BLUE と RED は独立したシーズン世界です。正式運用は 2026〜2028
+        年。各ワールドの年度を選んでください。
       </p>
       <SeasonsWorldGrid />
     </CategoryShell>

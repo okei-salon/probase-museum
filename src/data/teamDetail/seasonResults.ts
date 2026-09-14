@@ -1,5 +1,5 @@
 /**
- * 球団の年度成績（順位・勝敗）を teamSeasonStats から導出。
+ * 球団の年度成績（順位・勝敗）を teamSeasonStats / 最終順位から導出。
  * Step14: SeasonIdentity 単位（BLUE_2026 / RED_2026 を別行）。
  */
 
@@ -10,6 +10,7 @@ import {
   listTeamSeasonStatsForSeason,
   type TeamSeasonStatsRecord,
 } from "@/data/teamSeasonStats";
+import { getStandingsForSeason } from "@/data/teamStandings";
 import {
   formatSeasonLineLabel,
   identityFromWorldYear,
@@ -29,13 +30,13 @@ export type TeamYearResult = {
   rank: number | null;
   w: number | null;
   l: number | null;
-  /** 分は未保存のため常に null（ダミーを出さない） */
+  /** 引分：最終順位表の正式値（無い場合 null） */
   t: number | null;
   winPct: number | null;
   winPctText: string | null;
   /** 打撃の得点 */
   runsScored: number | null;
-  /** 失点は正式フィールド未整備のため null */
+  /** 投手成績の失点（counting.r） */
   runsAllowed: number | null;
 };
 
@@ -51,6 +52,46 @@ function winPctOf(w: number, l: number): number | null {
 
 function identityOfRecord(r: TeamSeasonStatsRecord): SeasonIdentity {
   return identityFromWorldYear(r.year, r.world);
+}
+
+function normalizeTeamLabel(value: string): string {
+  return value.replace(/\s+/g, "").trim();
+}
+
+/**
+ * 同一 YEAR×WORLD の最終順位から引分を取得。
+ * 他年度・他WORLD・DEMO からの補完はしない。
+ */
+function tiesFromStandings(
+  identity: SeasonIdentity,
+  teamId: TeamId,
+): number | null {
+  const team = getTeam(teamId);
+  if (!team) return null;
+  const standings = getStandingsForSeason(identity);
+  if (!standings) return null;
+
+  const rows =
+    team.league === "セ" ? standings.central : standings.pacific;
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+
+  const byId = rows.find((r) => r.teamId === teamId);
+  if (byId && Number.isFinite(byId.d)) return byId.d;
+
+  const short = normalizeTeamLabel(team.short);
+  const name = normalizeTeamLabel(team.name);
+  const byName = rows.find((r) => {
+    const label = normalizeTeamLabel(r.team ?? "");
+    if (!label) return false;
+    return (
+      label === short ||
+      label === name ||
+      label.includes(short) ||
+      short.includes(label)
+    );
+  });
+  if (byName && Number.isFinite(byName.d)) return byName.d;
+  return null;
 }
 
 /** Museum に通常シーズン成績があるカレンダー年一覧（互換） */
@@ -152,6 +193,11 @@ function yearResultForRecord(
     w != null && l != null
       ? winPctOf(w, l)
       : (rec.pitching?.derived.winPct ?? null);
+  const runsAllowedRaw = rec.pitching?.counting.r;
+  const runsAllowed =
+    runsAllowedRaw != null && Number.isFinite(runsAllowedRaw)
+      ? runsAllowedRaw
+      : null;
 
   return {
     year: identity.year,
@@ -161,11 +207,11 @@ function yearResultForRecord(
     rank: computeLeagueRankForSeason(identity, teamId),
     w,
     l,
-    t: null,
+    t: tiesFromStandings(identity, teamId),
     winPct,
     winPctText: winPct != null ? formatWinPctDisplay(winPct) : null,
     runsScored: rec.batting?.counting.r ?? null,
-    runsAllowed: null,
+    runsAllowed,
   };
 }
 
@@ -188,18 +234,30 @@ export function buildTeamYearlyBoard(teamId: TeamId): TeamYearlyBoard {
 
   let wSum = 0;
   let lSum = 0;
+  let tSum = 0;
   let rSum = 0;
+  let raSum = 0;
   let hasW = false;
+  let hasT = false;
   let hasR = false;
+  let hasRa = false;
   for (const row of rows) {
     if (row.w != null && row.l != null) {
       wSum += row.w;
       lSum += row.l;
       hasW = true;
     }
+    if (row.t != null) {
+      tSum += row.t;
+      hasT = true;
+    }
     if (row.runsScored != null) {
       rSum += row.runsScored;
       hasR = true;
+    }
+    if (row.runsAllowed != null) {
+      raSum += row.runsAllowed;
+      hasRa = true;
     }
   }
   const winPct = hasW ? winPctOf(wSum, lSum) : null;
@@ -214,11 +272,11 @@ export function buildTeamYearlyBoard(teamId: TeamId): TeamYearlyBoard {
       rank: null,
       w: hasW ? wSum : null,
       l: hasW ? lSum : null,
-      t: null,
+      t: hasT ? tSum : null,
       winPct,
       winPctText: winPct != null ? formatWinPctDisplay(winPct) : null,
       runsScored: hasR ? rSum : null,
-      runsAllowed: null,
+      runsAllowed: hasRa ? raSum : null,
     },
   };
 }

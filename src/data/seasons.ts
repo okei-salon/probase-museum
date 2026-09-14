@@ -24,9 +24,9 @@ export const FORMAL_SEASON_START_YEAR = 2026;
 
 /**
  * 正式シーズン年度（WORLD ごとにカード表示）。
- * 増やすときはここに年度を追加する。
+ * 増やすときはここに年度を追加する（YEAR×WORLD の既存構造を再利用）。
  */
-export const formalSeasonYears = ["2026"] as const;
+export const formalSeasonYears = ["2026", "2027", "2028"] as const;
 
 export type FormalSeasonYear = (typeof formalSeasonYears)[number];
 
@@ -289,22 +289,19 @@ export function includeInCareerTotals(_record: SeasonScopedFields): boolean {
 }
 
 /**
- * 手入力／一括取込用のシーズン選択肢。
- * 正式年度は BLUE / RED を別オプションにし、旧年度・2000 DEMO は year のみ。
- * （ユーザーに world を自由記述させず、選択から identity を引き継ぐ）
+ * 手入力／一括取込／YEARBOOK 等の通常シーズン選択肢。
+ * 正式年度は BLUE / RED を別オプションにする。
+ * 2025以前のレガシーと 2000 DEMO は通常UIに出さない（データ自体は残し、直接URL・内部テストは維持）。
  */
 export function listEntrySeasonIdentities(): SeasonIdentity[] {
-  const formal = SEASON_WORLDS.flatMap((world) =>
+  return SEASON_WORLDS.flatMap((world) =>
     formalSeasonYears.map((y) => createSeasonIdentity(world, Number(y))),
   );
-  const legacyOrDemo: SeasonIdentity[] = [];
-  for (const y of seasonYears) {
-    const n = Number(y);
-    if (n >= FORMAL_SEASON_START_YEAR) continue;
-    const identity = parseSeasonKey(y);
-    if (identity) legacyOrDemo.push(identity);
-  }
-  return [...formal, ...legacyOrDemo];
+}
+
+/** 内部テスト用：2000 DEMO のみ（通常プルダウンには混ぜない） */
+export function listDemoEntrySeasonIdentities(): SeasonIdentity[] {
+  return [createDemoSeasonIdentity()];
 }
 
 /** 年度別表示ラベル（同一年の BLUE/RED を区別） */
