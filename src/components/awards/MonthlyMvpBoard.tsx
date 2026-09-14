@@ -75,9 +75,11 @@ function occurrenceSortKey(o: MvpOccurrence): number {
 }
 
 /**
- * 選手名（空白無視）を基準に、部門別の通算何回目かを返す。
- * セ/パ・BLUE/RED・年度をまたいで通算。YEAR×WORLD×LEAGUE×MONTH×部門は重複排除。
- * その受賞（current）を含めた回数。
+ * 選手 × WORLD × 部門（投手/野手）の通算何回目かを返す。
+ * - BLUE と RED は合算しない（他WORLD fallback なし）
+ * - YEAR をまたいでも同一 WORLD・同一部門なら通算
+ * - セ/パは同一部門として通算（YEAR×WORLD×LEAGUE×MONTH で重複排除）
+ * - その受賞（current）を含めた回数
  */
 export function countMonthlyMvpCareerTimes(
   all: SavedMonthlyMvpRecord[],
@@ -89,10 +91,14 @@ export function countMonthlyMvpCareerTimes(
 
   const targetName = normalizePlayerName(player.playerName);
   const targetId = player.playerId;
+  const currentWorld = normalizeSeasonWorld(current.world);
   const seen = new Set<string>();
   const list: MvpOccurrence[] = [];
 
   for (const r of all) {
+    // WORLD 厳格分離：選択中 WORLD 以外は参照しない
+    if (normalizeSeasonWorld(r.world) !== currentWorld) continue;
+
     const side = role === "pitcher" ? r.pitcher : r.batter;
     if (!isRealPlayerName(side.playerName)) continue;
 
@@ -127,7 +133,7 @@ export function countMonthlyMvpCareerTimes(
       o.year === current.year &&
       o.month === current.month &&
       o.league === current.league &&
-      normalizeSeasonWorld(o.world) === normalizeSeasonWorld(current.world),
+      normalizeSeasonWorld(o.world) === currentWorld,
   );
   return idx >= 0 ? idx + 1 : list.length;
 }
