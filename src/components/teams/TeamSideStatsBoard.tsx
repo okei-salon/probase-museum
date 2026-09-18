@@ -1,11 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   buildTeamBattingBoard,
   buildTeamPitchingBoard,
+  TEAM_DETAIL_BATTING_KEYS,
+  TEAM_DETAIL_PITCHING_KEYS,
   type TeamSideBoard,
+  type TeamStatFieldRow,
 } from "@/data/teamDetail";
+import {
+  battingFieldLabel,
+  pitchingFieldLabel,
+} from "@/data/teamSeasonStats";
 import type { TeamId } from "@/data/teams";
 import { cn } from "@/lib/cn";
 
@@ -18,8 +25,48 @@ type LoadedState = {
   key: string;
   board: TeamSideBoard;
   mode: "year" | "career";
-  seasonKey: string | null;
 };
+
+type TableColumn = { key: string; label: string };
+
+const STICKY_BG = "bg-[#0a0f18]";
+const STICKY_BG_HEAD = "bg-[#0d1520]";
+
+function fieldLabel(kind: "batting" | "pitching", key: string): string {
+  if (kind === "batting") {
+    if (key === "cs") return "盗塁死";
+    return battingFieldLabel(key);
+  }
+  return pitchingFieldLabel(key);
+}
+
+function columnsForBoard(
+  kind: "batting" | "pitching",
+  board: TeamSideBoard,
+  mode: "year" | "career",
+): TableColumn[] {
+  const preferred =
+    kind === "batting" ? TEAM_DETAIL_BATTING_KEYS : TEAM_DETAIL_PITCHING_KEYS;
+  const present = new Set<string>();
+  const sources: TeamStatFieldRow[][] =
+    mode === "career"
+      ? board.career
+        ? [board.career]
+        : []
+      : board.years.map((y) => y.fields);
+
+  for (const fields of sources) {
+    for (const f of fields) present.add(f.key);
+  }
+
+  return preferred
+    .filter((key) => present.has(key))
+    .map((key) => ({ key, label: fieldLabel(kind, key) }));
+}
+
+function fieldMap(fields: TeamStatFieldRow[]): Map<string, string> {
+  return new Map(fields.map((f) => [f.key, f.valueText]));
+}
 
 export function TeamSideStatsBoard({ teamId, kind }: Props) {
   const loadKey = `${teamId}:${kind}`;
@@ -41,10 +88,6 @@ export function TeamSideStatsBoard({ teamId, kind }: Props) {
         key: `${teamId}:${kind}`,
         board,
         mode: "year",
-        seasonKey:
-          board.years.length > 0
-            ? board.years[board.years.length - 1]!.seasonKey
-            : null,
       });
     })();
     return () => {
@@ -52,11 +95,16 @@ export function TeamSideStatsBoard({ teamId, kind }: Props) {
     };
   }, [teamId, kind]);
 
+  const columns = useMemo(() => {
+    if (!state || state.key !== loadKey) return [];
+    return columnsForBoard(kind, state.board, state.mode);
+  }, [state, loadKey, kind]);
+
   if (!state || state.key !== loadKey) {
     return <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>;
   }
 
-  const { board, mode, seasonKey } = state;
+  const { board, mode } = state;
 
   if (board.years.length === 0 && !board.career) {
     return (
@@ -68,11 +116,20 @@ export function TeamSideStatsBoard({ teamId, kind }: Props) {
     );
   }
 
-  const yearFields =
-    board.years.find((y) => y.seasonKey === seasonKey)?.fields ??
-    board.years[board.years.length - 1]?.fields ??
-    [];
-  const fields = mode === "career" ? board.career ?? [] : yearFields;
+  const rows =
+    mode === "career"
+      ? board.career
+        ? [{ id: "career", label: "通算", fields: board.career }]
+        : []
+      : board.years.map((y) => ({
+          id: y.seasonKey,
+          label: y.seasonLabel,
+          fields: y.fields,
+        }));
+
+  const stickyWidthRem = 7.5;
+  const colWidthRem = 4.75;
+  const tableMinWidthRem = stickyWidthRem + columns.length * colWidthRem;
 
   return (
     <div className="space-y-4">
@@ -99,49 +156,85 @@ export function TeamSideStatsBoard({ teamId, kind }: Props) {
         ) : null}
       </div>
 
-      {mode === "year" && board.years.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {board.years.map((y) => (
-            <button
-              key={y.seasonKey}
-              type="button"
-              onClick={() =>
-                setState((prev) =>
-                  prev ? { ...prev, seasonKey: y.seasonKey } : prev,
-                )
-              }
-              className={cn(
-                "rounded-full border px-3 py-1.5 text-[11px] tracking-[0.06em] transition-colors",
-                seasonKey === y.seasonKey
-                  ? "border-[color:var(--museum-accent-border,#d4af3773)] bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.16))] text-[color:var(--museum-accent,#d4af37)]"
-                  : "border-white/15 bg-black/40 text-museum-ivory-soft hover:border-white/30",
-              )}
-            >
-              {y.seasonLabel}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      {fields.length === 0 ? (
+      {rows.length === 0 || columns.length === 0 ? (
         <p className="text-[13px] text-museum-ivory-soft">
           表示できる項目がありません。
         </p>
       ) : (
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {fields.map((f) => (
-            <div
-              key={f.key}
-              className="flex items-baseline justify-between gap-3 rounded-lg border border-white/10 bg-black/40 px-3 py-2.5"
+        <div className="min-w-0 w-full">
+          <div
+            className="w-full max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-white/10"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            <table
+              className="border-collapse text-left text-[12px] md:text-[13px]"
+              style={{
+                minWidth: `${tableMinWidthRem}rem`,
+                width: "max-content",
+              }}
             >
-              <span className="text-[12px] text-museum-ivory-soft">
-                {f.label}
-              </span>
-              <span className="font-display text-[18px] tabular-nums text-[color:var(--museum-accent,#d4af37)]">
-                {f.valueText}
-              </span>
-            </div>
-          ))}
+              <thead>
+                <tr className="border-b border-[color:var(--museum-accent-border,#d4af3773)]">
+                  <th
+                    className={cn(
+                      "sticky left-0 z-20 whitespace-nowrap px-2.5 py-2.5 font-medium text-[color:var(--museum-accent,#d4af37)]",
+                      STICKY_BG_HEAD,
+                      "shadow-[2px_0_6px_rgba(0,0,0,0.35)]",
+                    )}
+                    style={{ minWidth: `${stickyWidthRem}rem` }}
+                  >
+                    {mode === "career" ? "区分" : "年度"}
+                  </th>
+                  {columns.map((col) => (
+                    <th
+                      key={col.key}
+                      className="whitespace-nowrap px-2.5 py-2.5 font-medium tracking-[0.04em] text-museum-ivory-soft"
+                      style={{ minWidth: `${colWidthRem}rem` }}
+                    >
+                      {col.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => {
+                  const values = fieldMap(row.fields);
+                  return (
+                    <tr
+                      key={row.id}
+                      className="border-b border-white/10 text-museum-ivory"
+                    >
+                      <td
+                        className={cn(
+                          "sticky left-0 z-10 whitespace-nowrap px-2.5 py-2.5 font-medium",
+                          STICKY_BG,
+                          "shadow-[2px_0_6px_rgba(0,0,0,0.35)]",
+                          mode === "career" &&
+                            "text-[color:var(--museum-accent,#d4af37)]",
+                        )}
+                        style={{ minWidth: `${stickyWidthRem}rem` }}
+                      >
+                        {row.label}
+                      </td>
+                      {columns.map((col) => (
+                        <td
+                          key={col.key}
+                          className="whitespace-nowrap px-2.5 py-2.5 tabular-nums"
+                          style={{ minWidth: `${colWidthRem}rem` }}
+                        >
+                          {values.get(col.key) ?? "—"}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[10px] text-museum-ivory-soft">
+            表は横スクロールで全項目を確認できます。BLUE / RED
+            は別シーズン行として表示します。
+          </p>
         </div>
       )}
     </div>

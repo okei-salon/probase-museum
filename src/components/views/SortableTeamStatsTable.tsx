@@ -16,9 +16,31 @@ type SortableTeamStatsTableProps = {
   defaultSortKey: string;
   /** 交流戦など最初から12球団表示したい場合 */
   defaultLeague?: LeagueFilter;
+  /** true ならリーグ切替を隠し、常に12球団を表示 */
+  lockLeagueToAll?: boolean;
+  /**
+   * true なら同値は同順位（競技順位 1,2,2,4）。
+   * false（既定）は表示順の通し番号。
+   */
+  useCompetitionRank?: boolean;
   /** フッター注記（サンプル／正式など） */
   footerNote?: string;
 };
+
+/** ソート済み配列に対する競技順位（1,2,2,4） */
+export function competitionRanksForSortedValues(
+  values: Array<number | null | undefined>,
+): number[] {
+  const ranks: number[] = [];
+  let rank = 1;
+  for (let i = 0; i < values.length; i += 1) {
+    if (i > 0 && values[i] !== values[i - 1]) {
+      rank = i + 1;
+    }
+    ranks.push(rank);
+  }
+  return ranks;
+}
 
 const STICKY_BG = "bg-[#0a0f18]";
 const STICKY_BG_HEAD = "bg-[#0d1520]";
@@ -28,21 +50,26 @@ export function SortableTeamStatsTable({
   columns,
   defaultSortKey,
   defaultLeague = "central",
+  lockLeagueToAll = false,
+  useCompetitionRank = false,
   footerNote,
 }: SortableTeamStatsTableProps) {
-  const [league, setLeague] = useState<LeagueFilter>(defaultLeague);
+  const [league, setLeague] = useState<LeagueFilter>(
+    lockLeagueToAll ? "all" : defaultLeague,
+  );
   const [sortKey, setSortKey] = useState(defaultSortKey);
   const [dir, setDir] = useState<"asc" | "desc">(() => {
     const col = columns.find((c) => c.key === defaultSortKey);
     return col?.lowerIsBetter ? "asc" : "desc";
   });
 
-  const showLeagueCol = league === "all";
+  const effectiveLeague = lockLeagueToAll ? "all" : league;
+  const showLeagueCol = effectiveLeague === "all";
 
   const filtered = useMemo(() => {
-    if (league === "all") return rows;
-    return rows.filter((row) => row.league === league);
-  }, [league, rows]);
+    if (effectiveLeague === "all") return rows;
+    return rows.filter((row) => row.league === effectiveLeague);
+  }, [effectiveLeague, rows]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -51,6 +78,15 @@ export function SortableTeamStatsTable({
       return dir === "asc" ? av - bv : bv - av;
     });
   }, [dir, filtered, sortKey]);
+
+  const displayRanks = useMemo(() => {
+    if (!useCompetitionRank) {
+      return sorted.map((_, index) => index + 1);
+    }
+    return competitionRanksForSortedValues(
+      sorted.map((row) => row.values[sortKey] ?? 0),
+    );
+  }, [sorted, sortKey, useCompetitionRank]);
 
   // 順位+球団(+リーグ) + 各列。列を潰さず最後まで到達できる幅
   const stickyWidth = showLeagueCol ? 9.5 : 7.5; // rem
@@ -69,29 +105,31 @@ export function SortableTeamStatsTable({
 
   return (
     <div className="min-w-0 w-full">
-      <div className="mb-3 flex flex-wrap gap-2">
-        {(
-          [
-            ["central", "セ・リーグ"],
-            ["pacific", "パ・リーグ"],
-            ["all", "12球団"],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setLeague(id)}
-            className={cn(
-              "rounded-full border px-3 py-1.5 text-[11px] tracking-[0.06em] transition-colors",
-              league === id
-                ? "border-[color:var(--museum-accent-border,#d4af3773)] bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.16))] text-[color:var(--museum-accent,#d4af37)]"
-                : "border-white/15 bg-black/40 text-museum-ivory-soft hover:border-white/30",
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {lockLeagueToAll ? null : (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {(
+            [
+              ["central", "セ・リーグ"],
+              ["pacific", "パ・リーグ"],
+              ["all", "12球団"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setLeague(id)}
+              className={cn(
+                "rounded-full border px-3 py-1.5 text-[11px] tracking-[0.06em] transition-colors",
+                league === id
+                  ? "border-[color:var(--museum-accent-border,#d4af3773)] bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.16))] text-[color:var(--museum-accent,#d4af37)]"
+                  : "border-white/15 bg-black/40 text-museum-ivory-soft hover:border-white/30",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div
         className="w-full max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-white/10"
@@ -157,7 +195,7 @@ export function SortableTeamStatsTable({
                   style={{ minWidth: `${stickyWidth}rem` }}
                 >
                   <span className="mr-2 inline-block w-5 tabular-nums text-[color:var(--museum-accent,#d4af37)]">
-                    {index + 1}
+                    {displayRanks[index]}
                   </span>
                   <span className="whitespace-nowrap">{row.team}</span>
                   {showLeagueCol ? (
