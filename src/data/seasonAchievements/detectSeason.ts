@@ -99,7 +99,7 @@ function detectBatterSeason(
   const risp = d.rispAvg;
   const csRate = d.csRate;
 
-  // 20-20 / 30-30 / 40-40 / 50-50（最高到達のみ）。規定打席到達者のみ。
+  // 本塁打＆盗塁（各20以上・表示は10単位切り下げ）。規定打席到達者のみ。
   if (paOk && hr >= HR_SB_MIN_EACH && sb != null && sb >= HR_SB_MIN_EACH) {
     const label = hrSbAchievementLabel(hr, sb);
     const sum = hr + sb;

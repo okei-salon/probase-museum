@@ -17,7 +17,7 @@ const OTHER_SEASON_TYPES = new Set([
 
 const SPECIAL_TYPES = new Set(["perfect_game", "no_hitter", "cycle"]);
 
-/** 20-20以上（各20以上）を掲載。表示名は達成ランク（20-20/30-30…） */
+/** 20-20以上（各20以上）を掲載。表示名は本塁打・盗塁を各10単位で切り下げ */
 export const RECORDS_HR_SB_MIN_EACH = 20;
 
 export type OtherFeatsSectionId =

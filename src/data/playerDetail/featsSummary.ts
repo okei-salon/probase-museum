@@ -87,7 +87,7 @@ export function buildPlayerFeatsSummary(
     });
   }
 
-  // 20-20 / 30-30 / 40-40 / 50-50（各年の最高到達ランク名で集計）
+  // 本塁打＆盗塁達成（各年の表示名で集計）
   const hrSb = feats.filter((a) => {
     if (a.recordType !== "hr_sb_combo") return false;
     const hr = a.value ?? 0;

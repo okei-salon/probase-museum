@@ -12,6 +12,7 @@ import {
 } from "@/data/seasons";
 import { getDemoAchievements } from "./demoData";
 import { detectAchievementsFromSeasonLines } from "./detectSeason";
+import { hrSbAchievementLabel } from "./hrSbLabel";
 import { filterStreaksToLeagueLeaders } from "./streakDisplay";
 import { listStoredAchievementsForSeasonIdentity } from "./store";
 import type { AchievementCategory, SeasonAchievement } from "./types";
@@ -66,6 +67,19 @@ function sortAchievements(items: SeasonAchievement[]): SeasonAchievement[] {
   });
 }
 
+/**
+ * 保存済み recordName を書き換えず、表示時だけ本塁打・盗塁からラベルを再生成する。
+ */
+function withDisplayHrSbLabel(item: SeasonAchievement): SeasonAchievement {
+  if (item.recordType !== "hr_sb_combo") return item;
+  const hr = item.value;
+  const sb = item.secondaryValue;
+  if (hr == null || sb == null) return item;
+  const label = hrSbAchievementLabel(hr, sb);
+  if (!label || label === item.recordName) return item;
+  return { ...item, recordName: label };
+}
+
 /** 生データ（SOP用）。連続系のリーグ絞り込み前。 */
 export function collectYearAchievementsRaw(
   yearOrIdentity: number | SeasonIdentity,
@@ -78,7 +92,9 @@ export function collectYearAchievementsRaw(
   const manual = listStoredAchievementsForSeasonIdentity(identity);
   const demo =
     identity.world == null ? getDemoAchievements(identity.year) : [];
-  return dedupePreferManual([...auto, ...manual, ...demo]);
+  return dedupePreferManual([...auto, ...manual, ...demo]).map(
+    withDisplayHrSbLabel,
+  );
 }
 
 export function buildYearFeats(
