@@ -29,8 +29,11 @@ type LoadedState = {
 
 type TableColumn = { key: string; label: string };
 
-const STICKY_BG = "bg-[#0a0f18]";
-const STICKY_BG_HEAD = "bg-[#0d1520]";
+/** 個人成績（PlayerStatsExplorer）と同じ黒系。球場背景を透けさせない */
+const STICKY_BG = "bg-[#0a0a0a]";
+const STICKY_BG_HEAD = "bg-[#0d1118]";
+const TABLE_SURFACE = "bg-[#0a0a0a]";
+const THEAD_ROW = "bg-black/50";
 
 function fieldLabel(kind: "batting" | "pitching", key: string): string {
   if (kind === "batting") {
@@ -163,7 +166,10 @@ export function TeamSideStatsBoard({ teamId, kind }: Props) {
       ) : (
         <div className="min-w-0 w-full">
           <div
-            className="w-full max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-white/10"
+            className={cn(
+              "w-full max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-white/10",
+              TABLE_SURFACE,
+            )}
             style={{ WebkitOverflowScrolling: "touch" }}
           >
             <table
@@ -174,7 +180,12 @@ export function TeamSideStatsBoard({ teamId, kind }: Props) {
               }}
             >
               <thead>
-                <tr className="border-b border-[color:var(--museum-accent-border,#d4af3773)]">
+                <tr
+                  className={cn(
+                    "border-b border-[color:var(--museum-accent-border,#d4af3773)]",
+                    THEAD_ROW,
+                  )}
+                >
                   <th
                     className={cn(
                       "sticky left-0 z-20 whitespace-nowrap px-2.5 py-2.5 font-medium text-[color:var(--museum-accent,#d4af37)]",

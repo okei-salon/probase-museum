@@ -45,10 +45,10 @@ export function TeamYearlyBoard({ teamId }: Props) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-white/10">
+    <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#0a0a0a]">
       <table className="w-full min-w-[640px] border-collapse text-left text-[12px] md:text-[13px]">
         <thead>
-          <tr className="border-b border-white/10 text-[11px] text-white/55">
+          <tr className="border-b border-[color:var(--museum-accent-border,#d4af3773)] bg-black/50 text-[11px] text-white/55">
             <th className="px-2.5 py-2 font-medium">年度</th>
             <th className="px-2.5 py-2 font-medium">順位</th>
             <th className="px-2.5 py-2 font-medium">勝</th>

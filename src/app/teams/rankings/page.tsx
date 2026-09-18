@@ -1,4 +1,8 @@
-import { CategoryShell, PageHeading } from "@/components/category";
+import {
+  CategoryShell,
+  DataPanel,
+  PageHeading,
+} from "@/components/category";
 import { AllTeamsRankingBoard } from "@/components/teams/AllTeamsRankingBoard";
 
 export default function TeamsRankingsPage() {
@@ -13,7 +17,9 @@ export default function TeamsRankingsPage() {
         選択中のシーズン（BLUE / RED
         を含む）のチーム打撃・投手成績を、全球団で並べ替えて比較できます。
       </p>
-      <AllTeamsRankingBoard />
+      <DataPanel>
+        <AllTeamsRankingBoard />
+      </DataPanel>
     </CategoryShell>
   );
 }
