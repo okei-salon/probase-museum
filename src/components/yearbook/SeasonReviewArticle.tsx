@@ -25,7 +25,7 @@ function InlineParts({ parts }: { parts: SeasonReviewInlinePart[] }) {
           return (
             <span
               key={idx}
-              className="font-bold text-[1.05em] text-[color:var(--museum-accent,#d4af37)]"
+              className="font-bold text-[1.05em] text-[color:var(--museum-gold,#d4af37)]"
             >
               {p.text}
             </span>
@@ -35,14 +35,18 @@ function InlineParts({ parts }: { parts: SeasonReviewInlinePart[] }) {
           return (
             <span
               key={idx}
-              className="font-semibold text-[color:var(--museum-accent,#d4af37)]"
+              className="font-semibold text-[color:var(--museum-gold,#d4af37)]"
             >
               {p.text}
             </span>
           );
         }
+        // 成績数値・キーワード：WORLD アクセント（BLUE=水色 / RED=朱赤）
         return (
-          <span key={idx} className="font-semibold text-sky-300">
+          <span
+            key={idx}
+            className="font-semibold text-[color:var(--museum-world-accent,#7dd3fc)]"
+          >
             {p.text}
           </span>
         );
@@ -111,7 +115,7 @@ export function SeasonReviewArticle({ text, className }: Props) {
             return (
               <p
                 key={i}
-                className="mt-2 text-[15px] font-medium leading-relaxed text-[color:var(--museum-accent,#d4af37)]/90 md:text-[16px]"
+                className="mt-2 text-[15px] font-medium leading-relaxed text-[color:var(--museum-gold,#d4af37)]/90 md:text-[16px]"
               >
                 {b.text.trim()}
               </p>

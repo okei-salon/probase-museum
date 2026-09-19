@@ -6,6 +6,7 @@ import {
   parseSeasonKey,
   seasonDisplaySubtitle,
   seasonDisplayTitle,
+  yearbookThemeId,
 } from "@/data/seasons";
 import { getYearbookSectionLinks } from "@/data/yearbook";
 
@@ -18,7 +19,7 @@ export default async function YearbookYearPage({ params }: Props) {
 
   return (
     <CategoryShell
-      theme="yearbook"
+      theme={yearbookThemeId(identity)}
       back={{ href: "/yearbook", label: "YEARBOOK" }}
     >
       <PageHeading

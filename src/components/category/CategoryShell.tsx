@@ -4,6 +4,7 @@ import { CategoryHeader } from "@/components/category/CategoryHeader";
 import { Container } from "@/components/ui/Container";
 import {
   categoryThemes,
+  type CategoryTheme,
   type CategoryThemeId,
 } from "@/config/categoryThemes";
 
@@ -26,7 +27,8 @@ export function CategoryShell({
   contentClassName,
   dense = false,
 }: CategoryShellProps) {
-  const t = categoryThemes[theme];
+  const t = categoryThemes[theme] as CategoryTheme;
+  const world = t.worldAccent ?? t.accent;
 
   return (
     <div
@@ -37,6 +39,10 @@ export function CategoryShell({
           "--museum-accent-soft": t.accent.soft,
           "--museum-accent-border": t.accent.border,
           "--museum-accent-glow": t.accent.glow,
+          "--museum-world-accent": world.color,
+          "--museum-world-accent-soft": world.soft,
+          "--museum-world-accent-border": world.border,
+          "--museum-world-accent-glow": world.glow,
         } as React.CSSProperties
       }
     >

@@ -23,7 +23,13 @@ export type CategoryTheme = {
   id: string;
   background: MediaAsset;
   frame: BackgroundFrame;
+  /** 画面UIのメインアクセント（ゴールド／WORLD色など） */
   accent: CategoryAccent;
+  /**
+   * WORLD固有の強調色（総評の成績数値など）。
+   * 未設定時は accent を流用。ゴールド主題テーマでは別途 WORLD 色を載せる。
+   */
+  worldAccent?: CategoryAccent;
 };
 
 const accentGold: CategoryAccent = {
@@ -55,12 +61,15 @@ const accentSeasonBlue: CategoryAccent = {
   glow: "rgba(110,160,210,0.18)",
 };
 
-/** SEASONS WORLD — うっすら赤 */
+/**
+ * SEASONS WORLD — 暗い背景上で読める朱赤系。
+ * 原色の赤ではなく、Museum の重厚感を保つ明るめの vermillion。
+ */
 const accentSeasonRed: CategoryAccent = {
-  color: "#d4a090",
-  soft: "rgba(190,110,100,0.12)",
-  border: "rgba(200,120,110,0.36)",
-  glow: "rgba(190,110,100,0.18)",
+  color: "#e8907a",
+  soft: "rgba(232,144,122,0.14)",
+  border: "rgba(232,144,122,0.42)",
+  glow: "rgba(232,144,122,0.22)",
 };
 
 const stadiumSunset: MediaAsset = {
@@ -103,6 +112,11 @@ const dataVeil = "bg-[rgba(5,12,24,0.40)]";
 const dataOverlay =
   "bg-gradient-to-b from-[#050c18]/35 via-[#050c18]/15 to-black/55";
 
+/** RED WORLD：黒〜濃ボルドー基調（明るさは BLUE と同程度。赤で染めすぎない） */
+const redDataVeil = "bg-[rgba(8,4,6,0.48)]";
+const redDataOverlay =
+  "bg-gradient-to-b from-[#0c0608]/42 via-[#080406]/18 to-black/58";
+
 /** カテゴリごとの背景テーマ（写真とUIは分離） */
 export const categoryThemes = {
   seasons: {
@@ -140,6 +154,7 @@ export const categoryThemes = {
       overlayClassName: dataOverlay,
     },
     accent: accentSeasonBlue,
+    worldAccent: accentSeasonBlue,
   },
   seasonHubRed: {
     id: "seasonHubRed",
@@ -148,10 +163,11 @@ export const categoryThemes = {
       size: "cover",
       position: "center 55%",
       blurPx: 3,
-      veilClassName: "bg-[rgba(18,8,8,0.40)]",
-      overlayClassName: dataOverlay,
+      veilClassName: redDataVeil,
+      overlayClassName: redDataOverlay,
     },
     accent: accentSeasonRed,
+    worldAccent: accentSeasonRed,
   },
   pennant: {
     id: "pennant",
@@ -261,6 +277,34 @@ export const categoryThemes = {
       overlayClassName: dataOverlay,
     },
     accent: accentGold,
+  },
+  /** YEARBOOK · BLUE：UIはゴールド、成績強調は水色 */
+  yearbookBlue: {
+    id: "yearbookBlue",
+    background: stadiumSunset,
+    frame: {
+      size: "cover",
+      position: "55% 65%",
+      blurPx: 3,
+      veilClassName: "bg-[rgba(5,14,28,0.42)]",
+      overlayClassName: dataOverlay,
+    },
+    accent: accentGold,
+    worldAccent: accentSeasonBlue,
+  },
+  /** YEARBOOK · RED：暗いボルドー基調＋朱赤の成績強調（ゴールドは特別名称用） */
+  yearbookRed: {
+    id: "yearbookRed",
+    background: stadiumSunset,
+    frame: {
+      size: "cover",
+      position: "55% 65%",
+      blurPx: 3,
+      veilClassName: redDataVeil,
+      overlayClassName: redDataOverlay,
+    },
+    accent: accentGold,
+    worldAccent: accentSeasonRed,
   },
 } as const satisfies Record<string, CategoryTheme>;
 

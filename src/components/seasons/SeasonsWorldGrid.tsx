@@ -33,14 +33,14 @@ function WorldColumn({
         "rounded-2xl border p-4 md:p-5",
         isBlue
           ? "border-[color:rgba(130,175,220,0.32)] bg-[radial-gradient(ellipse_at_top,rgba(110,160,210,0.14),rgba(0,0,0,0.72)_58%)] shadow-[0_0_32px_rgba(110,160,210,0.08)]"
-          : "border-[color:rgba(200,120,110,0.30)] bg-[radial-gradient(ellipse_at_top,rgba(190,110,100,0.13),rgba(0,0,0,0.72)_58%)] shadow-[0_0_32px_rgba(190,110,100,0.08)]",
+          : "border-[color:rgba(180,90,78,0.34)] bg-[radial-gradient(ellipse_at_top,rgba(90,36,40,0.22),rgba(0,0,0,0.82)_58%)] shadow-[0_0_32px_rgba(90,36,40,0.12)]",
       )}
     >
       <header className="mb-4 text-center">
         <p
           className={cn(
             "text-[13px] font-semibold tracking-[0.22em]",
-            isBlue ? "text-[#b8d0ec]" : "text-[#e0c0b4]",
+            isBlue ? "text-[#b8d0ec]" : "text-[#e8907a]",
           )}
         >
           {world}
@@ -77,7 +77,7 @@ function SeasonYearCard({
         tone === "blue" &&
           "border-[color:rgba(130,175,220,0.28)] bg-black/78 hover:border-[color:rgba(130,175,220,0.55)] hover:bg-[radial-gradient(ellipse_at_center,rgba(110,160,210,0.16),rgba(0,0,0,0.88)_70%)]",
         tone === "red" &&
-          "border-[color:rgba(200,120,110,0.26)] bg-black/78 hover:border-[color:rgba(200,120,110,0.52)] hover:bg-[radial-gradient(ellipse_at_center,rgba(190,110,100,0.15),rgba(0,0,0,0.88)_70%)]",
+          "border-[color:rgba(180,90,78,0.32)] bg-black/82 hover:border-[color:rgba(232,144,122,0.48)] hover:bg-[radial-gradient(ellipse_at_center,rgba(90,36,40,0.22),rgba(0,0,0,0.90)_70%)]",
       )}
     >
       <p className="text-[18px] font-semibold tracking-[0.06em] text-museum-ivory md:text-[20px]">
@@ -88,7 +88,7 @@ function SeasonYearCard({
           className={cn(
             "mt-1.5 text-[11px] tracking-[0.14em]",
             tone === "blue" && "text-[#a8c4e0]",
-            tone === "red" && "text-[#d8b8ac]",
+            tone === "red" && "text-[#e8907a]",
           )}
         >
           {item.subtitle}

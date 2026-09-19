@@ -5,6 +5,7 @@ import { YearbookTimelineBoard } from "@/components/yearbook/YearbookTimelineBoa
 import {
   parseSeasonKey,
   seasonDisplayTitle,
+  yearbookThemeId,
 } from "@/data/seasons";
 import {
   getYearbookSection,
@@ -58,7 +59,7 @@ export default async function YearbookSectionPage({
 
   return (
     <DetailPage
-      theme="yearbook"
+      theme={yearbookThemeId(identity)}
       back={back}
       title={meta.title}
       subtitle={`${label} / ${meta.description}`}

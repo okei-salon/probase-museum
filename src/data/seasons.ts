@@ -339,6 +339,15 @@ export function seasonHubThemeId(
   return "seasonHub";
 }
 
+/** YEARBOOK：UIはゴールド、WORLD色は成績強調用に分離 */
+export function yearbookThemeId(
+  identity: SeasonIdentity,
+): CategoryThemeId {
+  if (identity.world === "BLUE") return "yearbookBlue";
+  if (identity.world === "RED") return "yearbookRed";
+  return "yearbook";
+}
+
 /** SEASONS トップ：BLUE / RED 列用アイテム */
 export function getWorldSeasonItems(world: SeasonWorld): SelectGridItem[] {
   return formalSeasonYears.map((year) => {
