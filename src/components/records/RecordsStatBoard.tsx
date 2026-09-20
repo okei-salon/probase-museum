@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import {
   buildCareerRecordsBoard,
   buildSeasonRecordsBoard,
+  careerStatDescription,
+  PITCHER_CAREER_STAT_GROUPS,
   statsForRole,
   statsForRoleCareer,
   type RecordsRankEntry,
@@ -57,6 +59,14 @@ export function RecordsStatBoard({
         ? "シーズン"
         : "通算";
 
+  const description =
+    mode === "career" && board.def
+      ? careerStatDescription(board.def)
+      : "";
+
+  const showCareerPitcherGroups =
+    mode === "career" && role === "pitcher";
+
   return (
     <div className="space-y-5">
       {scope === "interleague" ? (
@@ -96,29 +106,56 @@ export function RecordsStatBoard({
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {defs.map((d) => (
-          <button
-            key={d.id}
-            type="button"
-            onClick={() => setStatId(d.id)}
-            className={cn(
-              "rounded-full border px-3 py-1.5 text-[11px] tracking-[0.06em] transition-colors",
-              (board.def?.id ?? statId) === d.id
-                ? "border-[color:var(--museum-accent-border,#d4af3773)] bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.16))] text-[color:var(--museum-accent,#d4af37)]"
-                : "border-white/15 bg-black/40 text-museum-ivory-soft hover:border-white/30",
-            )}
-          >
-            {d.label}
-          </button>
-        ))}
-      </div>
+      {showCareerPitcherGroups ? (
+        <div className="space-y-3">
+          {PITCHER_CAREER_STAT_GROUPS.map((group) => {
+            const groupDefs = group.statIds
+              .map((id) => defs.find((d) => d.id === id))
+              .filter((d): d is RecordsStatDef => d != null);
+            return (
+              <div key={group.id} className="space-y-1.5">
+                <p className="text-[10px] tracking-[0.12em] text-white/40">
+                  {group.label}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {groupDefs.map((d) => (
+                    <StatChip
+                      key={d.id}
+                      label={d.label}
+                      active={(board.def?.id ?? statId) === d.id}
+                      onClick={() => setStatId(d.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {defs.map((d) => (
+            <StatChip
+              key={d.id}
+              label={d.label}
+              active={(board.def?.id ?? statId) === d.id}
+              onClick={() => setStatId(d.id)}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/40">
-        <p className="border-b border-white/10 px-3 py-2 text-[12px] text-[color:var(--museum-accent,#d4af37)]">
-          {modeLabel}
-          {board.def ? ` · ${board.def.label}` : ""}
-        </p>
+        <div className="border-b border-white/10 px-3 py-2">
+          <p className="text-[12px] text-[color:var(--museum-accent,#d4af37)]">
+            {modeLabel}
+            {board.def ? ` · ${board.def.label}` : ""}
+          </p>
+          {description ? (
+            <p className="mt-1 text-[11px] leading-relaxed text-museum-ivory-soft">
+              {description}
+            </p>
+          ) : null}
+        </div>
         {board.emptyReason && board.entries.length === 0 ? (
           <p className="px-4 py-8 text-center text-[12px] text-white/45">
             {board.emptyReason}
@@ -158,5 +195,30 @@ export function RecordsStatBoard({
         )}
       </div>
     </div>
+  );
+}
+
+function StatChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-full border px-3 py-1.5 text-[11px] tracking-[0.06em] transition-colors",
+        active
+          ? "border-[color:var(--museum-accent-border,#d4af3773)] bg-[color:var(--museum-accent-soft,rgba(212,175,55,0.16))] text-[color:var(--museum-accent,#d4af37)]"
+          : "border-white/15 bg-black/40 text-museum-ivory-soft hover:border-white/30",
+      )}
+    >
+      {label}
+    </button>
   );
 }

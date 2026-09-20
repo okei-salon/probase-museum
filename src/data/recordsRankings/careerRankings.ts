@@ -21,6 +21,7 @@ import {
 import { classifyPitcherWorkload } from "@/lib/sop/helpers";
 import {
   careerQualifiersForScope,
+  formatCareerHqsRateValueText,
   formatCareerQsRateValueText,
   formatCareerWinPctValueText,
   formatRecordsValue,
@@ -238,9 +239,19 @@ function careerPitcherValue(
       return c.sho ?? null;
     case "qs":
       return c.qs ?? null;
-    case "qsRate":
+    case "qsRate": {
+      // 順位は未丸めの通算QS÷通算先発（シーズン率の平均・round3は使わない）
       if (bundle.gsUnknown) return null;
-      return d.qsRate;
+      const gs = c.gs ?? 0;
+      if (gs <= 0) return null;
+      return (c.qs ?? 0) / gs;
+    }
+    case "hqsRate": {
+      if (bundle.gsUnknown) return null;
+      const gs = c.gs ?? 0;
+      if (gs <= 0) return null;
+      return (c.hqs ?? 0) / gs;
+    }
     case "reliefEra":
       return reliefEra;
     case "reliefSoRate":
@@ -326,7 +337,7 @@ function eligibleCareerPitcher(
       if (def.id === "winPct" && decisions <= 0) {
         return { ok: false, unknown: false };
       }
-      if (def.id === "qsRate") {
+      if (def.id === "qsRate" || def.id === "hqsRate") {
         if (bundle.gsUnknown) return { ok: false, unknown: true };
         if ((c.gs ?? 0) <= 0) return { ok: false, unknown: false };
       }
@@ -485,6 +496,13 @@ function buildCareerPool(
         }
         // 矛盾があっても数値は補正せずそのまま表示
         valueText = formatCareerQsRateValueText(value, qs, gs);
+      } else if (def.id === "hqsRate") {
+        const hqs = c.hqs ?? 0;
+        const gs = c.gs ?? 0;
+        if (gs > 0 && hqs > gs) {
+          qsOverGsCount += 1;
+        }
+        valueText = formatCareerHqsRateValueText(value, hqs, gs);
       }
 
       pool.push({
@@ -505,9 +523,9 @@ export function buildCareerRecordsBoard(
   def: RecordsStatDef,
   scope: SeasonLineScope = "pennant",
 ): RecordsBoard {
-  // 通算のみ勝率・QS率を投球回規定へ（シーズン記録の定義を壊さない）
+  // 通算のみ勝率・QS率・HQS率を投球回規定へ（シーズン記録の定義を壊さない）
   const careerDef: RecordsStatDef =
-    def.id === "winPct" || def.id === "qsRate"
+    def.id === "winPct" || def.id === "qsRate" || def.id === "hqsRate"
       ? { ...def, eligibility: "ip_100" }
       : def;
   const { pool, unknownCount, empty, qsOverGsCount } = buildCareerPool(
@@ -629,6 +647,12 @@ export function getPlayerCareerStatCards(
           valueText = formatCareerQsRateValueText(
             rawValue,
             bundle.counting.qs ?? 0,
+            bundle.counting.gs ?? 0,
+          );
+        } else if (def.id === "hqsRate") {
+          valueText = formatCareerHqsRateValueText(
+            rawValue,
+            bundle.counting.hqs ?? 0,
             bundle.counting.gs ?? 0,
           );
         }

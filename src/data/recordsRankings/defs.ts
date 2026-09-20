@@ -161,10 +161,10 @@ export const BATTER_SEASON_STATS: RecordsStatDef[] = [
   { id: "csRate", label: "盗塁阻止率", role: "batter", format: "avg", eligibility: "cs_30" },
 ];
 
+/** シーズン記録用（通算の並び・項目とは別） */
 export const PITCHER_SEASON_STATS: RecordsStatDef[] = [
   { id: "era", label: "防御率", role: "pitcher", format: "era", lowerIsBetter: true, eligibility: "ip_qualified" },
   { id: "w", label: "勝利", role: "pitcher", format: "int", eligibility: "none" },
-  // シーズン記録の勝率は従来どおり13勝以上。通算は statsForRoleCareer で ip_100 に切替。
   { id: "winPct", label: "勝率", role: "pitcher", format: "pct", eligibility: "wins_13" },
   { id: "ip", label: "投球回", role: "pitcher", format: "ip", eligibility: "none" },
   { id: "so", label: "奪三振", role: "pitcher", format: "int", eligibility: "none" },
@@ -176,24 +176,145 @@ export const PITCHER_SEASON_STATS: RecordsStatDef[] = [
   { id: "cg", label: "完投", role: "pitcher", format: "int", eligibility: "none" },
   { id: "sho", label: "完封", role: "pitcher", format: "int", eligibility: "none" },
   { id: "qs", label: "QS", role: "pitcher", format: "int", eligibility: "none" },
-  // シーズン記録のQS率は規定なし（先発1以上のみ）。通算は ip_100。
   { id: "qsRate", label: "QS率", role: "pitcher", format: "pct", eligibility: "none" },
   { id: "reliefEra", label: "救援防御率", role: "pitcher", format: "era", lowerIsBetter: true, eligibility: "relief_30" },
   { id: "reliefSoRate", label: "救援奪三振率", role: "pitcher", format: "rate2", eligibility: "relief_30" },
+];
+
+/**
+ * 通算記録・投手の表示順。
+ * QS通算数は出さない（保存・集計は維持）。HQS率を追加。
+ */
+export const PITCHER_CAREER_STATS: RecordsStatDef[] = [
+  { id: "era", label: "防御率", role: "pitcher", format: "era", lowerIsBetter: true, eligibility: "ip_qualified" },
+  { id: "w", label: "勝利", role: "pitcher", format: "int", eligibility: "none" },
+  { id: "winPct", label: "勝率", role: "pitcher", format: "pct", eligibility: "ip_100" },
+  { id: "ip", label: "投球回", role: "pitcher", format: "ip", eligibility: "none" },
+  { id: "so", label: "奪三振", role: "pitcher", format: "int", eligibility: "none" },
+  { id: "soRate", label: "奪三振率", role: "pitcher", format: "rate2", eligibility: "ip_qualified" },
+  { id: "whip", label: "WHIP", role: "pitcher", format: "rate2", lowerIsBetter: true, eligibility: "ip_qualified" },
+  { id: "cg", label: "完投", role: "pitcher", format: "int", eligibility: "none" },
+  { id: "sho", label: "完封", role: "pitcher", format: "int", eligibility: "none" },
+  { id: "qsRate", label: "QS率", role: "pitcher", format: "pct", eligibility: "ip_100" },
+  { id: "hqsRate", label: "HQS率", role: "pitcher", format: "pct", eligibility: "ip_100" },
+  { id: "g", label: "登板", role: "pitcher", format: "int", eligibility: "none" },
+  { id: "hp", label: "HP", role: "pitcher", format: "int", eligibility: "none" },
+  { id: "sv", label: "セーブ", role: "pitcher", format: "int", eligibility: "none" },
+  { id: "reliefEra", label: "救援防御率", role: "pitcher", format: "era", lowerIsBetter: true, eligibility: "relief_30" },
+  { id: "reliefSoRate", label: "救援奪三振率", role: "pitcher", format: "rate2", eligibility: "relief_30" },
+];
+
+/** 通算投手タブのグループ見出し（先発・共通 / 救援） */
+export const PITCHER_CAREER_STAT_GROUPS: {
+  id: "starter" | "relief";
+  label: string;
+  statIds: readonly string[];
+}[] = [
+  {
+    id: "starter",
+    label: "先発・共通",
+    statIds: [
+      "era",
+      "w",
+      "winPct",
+      "ip",
+      "so",
+      "soRate",
+      "whip",
+      "cg",
+      "sho",
+      "qsRate",
+      "hqsRate",
+    ],
+  },
+  {
+    id: "relief",
+    label: "救援",
+    statIds: ["g", "hp", "sv", "reliefEra", "reliefSoRate"],
+  },
 ];
 
 export function statsForRole(role: RecordsRole): RecordsStatDef[] {
   return role === "batter" ? BATTER_SEASON_STATS : PITCHER_SEASON_STATS;
 }
 
-/** 通算記録用。勝率・QS率のみ投球回100×シーズン数の規定に切替える */
+/** 通算記録用の項目リスト（投手は並び・HQS率・規定を通算仕様に） */
 export function statsForRoleCareer(role: RecordsRole): RecordsStatDef[] {
-  return statsForRole(role).map((def) => {
-    if (def.id === "winPct" || def.id === "qsRate") {
-      return { ...def, eligibility: "ip_100" as const };
-    }
-    return def;
-  });
+  if (role === "batter") return BATTER_SEASON_STATS;
+  return PITCHER_CAREER_STATS;
+}
+
+/**
+ * 通算ランキングの指標説明。eligibility / 計算と一致させる。
+ * （例文の「奪三振率＝100投球回」は実装が規定投球回のため、規定投球回で記載）
+ */
+export function careerStatDescription(def: RecordsStatDef): string {
+  switch (def.id) {
+    case "avg":
+      return "通算安打÷通算打数。対象：規定打席（443打席×シーズン数）以上。";
+    case "h":
+      return "通算安打数。多い順に表示。";
+    case "hr":
+      return "通算本塁打数。多い順に表示。";
+    case "rbi":
+      return "通算打点数。多い順に表示。";
+    case "r":
+      return "通算得点数。多い順に表示。";
+    case "sb":
+      return "通算盗塁数。多い順に表示。";
+    case "doubles":
+      return "通算二塁打数。多い順に表示。";
+    case "triples":
+      return "通算三塁打数。多い順に表示。";
+    case "bb":
+      return "通算四球数。多い順に表示。";
+    case "obp":
+      return "出塁の割合。対象：規定打席（443打席×シーズン数）以上。";
+    case "slg":
+      return "長打の割合。対象：規定打席（443打席×シーズン数）以上。";
+    case "ops":
+      return "出塁率＋長打率。対象：規定打席（443打席×シーズン数）以上。";
+    case "risp":
+      return "得点圏での打率。対象：得点圏打数50×シーズン数以上。";
+    case "sac":
+      return "通算犠打数。多い順に表示。";
+    case "csRate":
+      return "盗塁を刺した割合。対象：被盗塁企図30×シーズン数以上。";
+    case "era":
+      return "9投球回あたりの自責点。数値が低いほど上位。対象：規定投球回（143回×シーズン数）以上。";
+    case "w":
+      return "通算勝利数。多い順に表示。";
+    case "winPct":
+      return "通算勝利数÷通算勝敗数。対象：100投球回×シーズン数以上。";
+    case "ip":
+      return "通算の投球回数。投球回が多い順に表示。";
+    case "so":
+      return "通算奪三振数。多い順に表示。";
+    case "soRate":
+      return "9投球回あたりの奪三振数。対象：規定投球回（143回×シーズン数）以上。";
+    case "whip":
+      return "1投球回あたりに許した安打と四球の合計。数値が低いほど上位。対象：規定投球回（143回×シーズン数）以上。";
+    case "cg":
+      return "通算完投数。多い順に表示。";
+    case "sho":
+      return "通算完封数。多い順に表示。";
+    case "qsRate":
+      return "先発登板に占めるQSの割合。対象：100投球回×シーズン数以上、かつ先発1以上。";
+    case "hqsRate":
+      return "先発登板に占めるHQSの割合。対象：100投球回×シーズン数以上、かつ先発1以上。";
+    case "g":
+      return "通算登板数（先発・救援を含む）。多い順に表示。";
+    case "hp":
+      return "通算ホールドポイント。多い順に表示。";
+    case "sv":
+      return "通算セーブ数。多い順に表示。";
+    case "reliefEra":
+      return "救援型投手を対象とした通算防御率（先発時の成績を分離した値ではない）。対象：30登板・30投球回×シーズン数以上。";
+    case "reliefSoRate":
+      return "救援型投手を対象とした9投球回あたりの奪三振数（先発時の成績を分離した値ではない）。対象：30登板・30投球回×シーズン数以上。";
+    default:
+      return "";
+  }
 }
 
 export function formatRecordsValue(
@@ -225,11 +346,20 @@ export function formatCareerWinPctValueText(
   return `${formatRecordsValue("pct", winPct)}（${w}勝${l}敗）`;
 }
 
-/** 通算QS率の表示：.813（26QS／32先発） */
+/** 通算QS率の表示：.813（48先発／39QS）※順位は未丸めの qs÷gs */
 export function formatCareerQsRateValueText(
   qsRate: number,
   qs: number,
   gs: number,
 ): string {
-  return `${formatRecordsValue("pct", qsRate)}（${qs}QS／${gs}先発）`;
+  return `${formatRecordsValue("pct", qsRate)}（${gs}先発／${qs}QS）`;
+}
+
+/** 通算HQS率の表示：.625（48先発／30HQS）※順位は未丸めの hqs÷gs */
+export function formatCareerHqsRateValueText(
+  hqsRate: number,
+  hqs: number,
+  gs: number,
+): string {
+  return `${formatRecordsValue("pct", hqsRate)}（${gs}先発／${hqs}HQS）`;
 }
