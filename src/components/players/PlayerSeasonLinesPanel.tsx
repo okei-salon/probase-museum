@@ -14,6 +14,12 @@ import {
   pitcherColumns,
 } from "@/data/playerStats";
 import {
+  getCareerRankMapForPlayer,
+  getSeasonMedalMapForLine,
+  medalTextClass,
+  type CareerRankInfo,
+} from "@/data/recordsRankings";
+import {
   aggregateBatterCounting,
   aggregatePitcherCounting,
   computeBatterDerived,
@@ -243,6 +249,17 @@ function BatterYearTable({
 }) {
   const sum = aggregateBatterCounting(lines.map((l) => l.counting));
   const derived = computeBatterDerived(sum);
+  const playerId = lines[0]?.playerId ?? "";
+  const scope = lines[0]?.scope ?? "pennant";
+  const careerRanks = useMemo(
+    () =>
+      playerId
+        ? getCareerRankMapForPlayer(playerId, "batter", scope)
+        : new Map<string, CareerRankInfo>(),
+    // lines の内容変化で通算を再計算（保存データ変更時）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [playerId, scope, lines.length],
+  );
 
   const headers = [
     "年度",
@@ -279,6 +296,40 @@ function BatterYearTable({
     "盗塁阻止率",
   ] as const;
 
+  /** headers[2..] に対応する列キー（ランキング連動用） */
+  const statKeys = [
+    "avg",
+    "g",
+    "pa",
+    "ab",
+    "h",
+    "doubles",
+    "triples",
+    "hr",
+    "tb",
+    "slg",
+    "rbi",
+    "rispAvg",
+    "rispAb",
+    "rispH",
+    "r",
+    "bb",
+    "hbp",
+    "sac",
+    "sf",
+    "sb",
+    "cs",
+    "obp",
+    "hitStreak",
+    "onBaseStreak",
+    "multiHit",
+    "ops",
+    "csAttempted",
+    "csAllowed",
+    "csCaught",
+    "csRate",
+  ] as const;
+
   const colDivider =
     "border-r border-[color:rgba(212,175,55,0.12)]";
 
@@ -290,6 +341,44 @@ function BatterYearTable({
     if (kind === "avg") return fmtAvg(v);
     if (kind === "ops") return v.toFixed(3);
     return String(v);
+  }
+
+  function batterStatTexts(
+    c: BatterSeasonLine["counting"],
+    d: BatterSeasonLine["derived"],
+  ): string[] {
+    return [
+      cell(d.avg, "avg"),
+      cell(c.g),
+      cell(c.pa),
+      cell(c.ab),
+      cell(c.h),
+      cell(c.doubles),
+      cell(c.triples),
+      cell(c.hr),
+      cell(d.tb ?? c.tb),
+      cell(d.slg, "avg"),
+      cell(c.rbi),
+      cell(d.rispAvg, "avg"),
+      cell(c.rispAb),
+      cell(c.rispH),
+      cell(c.r),
+      cell(c.bb),
+      cell(c.hbp),
+      cell(c.sac),
+      cell(c.sf),
+      cell(c.sb),
+      cell(c.cs),
+      cell(d.obp, "avg"),
+      cell(c.hitStreak),
+      cell(c.onBaseStreak),
+      cell(c.multiHit),
+      cell(d.ops, "ops"),
+      cell(c.csAttempted),
+      cell(c.csAllowed),
+      cell(c.csCaught),
+      cell(d.csRate, "avg"),
+    ];
   }
 
   return (
@@ -315,115 +404,83 @@ function BatterYearTable({
         </thead>
         <tbody>
           {lines.map((row) => {
-            const c = row.counting;
-            const d = row.derived;
-            const vals = [
-              formatSeasonLineLabel(row),
-              teamShort(row),
-              cell(d.avg, "avg"),
-              cell(c.g),
-              cell(c.pa),
-              cell(c.ab),
-              cell(c.h),
-              cell(c.doubles),
-              cell(c.triples),
-              cell(c.hr),
-              cell(d.tb ?? c.tb),
-              cell(d.slg, "avg"),
-              cell(c.rbi),
-              cell(d.rispAvg, "avg"),
-              cell(c.rispAb),
-              cell(c.rispH),
-              cell(c.r),
-              cell(c.bb),
-              cell(c.hbp),
-              cell(c.sac),
-              cell(c.sf),
-              cell(c.sb),
-              cell(c.cs),
-              cell(d.obp, "avg"),
-              cell(c.hitStreak),
-              cell(c.onBaseStreak),
-              cell(c.multiHit),
-              cell(d.ops, "ops"),
-              cell(c.csAttempted),
-              cell(c.csAllowed),
-              cell(c.csCaught),
-              cell(d.csRate, "avg"),
-            ];
+            const texts = batterStatTexts(row.counting, row.derived);
+            const medals = getSeasonMedalMapForLine(row);
             return (
               <tr key={row.id} className="border-b border-white/8">
-                {vals.map((v, i) => (
-                  <td
-                    key={`${row.id}-${i}`}
-                    className={cn(
-                      "whitespace-nowrap px-2 py-2 tabular-nums",
-                      i === 0
-                        ? "text-white/85"
-                        : i === 1
-                          ? "text-white/70"
-                          : i === 2
+                <td
+                  className={cn(
+                    "whitespace-nowrap px-2 py-2 text-white/85",
+                    colDivider,
+                  )}
+                >
+                  {formatSeasonLineLabel(row)}
+                </td>
+                <td
+                  className={cn(
+                    "whitespace-nowrap px-2 py-2 text-white/70",
+                    colDivider,
+                  )}
+                >
+                  {teamShort(row)}
+                </td>
+                {texts.map((v, i) => {
+                  const key = statKeys[i]!;
+                  const medal = medals.get(key);
+                  return (
+                    <td
+                      key={`${row.id}-${key}`}
+                      title={medal?.title}
+                      className={cn(
+                        "whitespace-nowrap px-2 py-2 tabular-nums",
+                        medal
+                          ? medalTextClass(medal.rank)
+                          : i === 0
                             ? "font-medium text-white"
-                            : "",
-                      i < vals.length - 1 && colDivider,
-                    )}
-                  >
-                    {v}
-                  </td>
-                ))}
+                            : "text-museum-ivory",
+                        i < texts.length - 1 && colDivider,
+                      )}
+                    >
+                      {v}
+                    </td>
+                  );
+                })}
               </tr>
             );
           })}
           <tr className="border-t border-[color:var(--museum-accent,#d4af37)]/35 bg-black/30">
-            {[
-              totalLabel,
-              "—",
-              cell(derived.avg, "avg"),
-              cell(sum.g),
-              cell(sum.pa),
-              cell(sum.ab),
-              cell(sum.h),
-              cell(sum.doubles),
-              cell(sum.triples),
-              cell(sum.hr),
-              cell(derived.tb ?? sum.tb),
-              cell(derived.slg, "avg"),
-              cell(sum.rbi),
-              cell(derived.rispAvg, "avg"),
-              cell(sum.rispAb),
-              cell(sum.rispH),
-              cell(sum.r),
-              cell(sum.bb),
-              cell(sum.hbp),
-              cell(sum.sac),
-              cell(sum.sf),
-              cell(sum.sb),
-              cell(sum.cs),
-              cell(derived.obp, "avg"),
-              cell(sum.hitStreak),
-              cell(sum.onBaseStreak),
-              cell(sum.multiHit),
-              cell(derived.ops, "ops"),
-              cell(sum.csAttempted),
-              cell(sum.csAllowed),
-              cell(sum.csCaught),
-              cell(derived.csRate, "avg"),
-            ].map((v, i) => (
-              <td
-                key={`sum-${i}`}
-                className={cn(
-                  "whitespace-nowrap px-2 py-2.5 tabular-nums",
-                  i === 0
-                    ? "font-medium text-[color:var(--museum-accent,#d4af37)]"
-                    : i === 2
-                      ? "font-medium text-white"
-                      : "",
-                  i < 32 && colDivider,
-                )}
-              >
-                {v}
-              </td>
-            ))}
+            <td
+              className={cn(
+                "whitespace-nowrap px-2 py-2.5 font-medium text-[color:var(--museum-accent,#d4af37)]",
+                colDivider,
+              )}
+            >
+              {totalLabel}
+            </td>
+            <td
+              className={cn(
+                "whitespace-nowrap px-2 py-2.5 text-white/50",
+                colDivider,
+              )}
+            >
+              —
+            </td>
+            {batterStatTexts(sum, derived).map((v, i) => {
+              const key = statKeys[i]!;
+              const career = careerRanks.get(key);
+              return (
+                <td
+                  key={`sum-${key}`}
+                  className={cn(
+                    "whitespace-nowrap px-2 py-2.5 tabular-nums align-top",
+                    i === 0 ? "font-medium text-white" : "text-museum-ivory",
+                    i < statKeys.length - 1 && colDivider,
+                  )}
+                >
+                  <CareerStatCell text={v} career={career} />
+                </td>
+              );
+            })}
           </tr>
         </tbody>
       </table>
@@ -440,7 +497,16 @@ function PitcherYearTable({
 }) {
   const sum = aggregatePitcherCounting(lines.map((l) => l.counting));
   const derived = computePitcherDerived(sum);
-  /** 個人成績ランキング投手列と同じ27項目（年度・球団は別） */
+  const playerId = lines[0]?.playerId ?? "";
+  const scope = lines[0]?.scope ?? "pennant";
+  const careerRanks = useMemo(
+    () =>
+      playerId
+        ? getCareerRankMapForPlayer(playerId, "pitcher", scope)
+        : new Map<string, CareerRankInfo>(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [playerId, scope, lines.length],
+  );
   const statCols = pitcherColumns;
   const colDivider =
     "border-r border-[color:rgba(212,175,55,0.12)]";
@@ -494,6 +560,7 @@ function PitcherYearTable({
         <tbody>
           {lines.map((row) => {
             const vals = cellsFor(row.counting, row.derived);
+            const medals = getSeasonMedalMapForLine(row);
             return (
               <tr key={row.id} className="border-b border-white/8">
                 <td
@@ -512,18 +579,27 @@ function PitcherYearTable({
                 >
                   {teamShort(row)}
                 </td>
-                {vals.map((v, i) => (
-                  <td
-                    key={`${row.id}-${statCols[i]!.key}`}
-                    className={cn(
-                      "whitespace-nowrap px-2 py-2 tabular-nums",
-                      i === 0 ? "font-medium text-white" : "text-museum-ivory",
-                      i < vals.length - 1 && colDivider,
-                    )}
-                  >
-                    {v}
-                  </td>
-                ))}
+                {vals.map((v, i) => {
+                  const key = statCols[i]!.key;
+                  const medal = medals.get(key);
+                  return (
+                    <td
+                      key={`${row.id}-${key}`}
+                      title={medal?.title}
+                      className={cn(
+                        "whitespace-nowrap px-2 py-2 tabular-nums",
+                        medal
+                          ? medalTextClass(medal.rank)
+                          : i === 0
+                            ? "font-medium text-white"
+                            : "text-museum-ivory",
+                        i < vals.length - 1 && colDivider,
+                      )}
+                    >
+                      {v}
+                    </td>
+                  );
+                })}
               </tr>
             );
           })}
@@ -544,24 +620,47 @@ function PitcherYearTable({
             >
               —
             </td>
-            {cellsFor(sum, derived).map((v, i) => (
-              <td
-                key={`sum-${statCols[i]!.key}`}
-                className={cn(
-                  "whitespace-nowrap px-2 py-2.5 tabular-nums",
-                  i === 0
-                    ? "font-medium text-white"
-                    : "text-museum-ivory",
-                  i < statCols.length - 1 && colDivider,
-                )}
-              >
-                {v}
-              </td>
-            ))}
+            {cellsFor(sum, derived).map((v, i) => {
+              const key = statCols[i]!.key;
+              const career = careerRanks.get(key);
+              return (
+                <td
+                  key={`sum-${key}`}
+                  className={cn(
+                    "whitespace-nowrap px-2 py-2.5 tabular-nums align-top",
+                    i === 0
+                      ? "font-medium text-white"
+                      : "text-museum-ivory",
+                    i < statCols.length - 1 && colDivider,
+                  )}
+                >
+                  <CareerStatCell text={v} career={career} />
+                </td>
+              );
+            })}
           </tr>
         </tbody>
       </table>
     </div>
+  );
+}
+
+function CareerStatCell({
+  text,
+  career,
+}: {
+  text: string;
+  career?: CareerRankInfo;
+}) {
+  return (
+    <span className="inline-flex flex-col items-start leading-tight">
+      <span>{text}</span>
+      {career ? (
+        <span className="mt-0.5 text-[9px] font-normal tracking-normal text-white/40 md:text-[10px]">
+          {career.label}
+        </span>
+      ) : null}
+    </span>
   );
 }
 

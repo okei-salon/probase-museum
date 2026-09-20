@@ -12,6 +12,10 @@
   --museum-gold-deep: #8a6f2a;
   --museum-gold-border: rgba(212, 175, 55, 0.45);
   --museum-gold-border-strong: rgba(224, 195, 106, 0.65);
+  /* 年度別成績：金・銀・銅（順位色） */
+  --museum-rank-gold: #d4af37;
+  --museum-rank-silver: #c5c5c8;
+  --museum-rank-bronze: #c9854a;
   --museum-ivory: #f5f0e6;
   --museum-ivory-muted: rgba(245, 240, 230, 0.88);
   --museum-ivory-soft: rgba(245, 240, 230, 0.72);

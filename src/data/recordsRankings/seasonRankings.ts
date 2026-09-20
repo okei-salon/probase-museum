@@ -284,6 +284,32 @@ function rankTop10(
   return out;
 }
 
+/** シーズン行から野手指標値を取得（RECORDS シーズン記録と同一） */
+export function seasonBatterValue(
+  line: Extract<PlayerSeasonLine, { role: "batter" }>,
+  def: RecordsStatDef,
+): number | null {
+  return batterValue(line, def);
+}
+
+/** シーズン行から投手指標値を取得（RECORDS シーズン記録と同一） */
+export function seasonPitcherValue(
+  line: Extract<PlayerSeasonLine, { role: "pitcher" }>,
+  def: RecordsStatDef,
+): number | null {
+  return pitcherValue(line, def);
+}
+
+/** シーズン規定判定（RECORDS シーズン記録と同一） */
+export function eligibleSeasonLine(
+  line: PlayerSeasonLine,
+  def: RecordsStatDef,
+  teamGamesCtx: TeamGamesContext,
+  scope: SeasonLineScope,
+): { ok: boolean; unknown: boolean } {
+  return eligibleSeason(line, def, teamGamesCtx, scope);
+}
+
 export function buildSeasonRecordsBoard(
   def: RecordsStatDef,
   scope: SeasonLineScope = "pennant",

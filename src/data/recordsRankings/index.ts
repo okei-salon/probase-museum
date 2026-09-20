@@ -28,9 +28,21 @@ export {
 export {
   buildSeasonRecordsBoard,
   buildSeasonRecordsForRole,
+  eligibleSeasonLine,
+  seasonBatterValue,
+  seasonPitcherValue,
   type RecordsBoard,
   type RecordsRankEntry,
 } from "./seasonRankings";
+
+export {
+  getCareerRankMapForPlayer,
+  getSeasonMedalMapForLine,
+  medalTextClass,
+  type CareerRankInfo,
+  type SeasonMedalInfo,
+  type SeasonMedalTier,
+} from "./playerYearlyRanks";
 
 export {
   buildCareerRecordsBoard,
