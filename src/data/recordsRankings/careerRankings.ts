@@ -18,6 +18,7 @@ import {
   computeBatterDerived,
   computePitcherDerived,
 } from "@/lib/manualEntry/computeSeasonStats";
+import { classifyPitcherWorkload } from "@/lib/sop/helpers";
 import {
   careerQualifiersForScope,
   formatCareerQsRateValueText,
@@ -53,14 +54,8 @@ type CareerPitcherBundle = {
   years: number[];
   counting: ReturnType<typeof aggregatePitcherCounting>;
   derived: ReturnType<typeof computePitcherDerived>;
-  /** いずれかのシーズンで救援投球回が未入力 */
-  reliefIpUnknown: boolean;
-  /** いずれかのシーズンで先発登板数が未入力 */
+  /** いずれかのシーズンで先発登板数が未入力（救援型判定・QS率に必要） */
   gsUnknown: boolean;
-  /** いずれかのシーズンで救援自責点が未入力 */
-  reliefErUnknown: boolean;
-  /** いずれかのシーズンで救援奪三振が未入力 */
-  reliefSoUnknown: boolean;
 };
 
 function fullName(playerId: string, fallback: string) {
@@ -137,16 +132,7 @@ function groupPitcherCareers(
     const counting = aggregatePitcherCounting(
       playerLines.map((l) => l.counting),
     );
-    const reliefIpUnknown = playerLines.some(
-      (l) => l.counting.reliefIpOuts == null,
-    );
     const gsUnknown = playerLines.some((l) => l.counting.gs == null);
-    const reliefErUnknown = playerLines.some(
-      (l) => l.counting.reliefEr == null,
-    );
-    const reliefSoUnknown = playerLines.some(
-      (l) => l.counting.reliefSo == null,
-    );
     out.push({
       playerId,
       playerName: fullName(playerId, playerLines[0]!.playerName),
@@ -155,10 +141,7 @@ function groupPitcherCareers(
       years,
       counting,
       derived: computePitcherDerived(counting),
-      reliefIpUnknown,
       gsUnknown,
-      reliefErUnknown,
-      reliefSoUnknown,
     });
   }
   return out;
@@ -214,15 +197,18 @@ function careerPitcherValue(
   const d = bundle.derived;
   const ip = c.ipOuts / 3;
   const hpValue = c.hld ?? c.hp ?? null;
-  const reliefIp =
-    c.reliefIpOuts != null && c.reliefIpOuts >= 0 ? c.reliefIpOuts / 3 : null;
+  /**
+   * 救援防御率／救援奪三振率は「救援型投手の通算防御率／奪三振率」。
+   * 救援専用カウントは使わず、通算自責点・奪三振・投球アウトから再計算する。
+   * ERA = ER×27÷ipOuts / K9 = SO×27÷ipOuts（シーズン率の平均ではない）
+   */
   const reliefEra =
-    reliefIp != null && reliefIp > 0 && c.reliefEr != null
-      ? (c.reliefEr * 9) / reliefIp
+    c.ipOuts > 0 && c.er != null && Number.isFinite(c.er)
+      ? (c.er * 27) / c.ipOuts
       : null;
   const reliefSoRate =
-    reliefIp != null && reliefIp > 0 && c.reliefSo != null
-      ? (c.reliefSo * 9) / reliefIp
+    c.ipOuts > 0 && c.so != null && Number.isFinite(c.so)
+      ? (c.so * 27) / c.ipOuts
       : null;
 
   switch (def.id) {
@@ -256,10 +242,8 @@ function careerPitcherValue(
       if (bundle.gsUnknown) return null;
       return d.qsRate;
     case "reliefEra":
-      if (bundle.reliefIpUnknown || bundle.reliefErUnknown) return null;
       return reliefEra;
     case "reliefSoRate":
-      if (bundle.reliefIpUnknown || bundle.reliefSoUnknown) return null;
       return reliefSoRate;
     default:
       return null;
@@ -352,28 +336,18 @@ function eligibleCareerPitcher(
       };
     }
     case "relief_30": {
-      // 専用の救援登板数フィールドは未保存。gs があるときのみ g−gs を推定に使う。
-      // 総投球回・総自責点を救援として流用はしない（reliefIpOuts / reliefEr / reliefSo のみ）。
-      if (bundle.reliefIpUnknown || c.reliefIpOuts == null) {
+      // 年度成績と同じ：救援型（先発率≤20%）かつ 登板・投球回が 30×シーズン数以上。
+      // 値は通算防御率／奪三振率（救援登板時の分離成績ではない）。
+      if (bundle.gsUnknown) {
         return { ok: false, unknown: true };
       }
-      if (bundle.gsUnknown || c.gs == null) {
-        return { ok: false, unknown: true };
-      }
-      if (def.id === "reliefEra" && (bundle.reliefErUnknown || c.reliefEr == null)) {
-        return { ok: false, unknown: true };
-      }
-      if (
-        def.id === "reliefSoRate" &&
-        (bundle.reliefSoUnknown || c.reliefSo == null)
-      ) {
-        return { ok: false, unknown: true };
-      }
-      const reliefApps = Math.max(0, c.g - c.gs);
+      const { class: pClass } = classifyPitcherWorkload(c.g, c.gs ?? null);
+      if (pClass === "unknown") return { ok: false, unknown: true };
+      if (pClass !== "reliever") return { ok: false, unknown: false };
       return {
         ok:
-          c.reliefIpOuts >= q.reliefIpOutsPerSeason * n &&
-          reliefApps >= q.reliefGPerSeason * n,
+          c.g >= q.reliefGPerSeason * n &&
+          c.ipOuts >= q.reliefIpOutsPerSeason * n,
         unknown: false,
       };
     }
@@ -557,7 +531,7 @@ export function buildCareerRecordsBoard(
   if (entries.length === 0) {
     if (unknownCount > 0 && careerDef.eligibility === "relief_30") {
       emptyReason =
-        "救援投球回・救援自責点・救援奪三振、または先発登板数が未入力のため、規定判定できる投手がいません。（救援登板数の専用フィールドは未保存のため、登板−先発で推定しています）";
+        "先発登板数が未入力のため、救援型（先発率）の判定できる投手がいません。";
     } else if (unknownCount > 0) {
       emptyReason =
         "規定判定に必要なデータが不足しているため、表示できる記録がありません。";

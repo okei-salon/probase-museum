@@ -21,7 +21,7 @@ export type RecordsEligibility =
   | "ip_100" // 勝率・QS率：100投球回×シーズン数（アウト数で判定）
   | "risp_50" // 得点圏打席50以上
   | "cs_30" // 被盗企30以上
-  | "relief_30"; // 救援：救援IP・救援登板推定が 30×シーズン数以上
+  | "relief_30"; // 救援型＋登板30×N・投球回30×N（値は通算ERA/K9）
 
 export type RecordsStatDef = {
   id: string;
@@ -46,15 +46,15 @@ export type CareerQualifiers = {
   ipOutsPerSeason: number;
   rispAbPerSeason: number;
   csAttemptedPerSeason: number;
-  /** 1シーズンあたりの救援投球回（イニング） */
-  reliefIpPerSeason: number;
-  /** 1シーズンあたりの救援投球回（アウト数）＝30回×3 */
-  reliefIpOutsPerSeason: number;
   /**
-   * 1シーズンあたりの救援登板数。
-   * 専用フィールドが無いため、通算では g−gs 推定に使う。
+   * 1シーズンあたりの救援ランキング規定登板数（総登板）。
+   * 救援型判定後に 30×シーズン数 で使う。
    */
   reliefGPerSeason: number;
+  /** 1シーズンあたりの救援ランキング規定投球回（イニング） */
+  reliefIpPerSeason: number;
+  /** 1シーズンあたりの救援ランキング規定投球回（アウト数）＝30回×3 */
+  reliefIpOutsPerSeason: number;
   /** 勝率・QS率用：1シーズンあたり100投球回（アウト数） */
   ip100OutsPerSeason: number;
 };
