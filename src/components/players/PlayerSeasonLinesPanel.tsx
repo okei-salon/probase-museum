@@ -467,17 +467,40 @@ function BatterYearTable({
             </td>
             {batterStatTexts(sum, derived).map((v, i) => {
               const key = statKeys[i]!;
-              const career = careerRanks.get(key);
               return (
                 <td
                   key={`sum-${key}`}
                   className={cn(
-                    "whitespace-nowrap px-2 py-2.5 tabular-nums align-top",
+                    "whitespace-nowrap px-2 py-2.5 tabular-nums",
                     i === 0 ? "font-medium text-white" : "text-museum-ivory",
                     i < statKeys.length - 1 && colDivider,
                   )}
                 >
-                  <CareerStatCell text={v} career={career} />
+                  {v}
+                </td>
+              );
+            })}
+          </tr>
+          <tr className="border-t border-white/10 bg-black/20">
+            <td
+              className={cn("whitespace-nowrap px-2 py-1.5", colDivider)}
+              aria-hidden
+            />
+            <td
+              className={cn("whitespace-nowrap px-2 py-1.5", colDivider)}
+              aria-hidden
+            />
+            {statKeys.map((key, i) => {
+              const career = careerRanks.get(key);
+              return (
+                <td
+                  key={`rank-${key}`}
+                  className={cn(
+                    "whitespace-nowrap px-2 py-1.5 tabular-nums text-[9px] text-white/40 md:text-[10px]",
+                    i < statKeys.length - 1 && colDivider,
+                  )}
+                >
+                  {career ? `${career.rank}位` : ""}
                 </td>
               );
             })}
@@ -622,19 +645,42 @@ function PitcherYearTable({
             </td>
             {cellsFor(sum, derived).map((v, i) => {
               const key = statCols[i]!.key;
-              const career = careerRanks.get(key);
               return (
                 <td
                   key={`sum-${key}`}
                   className={cn(
-                    "whitespace-nowrap px-2 py-2.5 tabular-nums align-top",
+                    "whitespace-nowrap px-2 py-2.5 tabular-nums",
                     i === 0
                       ? "font-medium text-white"
                       : "text-museum-ivory",
                     i < statCols.length - 1 && colDivider,
                   )}
                 >
-                  <CareerStatCell text={v} career={career} />
+                  {v}
+                </td>
+              );
+            })}
+          </tr>
+          <tr className="border-t border-white/10 bg-black/20">
+            <td
+              className={cn("whitespace-nowrap px-2 py-1.5", colDivider)}
+              aria-hidden
+            />
+            <td
+              className={cn("whitespace-nowrap px-2 py-1.5", colDivider)}
+              aria-hidden
+            />
+            {statCols.map((col, i) => {
+              const career = careerRanks.get(col.key);
+              return (
+                <td
+                  key={`rank-${col.key}`}
+                  className={cn(
+                    "whitespace-nowrap px-2 py-1.5 tabular-nums text-[9px] text-white/40 md:text-[10px]",
+                    i < statCols.length - 1 && colDivider,
+                  )}
+                >
+                  {career ? `${career.rank}位` : ""}
                 </td>
               );
             })}
@@ -642,25 +688,6 @@ function PitcherYearTable({
         </tbody>
       </table>
     </div>
-  );
-}
-
-function CareerStatCell({
-  text,
-  career,
-}: {
-  text: string;
-  career?: CareerRankInfo;
-}) {
-  return (
-    <span className="inline-flex flex-col items-start leading-tight">
-      <span>{text}</span>
-      {career ? (
-        <span className="mt-0.5 text-[9px] font-normal tracking-normal text-white/40 md:text-[10px]">
-          {career.label}
-        </span>
-      ) : null}
-    </span>
   );
 }
 

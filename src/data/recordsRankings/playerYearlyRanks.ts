@@ -289,7 +289,7 @@ export function medalTextClass(rank: SeasonMedalTier): string {
     case 1:
       return "text-[color:var(--museum-rank-gold,#d4af37)]";
     case 2:
-      return "text-[color:var(--museum-rank-silver,#c5c5c8)]";
+      return "text-[color:var(--museum-rank-silver,#7dd3fc)]";
     case 3:
       return "text-[color:var(--museum-rank-bronze,#c9854a)]";
   }
