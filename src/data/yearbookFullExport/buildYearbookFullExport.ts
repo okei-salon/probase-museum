@@ -749,13 +749,15 @@ export function buildYearbookFullExport(
       seasonReviews.general ||
         seasonReviews.central ||
         seasonReviews.pacific ||
-        seasonReviews.teams,
+        seasonReviews.teams ||
+        seasonReviews.title,
     ),
     seasonReviewSections: {
       general: Boolean(seasonReviews.general),
       central: Boolean(seasonReviews.central),
       pacific: Boolean(seasonReviews.pacific),
       teams: Boolean(seasonReviews.teams),
+      title: Boolean(seasonReviews.title),
     },
     missingNotes,
   };
@@ -796,6 +798,7 @@ export function buildYearbookFullExport(
       central: seasonReviews.central,
       pacific: seasonReviews.pacific,
       teams: seasonReviews.teams,
+      title: seasonReviews.title,
     },
   };
 

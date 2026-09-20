@@ -138,6 +138,13 @@ export function formatYearbookFullExportTxt(
       : "(なし)",
   );
   lines.push("");
+  lines.push(section("SEASON REVIEW / TITLES"));
+  lines.push(
+    payload.seasonReviews?.title?.trim()
+      ? payload.seasonReviews.title.trim()
+      : "(なし)",
+  );
+  lines.push("");
 
   return `${lines.join("\n")}\n`;
 }

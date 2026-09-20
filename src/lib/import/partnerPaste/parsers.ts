@@ -1335,9 +1335,10 @@ export type PartnerSeasonHighlightResult = {
     | "SEASON_REVIEW_GENERAL"
     | "SEASON_REVIEW_CENTRAL"
     | "SEASON_REVIEW_PACIFIC"
-    | "SEASON_REVIEW_TEAMS";
-  /** general | central | pacific | teams */
-  reviewKind: "general" | "central" | "pacific" | "teams";
+    | "SEASON_REVIEW_TEAMS"
+    | "SEASON_REVIEW_TITLE";
+  /** general | central | pacific | teams | title */
+  reviewKind: "general" | "central" | "pacific" | "teams" | "title";
   year: number;
   world: "BLUE" | "RED" | null;
   text: string;
@@ -1359,14 +1360,16 @@ const SEASON_REVIEW_TYPES = new Set([
   "SEASON_REVIEW_CENTRAL",
   "SEASON_REVIEW_PACIFIC",
   "SEASON_REVIEW_TEAMS",
+  "SEASON_REVIEW_TITLE",
 ]);
 
 function reviewKindFromType(
   type: string,
-): "general" | "central" | "pacific" | "teams" {
+): "general" | "central" | "pacific" | "teams" | "title" {
   if (type === "SEASON_REVIEW_CENTRAL") return "central";
   if (type === "SEASON_REVIEW_PACIFIC") return "pacific";
   if (type === "SEASON_REVIEW_TEAMS") return "teams";
+  if (type === "SEASON_REVIEW_TITLE") return "title";
   return "general";
 }
 
@@ -1516,6 +1519,7 @@ export function parseNonSeasonPartnerPaste(
     case "SEASON_REVIEW_CENTRAL":
     case "SEASON_REVIEW_PACIFIC":
     case "SEASON_REVIEW_TEAMS":
+    case "SEASON_REVIEW_TITLE":
       return parseSeasonReviewPartner(rawText, fallbackYear, fallbackWorld);
     default:
       if (

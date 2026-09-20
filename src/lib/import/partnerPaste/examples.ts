@@ -258,6 +258,13 @@ TEXT=
 巨人
 ……`,
 
+  SEASON_REVIEW_TITLE: `YEAR=2026
+WORLD=RED
+TYPE=SEASON_REVIEW_TITLE
+
+TEXT=
+（タイトル総評本文）`,
+
   /** @deprecated 正式は SEASON_REVIEW。貼り付け互換のため残す */
   SEASON_HIGHLIGHT: `YEAR=2026
 WORLD=BLUE

@@ -2,7 +2,7 @@
  * YEARBOOK シーズン総評
  * SeasonIdentity（WORLD × YEAR）単位で保存。
  * body = 全体総評（GENERAL）。既存 SEASON_REVIEW 互換。
- * セ／パ／12球団は同一レコードの別フィールド（未設定は未登録）。
+ * セ／パ／12球団／タイトルは同一レコードの別フィールド（未設定は未登録）。
  */
 
 import type { SeasonWorld } from "@/data/seasons";
@@ -14,13 +14,15 @@ export type SeasonReviewKind =
   | "general"
   | "central"
   | "pacific"
-  | "teams";
+  | "teams"
+  | "title";
 
 export const SEASON_REVIEW_KIND_LABELS: Record<SeasonReviewKind, string> = {
   general: "総評",
   central: "セ・リーグ総評",
   pacific: "パ・リーグ総評",
   teams: "12球団総評",
+  title: "タイトル総評",
 };
 
 export type YearbookSeasonReview = {
@@ -44,6 +46,11 @@ export type YearbookSeasonReview = {
   pacificBody?: string;
   /** 12球団総評（1本。球団見出しは本文内） */
   teamsBody?: string;
+  /**
+   * タイトル総評（表彰・記録をめぐる文章）。
+   * 既存レコードに無い場合は未登録として扱う（移行・再生成しない）。
+   */
+  titleBody?: string;
   /** 生成／入力の出所 */
   source: YearbookReviewSource;
   /** ユーザー確認済みか（AI生成フロー用） */

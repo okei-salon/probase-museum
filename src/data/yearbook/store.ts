@@ -41,6 +41,7 @@ function normalizeReview(r: YearbookSeasonReview & { id?: string }): YearbookRev
     pacificBody:
       typeof r.pacificBody === "string" ? r.pacificBody : r.pacificBody,
     teamsBody: typeof r.teamsBody === "string" ? r.teamsBody : r.teamsBody,
+    titleBody: typeof r.titleBody === "string" ? r.titleBody : r.titleBody,
     id: r.id || seasonKey,
   };
 }
@@ -107,6 +108,7 @@ export function upsertYearbookReview(input: {
   centralBody?: string;
   pacificBody?: string;
   teamsBody?: string;
+  titleBody?: string;
   source?: YearbookReviewSource;
   confirmed?: boolean;
 }): YearbookSeasonReview;
@@ -116,6 +118,7 @@ export function upsertYearbookReview(input: {
   centralBody?: string;
   pacificBody?: string;
   teamsBody?: string;
+  titleBody?: string;
   source?: YearbookReviewSource;
   confirmed?: boolean;
 }): YearbookSeasonReview;
@@ -129,6 +132,7 @@ export function upsertYearbookReview(
         centralBody?: string;
         pacificBody?: string;
         teamsBody?: string;
+        titleBody?: string;
         source?: YearbookReviewSource;
         confirmed?: boolean;
       }
@@ -138,6 +142,7 @@ export function upsertYearbookReview(
         centralBody?: string;
         pacificBody?: string;
         teamsBody?: string;
+        titleBody?: string;
         source?: YearbookReviewSource;
         confirmed?: boolean;
       },
@@ -165,6 +170,8 @@ export function upsertYearbookReview(
         : prev?.pacificBody,
     teamsBody:
       input.teamsBody !== undefined ? input.teamsBody : prev?.teamsBody,
+    titleBody:
+      input.titleBody !== undefined ? input.titleBody : prev?.titleBody,
     source: input.source ?? prev?.source ?? "manual",
     confirmed: input.confirmed ?? prev?.confirmed ?? true,
     createdAt: prev?.createdAt ?? now,

@@ -1,7 +1,8 @@
 /**
- * SEASON_REVIEW — YEAR × WORLD の正式シーズン総評（4大項目）。
+ * SEASON_REVIEW — YEAR × WORLD の正式シーズン総評（大項目）。
  * 正本は yearbook-reviews（localStorage + museum_documents）。
  * 旧 season-highlights / 既存 body は GENERAL の読み取り互換（削除・初期化しない）。
+ * titleBody など新フィールドは未設定の既存レコードを壊さず空欄扱いする。
  */
 
 import {
@@ -33,6 +34,7 @@ export const SEASON_REVIEW_KINDS: SeasonReviewKind[] = [
   "central",
   "pacific",
   "teams",
+  "title",
 ];
 
 function trimBody(body: string): string {
@@ -56,7 +58,11 @@ function sectionFromRecord(
     const body = review.pacificBody ?? "";
     return body.trim() ? body : null;
   }
-  const body = review.teamsBody ?? "";
+  if (kind === "teams") {
+    const body = review.teamsBody ?? "";
+    return body.trim() ? body : null;
+  }
+  const body = review.titleBody ?? "";
   return body.trim() ? body : null;
 }
 
@@ -97,6 +103,7 @@ export function getAllSeasonReviewSections(
     central: getSeasonReviewSection(identity, "central"),
     pacific: getSeasonReviewSection(identity, "pacific"),
     teams: getSeasonReviewSection(identity, "teams"),
+    title: getSeasonReviewSection(identity, "title"),
   };
 }
 
@@ -120,7 +127,8 @@ export function getSeasonReviewRecord(
     Boolean(review.body?.trim()) ||
     Boolean(review.centralBody?.trim()) ||
     Boolean(review.pacificBody?.trim()) ||
-    Boolean(review.teamsBody?.trim());
+    Boolean(review.teamsBody?.trim()) ||
+    Boolean(review.titleBody?.trim());
   return hasAny ? review : null;
 }
 
@@ -168,6 +176,7 @@ export function upsertSeasonReviewSection(input: {
     centralBody: prev?.centralBody,
     pacificBody: prev?.pacificBody,
     teamsBody: prev?.teamsBody,
+    titleBody: prev?.titleBody,
     source,
     confirmed: true as const,
   };
@@ -181,7 +190,10 @@ export function upsertSeasonReviewSection(input: {
   if (input.kind === "pacific") {
     return upsertYearbookReview({ ...base, pacificBody: body });
   }
-  return upsertYearbookReview({ ...base, teamsBody: body });
+  if (input.kind === "teams") {
+    return upsertYearbookReview({ ...base, teamsBody: body });
+  }
+  return upsertYearbookReview({ ...base, titleBody: body });
 }
 
 export async function hydrateSeasonReviewSources(): Promise<void> {

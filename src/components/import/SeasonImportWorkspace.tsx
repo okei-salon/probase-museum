@@ -154,7 +154,7 @@ export function SeasonImportWorkspace() {
     [],
   );
 
-  // season review（4大項目）
+  // season review（大項目）
   const [reviewTexts, setReviewTexts] = useState<
     Record<SeasonReviewKind, string>
   >({
@@ -162,6 +162,7 @@ export function SeasonImportWorkspace() {
     central: "",
     pacific: "",
     teams: "",
+    title: "",
   });
   const [reviewSaveKind, setReviewSaveKind] =
     useState<SeasonReviewKind>("general");
@@ -288,7 +289,7 @@ export function SeasonImportWorkspace() {
       if (sub === "review") {
         if (parsed.kind !== "season_review") {
           setError(
-            "シーズン総評は TYPE=SEASON_REVIEW / SEASON_REVIEW_GENERAL / CENTRAL / PACIFIC / TEAMS を指定してください",
+            "シーズン総評は TYPE=SEASON_REVIEW / SEASON_REVIEW_GENERAL / CENTRAL / PACIFIC / TEAMS / TITLE を指定してください",
           );
           return;
         }
@@ -318,6 +319,7 @@ export function SeasonImportWorkspace() {
       central: sections.central ?? "",
       pacific: sections.pacific ?? "",
       teams: sections.teams ?? "",
+      title: sections.title ?? "",
     });
     setReviewPreviewYear(identity.year);
     setReviewPreviewWorld(identity.world);
@@ -841,6 +843,7 @@ export function SeasonImportWorkspace() {
             central: "",
             pacific: "",
             teams: "",
+            title: "",
           });
           setReviewPreviewYear(null);
           setReviewPreviewWorld(null);
@@ -1091,8 +1094,8 @@ export function SeasonImportWorkspace() {
               YEAR：{year}　WORLD：{world ?? "—"}
             </p>
             <p className="text-[12px] text-white/55">
-              4種類の総評をそれぞれ独立して貼り付け・保存できます。相棒データは
-              TYPE=SEASON_REVIEW_GENERAL / CENTRAL / PACIFIC / TEAMS（または
+              各総評をそれぞれ独立して貼り付け・保存できます。相棒データは
+              TYPE=SEASON_REVIEW_GENERAL / CENTRAL / PACIFIC / TEAMS / TITLE（または
               SEASON_REVIEW＝全体総評）に対応します。改行・段落はそのまま保存されます。
               <button
                 type="button"
@@ -1120,6 +1123,10 @@ export function SeasonImportWorkspace() {
               {
                 kind: "teams" as const,
                 hint: "TYPE=SEASON_REVIEW_TEAMS（球団見出しは本文内）",
+              },
+              {
+                kind: "title" as const,
+                hint: "TYPE=SEASON_REVIEW_TITLE",
               },
             ] as const
           ).map(({ kind, hint }) => (

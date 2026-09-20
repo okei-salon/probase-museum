@@ -75,7 +75,7 @@ export const yearbookSections = [
   {
     id: "overview",
     title: "シーズン総評",
-    description: "総評・セ／パ・12球団を分けて読む入口",
+    description: "総評・セ／パ・12球団・タイトルを分けて読む入口",
     icon: "book" as const,
   },
 ] as const;

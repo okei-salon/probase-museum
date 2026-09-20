@@ -34,6 +34,7 @@ const TAB_ORDER: SeasonReviewKind[] = [
   "central",
   "pacific",
   "teams",
+  "title",
 ];
 
 const TAB_SHORT: Record<SeasonReviewKind, string> = {
@@ -41,6 +42,7 @@ const TAB_SHORT: Record<SeasonReviewKind, string> = {
   central: "セ・リーグ",
   pacific: "パ・リーグ",
   teams: "12球団",
+  title: "タイトル",
 };
 
 export function YearbookSeasonReviewBoard({
@@ -69,6 +71,7 @@ export function YearbookSeasonReviewBoard({
       central: null,
       pacific: null,
       teams: null,
+      title: null,
     },
   );
   const [tab, setTab] = useState<SeasonReviewKind>("general");
@@ -76,6 +79,8 @@ export function YearbookSeasonReviewBoard({
   const [draft, setDraft] = useState("");
   const [savedFlash, setSavedFlash] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [contextOpen, setContextOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +95,7 @@ export function YearbookSeasonReviewBoard({
       setDraft(next[tab] ?? "");
       setEditing(false);
       setReady(true);
+      setContextOpen(false);
     })();
     return () => {
       cancelled = true;
@@ -99,8 +105,11 @@ export function YearbookSeasonReviewBoard({
   }, [identity]);
 
   const context = useMemo(
-    () => (ready && identity ? buildYearbookSeasonContext(identity) : null),
-    [ready, identity],
+    () =>
+      ready && identity && contextOpen
+        ? buildYearbookSeasonContext(identity)
+        : null,
+    [ready, identity, contextOpen],
   );
 
   const body = bodies[tab];
@@ -151,7 +160,7 @@ export function YearbookSeasonReviewBoard({
     <div className="mx-auto w-full max-w-[960px] space-y-6">
       <header className="space-y-2 border-b border-[color:var(--museum-accent,#d4af37)]/25 pb-4">
         <p className="text-[10px] tracking-[0.22em] text-[color:var(--museum-accent,#d4af37)]">
-          SEASON REVIEW · {context?.seasonLabel ?? seasonKey}
+          SEASON REVIEW · {identity ? seasonDisplayTitle(identity) : seasonKey}
         </p>
         <h3 className="font-display text-[24px] tracking-[0.04em] text-museum-ivory md:text-[28px]">
           {titleLabel} シーズン総評
@@ -159,7 +168,7 @@ export function YearbookSeasonReviewBoard({
         <p className="max-w-2xl text-[13px] leading-relaxed text-museum-ivory-soft">
           YEAR {identity.year}
           {identity.world ? ` · WORLD ${identity.world}` : null}
-          。総評・セ・パ・12球団を分けて閲覧します。
+          。総評・セ・パ・12球団・タイトルを分けて閲覧します。
           {identity.world
             ? `（${identity.world} のみ。他WORLDは含めません）`
             : null}
@@ -273,38 +282,53 @@ export function YearbookSeasonReviewBoard({
         </p>
       )}
 
-      {context && allowEdit ? (
-        <details className="rounded-xl border border-white/10 bg-black/40 p-4">
+      {allowEdit ? (
+        <details
+          className="rounded-xl border border-white/10 bg-black/40 p-4"
+          onToggle={(e) => {
+            setContextOpen((e.target as HTMLDetailsElement).open);
+          }}
+        >
           <summary className="cursor-pointer text-[12px] tracking-[0.1em] text-white/55">
-            総評の根拠データ（{context.seasonLabel}）
+            総評の根拠データ（
+            {identity
+              ? `${identity.year}${identity.world ? ` ${identity.world}` : ""}`
+              : seasonKey}
+            ）
           </summary>
           <div className="mt-3 space-y-3 text-[12px] text-white/65">
-            {context.available.length > 0 ? (
-              <div>
-                <p className="text-[11px] text-emerald-300/80">利用可能</p>
-                <p className="mt-1">{context.available.join(" · ")}</p>
-              </div>
-            ) : null}
-            {context.missing.length > 0 ? (
-              <div>
-                <p className="text-[11px] text-amber-200/80">未登録・未使用</p>
-                <ul className="mt-1 list-disc space-y-0.5 pl-5">
-                  {context.missing.map((m) => (
-                    <li key={m}>{m}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {context.factLines.length > 0 ? (
-              <div>
-                <p className="text-[11px] text-white/45">事実メモ</p>
-                <ul className="mt-1 list-disc space-y-0.5 pl-5">
-                  {context.factLines.map((f) => (
-                    <li key={f}>{f}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
+            {!context ? (
+              <p className="text-white/45">読み込み中…</p>
+            ) : (
+              <>
+                {context.available.length > 0 ? (
+                  <div>
+                    <p className="text-[11px] text-emerald-300/80">利用可能</p>
+                    <p className="mt-1">{context.available.join(" · ")}</p>
+                  </div>
+                ) : null}
+                {context.missing.length > 0 ? (
+                  <div>
+                    <p className="text-[11px] text-amber-200/80">未登録・未使用</p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                      {context.missing.map((m) => (
+                        <li key={m}>{m}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {context.factLines.length > 0 ? (
+                  <div>
+                    <p className="text-[11px] text-white/45">事実メモ</p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                      {context.factLines.map((f) => (
+                        <li key={f}>{f}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </>
+            )}
           </div>
         </details>
       ) : null}

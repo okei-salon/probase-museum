@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildYearbookFullExport,
   downloadYearbookExportFile,
@@ -30,7 +30,7 @@ type Props = {
 
 /**
  * YEARBOOK 分析用フルデータ書き出し（読み取り専用）。
- * 既存の「シーズン資料をコピー」とは別機能。
+ * マウント時は集計しない。JSON／TXT 書き出しクリック時のみ hydrate + build。
  */
 export function YearbookFullExportPanel({ seasonKey, className }: Props) {
   const identity: SeasonIdentity | null = useMemo(
@@ -38,17 +38,40 @@ export function YearbookFullExportPanel({ seasonKey, className }: Props) {
     [seasonKey],
   );
 
-  const [ready, setReady] = useState(false);
   const [summary, setSummary] = useState<YearbookFullExportSummary | null>(
     null,
   );
+  const [summaryForKey, setSummaryForKey] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
 
+  // YEAR/WORLD 切替時は旧サマリを破棄。生成は開始しない。
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
+    setSummary(null);
+    setSummaryForKey(null);
+    setMessage(null);
+    setError(null);
+    setBusy(false);
+    busyRef.current = false;
+  }, [seasonKey]);
+
+  const label = identity ? formatSeasonLineLabel(identity) : seasonKey;
+  const visibleSummary =
+    summary && summaryForKey === seasonKey ? summary : null;
+
+  async function runExport(kind: "json" | "txt") {
+    setError(null);
+    setMessage(null);
+    if (!identity) {
+      setError("シーズンを特定できません");
+      return;
+    }
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    try {
       await Promise.allSettled([
         hydrateSeasonReviewSources(),
         hydratePlayerMasterFromCloud(),
@@ -61,36 +84,9 @@ export function YearbookFullExportPanel({ seasonKey, className }: Props) {
         hydrateSeasonAchievementsFromCloud(),
         hydrateTeamSeasonStatsFromCloud(),
       ]);
-      if (cancelled || !identity) return;
-      try {
-        const bundle = buildYearbookFullExport(identity);
-        setSummary(bundle.payload.summary);
-        setReady(true);
-      } catch (e) {
-        setError(
-          e instanceof Error ? e.message : "エクスポート準備に失敗しました",
-        );
-        setReady(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [identity]);
-
-  const label = identity ? formatSeasonLineLabel(identity) : seasonKey;
-
-  function runExport(kind: "json" | "txt") {
-    setError(null);
-    setMessage(null);
-    if (!identity) {
-      setError("シーズンを特定できません");
-      return;
-    }
-    setBusy(true);
-    try {
       const bundle = buildYearbookFullExport(identity);
       setSummary(bundle.payload.summary);
+      setSummaryForKey(identity.seasonKey);
       if (kind === "json") {
         downloadYearbookExportFile(
           `${bundle.filenameBase}.json`,
@@ -109,6 +105,7 @@ export function YearbookFullExportPanel({ seasonKey, className }: Props) {
     } catch (e) {
       setError(e instanceof Error ? e.message : "書き出しに失敗しました");
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
@@ -138,16 +135,17 @@ export function YearbookFullExportPanel({ seasonKey, className }: Props) {
       <p className="mt-1.5 text-[12px] leading-relaxed text-museum-ivory-soft">
         選択中の YEAR / WORLD に保存されているシーズンデータを、分析用に
         1ファイルへ集約して書き出します。既存データは変更しません。
+        集計は書き出しボタンを押したときのみ実行します。
       </p>
 
       <div className="mt-3 flex flex-wrap gap-2">
         <button
           type="button"
-          disabled={!ready || busy}
-          onClick={() => runExport("json")}
+          disabled={busy}
+          onClick={() => void runExport("json")}
           className={cn(
             "rounded-md border px-3 py-2 text-[12px]",
-            !ready || busy
+            busy
               ? "border-white/10 text-white/30"
               : "border-[color:var(--museum-accent,#d4af37)] bg-[color:var(--museum-accent,#d4af37)]/15 text-[color:var(--museum-accent,#d4af37)]",
           )}
@@ -156,11 +154,11 @@ export function YearbookFullExportPanel({ seasonKey, className }: Props) {
         </button>
         <button
           type="button"
-          disabled={!ready || busy}
-          onClick={() => runExport("txt")}
+          disabled={busy}
+          onClick={() => void runExport("txt")}
           className={cn(
             "rounded-md border px-3 py-2 text-[12px]",
-            !ready || busy
+            busy
               ? "border-white/10 text-white/30"
               : "border-white/20 text-white/80 hover:border-white/35",
           )}
@@ -169,29 +167,40 @@ export function YearbookFullExportPanel({ seasonKey, className }: Props) {
         </button>
       </div>
 
-      {summary ? (
+      {visibleSummary ? (
         <ul className="mt-3 grid gap-1 text-[12px] text-museum-ivory-soft sm:grid-cols-2">
-          <li>野手 {summary.batters}人</li>
-          <li>投手 {summary.pitchers}人</li>
-          <li>捕手（阻止データ） {summary.catchers}人</li>
-          <li>チーム {summary.teams}球団</li>
-          <li>表彰枠 {summary.awards}件</li>
-          <li>記録・偉業 {summary.records}件</li>
-          <li>SOP対象 {summary.sopPlayers}人</li>
-          <li>二刀流候補 {summary.twoWayPlayers}人</li>
-          <li>月間MVP {summary.monthlyMvp}件</li>
-          <li>最終順位 {summary.hasStandings ? "あり" : "なし"}</li>
-          <li>月次順位 {summary.hasMonthlyStandings ? "あり" : "なし"}</li>
-          <li>交流戦 {summary.hasInterleague ? "あり" : "なし"}</li>
-          <li>ポストシーズン {summary.hasPostseason ? "あり" : "なし"}</li>
+          <li>野手 {visibleSummary.batters}人</li>
+          <li>投手 {visibleSummary.pitchers}人</li>
+          <li>捕手（阻止データ） {visibleSummary.catchers}人</li>
+          <li>チーム {visibleSummary.teams}球団</li>
+          <li>表彰枠 {visibleSummary.awards}件</li>
+          <li>記録・偉業 {visibleSummary.records}件</li>
+          <li>SOP対象 {visibleSummary.sopPlayers}人</li>
+          <li>二刀流候補 {visibleSummary.twoWayPlayers}人</li>
+          <li>月間MVP {visibleSummary.monthlyMvp}件</li>
+          <li>最終順位 {visibleSummary.hasStandings ? "あり" : "なし"}</li>
+          <li>
+            月次順位 {visibleSummary.hasMonthlyStandings ? "あり" : "なし"}
+          </li>
+          <li>交流戦 {visibleSummary.hasInterleague ? "あり" : "なし"}</li>
+          <li>
+            ポストシーズン {visibleSummary.hasPostseason ? "あり" : "なし"}
+          </li>
           <li>
             SEASON_REVIEW{" "}
-            {summary.hasSeasonReview
+            {visibleSummary.hasSeasonReview
               ? [
-                  summary.seasonReviewSections?.general ? "総評" : null,
-                  summary.seasonReviewSections?.central ? "セ" : null,
-                  summary.seasonReviewSections?.pacific ? "パ" : null,
-                  summary.seasonReviewSections?.teams ? "12球団" : null,
+                  visibleSummary.seasonReviewSections?.general
+                    ? "総評"
+                    : null,
+                  visibleSummary.seasonReviewSections?.central ? "セ" : null,
+                  visibleSummary.seasonReviewSections?.pacific ? "パ" : null,
+                  visibleSummary.seasonReviewSections?.teams
+                    ? "12球団"
+                    : null,
+                  visibleSummary.seasonReviewSections?.title
+                    ? "タイトル"
+                    : null,
                 ]
                   .filter(Boolean)
                   .join("・") || "あり"
@@ -200,9 +209,9 @@ export function YearbookFullExportPanel({ seasonKey, className }: Props) {
         </ul>
       ) : null}
 
-      {summary?.missingNotes?.length ? (
+      {visibleSummary?.missingNotes?.length ? (
         <p className="mt-2 text-[11px] leading-relaxed text-amber-200/85">
-          欠落メモ: {summary.missingNotes.join(" / ")}
+          欠落メモ: {visibleSummary.missingNotes.join(" / ")}
         </p>
       ) : null}
 
@@ -213,7 +222,7 @@ export function YearbookFullExportPanel({ seasonKey, className }: Props) {
         <p className="mt-3 text-[12px] text-amber-200">{error}</p>
       ) : null}
 
-      {!ready ? (
+      {busy ? (
         <p className="mt-3 text-[12px] text-white/45">データ準備中…</p>
       ) : null}
     </div>

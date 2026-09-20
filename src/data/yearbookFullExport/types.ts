@@ -28,6 +28,7 @@ export type YearbookFullExportSummary = {
     central: boolean;
     pacific: boolean;
     teams: boolean;
+    title: boolean;
   };
   missingNotes: string[];
 };
@@ -71,6 +72,7 @@ export type YearbookFullExportPayload = {
     central: string | null;
     pacific: string | null;
     teams: string | null;
+    title: string | null;
   };
 };
 
