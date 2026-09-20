@@ -18,17 +18,18 @@ import {
   computeBatterDerived,
   computePitcherDerived,
 } from "@/lib/manualEntry/computeSeasonStats";
-import { classifyPitcherWorkload } from "@/lib/sop/helpers";
 import {
   careerQualifiersForScope,
+  formatCareerQsRateValueText,
+  formatCareerWinPctValueText,
   formatRecordsValue,
-  statsForRole,
+  RECORDS_CAREER_RANK_LIMIT,
+  statsForRoleCareer,
   type CareerQualifiers,
   type RecordsRole,
   type RecordsStatDef,
 } from "./defs";
 import type { RecordsBoard, RecordsRankEntry } from "./seasonRankings";
-import { MIN_WINS_FOR_WIN_PCT } from "@/lib/stats";
 
 type CareerBatterBundle = {
   playerId: string;
@@ -54,6 +55,12 @@ type CareerPitcherBundle = {
   derived: ReturnType<typeof computePitcherDerived>;
   /** いずれかのシーズンで救援投球回が未入力 */
   reliefIpUnknown: boolean;
+  /** いずれかのシーズンで先発登板数が未入力 */
+  gsUnknown: boolean;
+  /** いずれかのシーズンで救援自責点が未入力 */
+  reliefErUnknown: boolean;
+  /** いずれかのシーズンで救援奪三振が未入力 */
+  reliefSoUnknown: boolean;
 };
 
 function fullName(playerId: string, fallback: string) {
@@ -133,6 +140,13 @@ function groupPitcherCareers(
     const reliefIpUnknown = playerLines.some(
       (l) => l.counting.reliefIpOuts == null,
     );
+    const gsUnknown = playerLines.some((l) => l.counting.gs == null);
+    const reliefErUnknown = playerLines.some(
+      (l) => l.counting.reliefEr == null,
+    );
+    const reliefSoUnknown = playerLines.some(
+      (l) => l.counting.reliefSo == null,
+    );
     out.push({
       playerId,
       playerName: fullName(playerId, playerLines[0]!.playerName),
@@ -142,6 +156,9 @@ function groupPitcherCareers(
       counting,
       derived: computePitcherDerived(counting),
       reliefIpUnknown,
+      gsUnknown,
+      reliefErUnknown,
+      reliefSoUnknown,
     });
   }
   return out;
@@ -236,10 +253,13 @@ function careerPitcherValue(
     case "qs":
       return c.qs ?? null;
     case "qsRate":
+      if (bundle.gsUnknown) return null;
       return d.qsRate;
     case "reliefEra":
+      if (bundle.reliefIpUnknown || bundle.reliefErUnknown) return null;
       return reliefEra;
     case "reliefSoRate":
+      if (bundle.reliefIpUnknown || bundle.reliefSoUnknown) return null;
       return reliefSoRate;
     default:
       return null;
@@ -311,20 +331,49 @@ function eligibleCareerPitcher(
         unknown: false,
       };
     case "wins_13":
+      // 通算では使わない（定義上はシーズン用）。互換のため ip_100 相当へ寄せる。
+      return eligibleCareerPitcher(
+        bundle,
+        { ...def, eligibility: "ip_100" },
+        q,
+      );
+    case "ip_100": {
+      const decisions = (c.w ?? 0) + (c.l ?? 0);
+      if (def.id === "winPct" && decisions <= 0) {
+        return { ok: false, unknown: false };
+      }
+      if (def.id === "qsRate") {
+        if (bundle.gsUnknown) return { ok: false, unknown: true };
+        if ((c.gs ?? 0) <= 0) return { ok: false, unknown: false };
+      }
       return {
-        ok: (c.w ?? 0) >= MIN_WINS_FOR_WIN_PCT * n,
+        ok: c.ipOuts >= q.ip100OutsPerSeason * n,
         unknown: false,
       };
+    }
     case "relief_30": {
-      const { class: pClass } = classifyPitcherWorkload(c.g, c.gs ?? null);
-      if (pClass === "unknown") return { ok: false, unknown: true };
-      if (pClass !== "reliever") return { ok: false, unknown: false };
+      // 専用の救援登板数フィールドは未保存。gs があるときのみ g−gs を推定に使う。
+      // 総投球回・総自責点を救援として流用はしない（reliefIpOuts / reliefEr / reliefSo のみ）。
       if (bundle.reliefIpUnknown || c.reliefIpOuts == null) {
         return { ok: false, unknown: true };
       }
-      const reliefIp = c.reliefIpOuts / 3;
+      if (bundle.gsUnknown || c.gs == null) {
+        return { ok: false, unknown: true };
+      }
+      if (def.id === "reliefEra" && (bundle.reliefErUnknown || c.reliefEr == null)) {
+        return { ok: false, unknown: true };
+      }
+      if (
+        def.id === "reliefSoRate" &&
+        (bundle.reliefSoUnknown || c.reliefSo == null)
+      ) {
+        return { ok: false, unknown: true };
+      }
+      const reliefApps = Math.max(0, c.g - c.gs);
       return {
-        ok: reliefIp >= q.reliefIpPerSeason * n,
+        ok:
+          c.reliefIpOuts >= q.reliefIpOutsPerSeason * n &&
+          reliefApps >= q.reliefGPerSeason * n,
         unknown: false,
       };
     }
@@ -333,16 +382,18 @@ function eligibleCareerPitcher(
   }
 }
 
-/** 同値は同順位。10位タイは全員含める */
-function rankTop10Tied(
+/** 同値は同順位。上位枠内の同順位は全員含める */
+function rankTopTied(
   rows: {
     playerId: string;
     playerName: string;
     teamShort: string;
     year: number;
     value: number;
+    valueText?: string;
   }[],
   def: RecordsStatDef,
+  limit: number = RECORDS_CAREER_RANK_LIMIT,
 ): RecordsRankEntry[] {
   const sorted = [...rows].sort((a, b) => {
     if (def.lowerIsBetter) return a.value - b.value;
@@ -356,7 +407,7 @@ function rankTop10Tied(
     let j = i;
     while (j < sorted.length && sorted[j]!.value === score) j += 1;
     const rank = i + 1;
-    if (rank > 10) break;
+    if (rank > limit) break;
     for (let k = i; k < j; k += 1) {
       const row = sorted[k]!;
       out.push({
@@ -368,7 +419,8 @@ function rankTop10Tied(
         seasonLabel: String(row.year),
         teamShort: row.teamShort,
         value: row.value,
-        valueText: formatRecordsValue(def.format, row.value),
+        valueText:
+          row.valueText ?? formatRecordsValue(def.format, row.value),
       });
     }
     i = j;
@@ -382,6 +434,7 @@ type CareerPoolRow = {
   teamShort: string;
   year: number;
   value: number;
+  valueText?: string;
 };
 
 function buildCareerPool(
@@ -391,6 +444,7 @@ function buildCareerPool(
   pool: CareerPoolRow[];
   unknownCount: number;
   empty: boolean;
+  qsOverGsCount: number;
 } {
   const lines = listSeasonLines().filter(
     (l) => l.role === def.role && l.scope === scope,
@@ -398,11 +452,12 @@ function buildCareerPool(
   const q = careerQualifiersForScope(scope);
 
   if (lines.length === 0) {
-    return { pool: [], unknownCount: 0, empty: true };
+    return { pool: [], unknownCount: 0, empty: true, qsOverGsCount: 0 };
   }
 
   const pool: CareerPoolRow[] = [];
   let unknownCount = 0;
+  let qsOverGsCount = 0;
 
   if (def.role === "batter") {
     const bundles = groupBatterCareers(
@@ -437,31 +492,58 @@ function buildCareerPool(
         continue;
       }
       if (!el.ok) continue;
-      if (def.id === "qsRate" && (bundle.counting.gs ?? 0) <= 0) continue;
       const value = careerPitcherValue(bundle, def);
       if (value == null || !Number.isFinite(value)) continue;
+
+      const c = bundle.counting;
+      let valueText: string | undefined;
+      if (def.id === "winPct") {
+        valueText = formatCareerWinPctValueText(
+          value,
+          c.w ?? 0,
+          c.l ?? 0,
+        );
+      } else if (def.id === "qsRate") {
+        const qs = c.qs ?? 0;
+        const gs = c.gs ?? 0;
+        if (gs > 0 && qs > gs) {
+          qsOverGsCount += 1;
+        }
+        // 矛盾があっても数値は補正せずそのまま表示
+        valueText = formatCareerQsRateValueText(value, qs, gs);
+      }
+
       pool.push({
         playerId: bundle.playerId,
         playerName: bundle.playerName,
         teamShort: bundle.teamShort,
         year: bundle.seasonCount,
         value,
+        valueText,
       });
     }
   }
 
-  return { pool, unknownCount, empty: false };
+  return { pool, unknownCount, empty: false, qsOverGsCount };
 }
 
 export function buildCareerRecordsBoard(
   def: RecordsStatDef,
   scope: SeasonLineScope = "pennant",
 ): RecordsBoard {
-  const { pool, unknownCount, empty } = buildCareerPool(def, scope);
+  // 通算のみ勝率・QS率を投球回規定へ（シーズン記録の定義を壊さない）
+  const careerDef: RecordsStatDef =
+    def.id === "winPct" || def.id === "qsRate"
+      ? { ...def, eligibility: "ip_100" }
+      : def;
+  const { pool, unknownCount, empty, qsOverGsCount } = buildCareerPool(
+    careerDef,
+    scope,
+  );
 
   if (empty) {
     return {
-      def,
+      def: careerDef,
       entries: [],
       emptyReason:
         scope === "interleague"
@@ -470,16 +552,24 @@ export function buildCareerRecordsBoard(
     };
   }
 
-  const entries = rankTop10Tied(pool, def);
+  const entries = rankTopTied(pool, careerDef);
   let emptyReason: string | undefined;
   if (entries.length === 0) {
-    emptyReason =
-      unknownCount > 0
-        ? "規定判定に必要なデータが不足しているため、表示できる記録がありません。"
-        : "該当する正式記録がありません。";
+    if (unknownCount > 0 && careerDef.eligibility === "relief_30") {
+      emptyReason =
+        "救援投球回・救援自責点・救援奪三振、または先発登板数が未入力のため、規定判定できる投手がいません。（救援登板数の専用フィールドは未保存のため、登板−先発で推定しています）";
+    } else if (unknownCount > 0) {
+      emptyReason =
+        "規定判定に必要なデータが不足しているため、表示できる記録がありません。";
+    } else {
+      emptyReason = "該当する正式記録がありません。";
+    }
   }
 
-  return { def, entries, emptyReason };
+  // qsOverGsCount > 0 の場合も数値は補正せずそのまま返す（報告用にカウントのみ保持）
+  void qsOverGsCount;
+
+  return { def: careerDef, entries, emptyReason };
 }
 
 export type PlayerCareerStatCard = {
@@ -492,13 +582,13 @@ export type PlayerCareerStatCard = {
   note?: string;
 };
 
-/** 選手の通算各項目＋歴代順位（TOP10外も含む） */
+/** 選手の通算各項目＋歴代順位（表示枠外も含む） */
 export function getPlayerCareerStatCards(
   playerId: string,
   role: RecordsRole,
   scope: SeasonLineScope = "pennant",
 ): PlayerCareerStatCard[] {
-  return statsForRole(role).map((def) => {
+  return statsForRoleCareer(role).map((def) => {
     const { pool } = buildCareerPool(def, scope);
     const mine = pool.find((p) => p.playerId === playerId);
 
@@ -543,7 +633,33 @@ export function getPlayerCareerStatCards(
       };
     }
 
-    const valueText = formatRecordsValue(def.format, rawValue);
+    let valueText = formatRecordsValue(def.format, rawValue);
+    if (role === "pitcher" && mine) {
+      // mine がある場合は pool 行の注記付き表示を優先
+      if (mine.valueText) valueText = mine.valueText;
+    } else if (role === "pitcher") {
+      const pitchers = lines.filter(
+        (l): l is PitcherSeasonLine => l.role === "pitcher",
+      );
+      const bundle = groupPitcherCareers(pitchers).find(
+        (b) => b.playerId === playerId,
+      );
+      if (bundle) {
+        if (def.id === "winPct") {
+          valueText = formatCareerWinPctValueText(
+            rawValue,
+            bundle.counting.w ?? 0,
+            bundle.counting.l ?? 0,
+          );
+        } else if (def.id === "qsRate") {
+          valueText = formatCareerQsRateValueText(
+            rawValue,
+            bundle.counting.qs ?? 0,
+            bundle.counting.gs ?? 0,
+          );
+        }
+      }
+    }
 
     if (!mine) {
       return {
@@ -572,7 +688,7 @@ export function getPlayerCareerStatCards(
         return {
           def,
           value: rawValue,
-          valueText,
+          valueText: mine.valueText ?? valueText,
           rank,
           ranked: true,
         };
@@ -582,7 +698,7 @@ export function getPlayerCareerStatCards(
     return {
       def,
       value: rawValue,
-      valueText,
+      valueText: mine.valueText ?? valueText,
       rank: null,
       ranked: false,
     };
@@ -593,5 +709,7 @@ export function buildCareerRecordsForRole(
   role: RecordsRole,
   scope: SeasonLineScope = "pennant",
 ): RecordsBoard[] {
-  return statsForRole(role).map((def) => buildCareerRecordsBoard(def, scope));
+  return statsForRoleCareer(role).map((def) =>
+    buildCareerRecordsBoard(def, scope),
+  );
 }

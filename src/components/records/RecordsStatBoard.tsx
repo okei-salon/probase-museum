@@ -5,6 +5,7 @@ import {
   buildCareerRecordsBoard,
   buildSeasonRecordsBoard,
   statsForRole,
+  statsForRoleCareer,
   type RecordsRankEntry,
   type RecordsRole,
   type RecordsStatDef,
@@ -25,13 +26,16 @@ export function RecordsStatBoard({
   scope = "pennant",
 }: RecordsStatBoardProps) {
   const [role, setRole] = useState<RecordsRole>("batter");
-  const defs = useMemo(() => statsForRole(role), [role]);
+  const defs = useMemo(
+    () => (mode === "career" ? statsForRoleCareer(role) : statsForRole(role)),
+    [mode, role],
+  );
   const [statId, setStatId] = useState(defs[0]?.id ?? "avg");
 
   const board = useMemo(() => {
-    const def =
-      statsForRole(role).find((d) => d.id === statId) ??
-      statsForRole(role)[0];
+    const list =
+      mode === "career" ? statsForRoleCareer(role) : statsForRole(role);
+    const def = list.find((d) => d.id === statId) ?? list[0];
     if (!def) {
       return {
         def: null as RecordsStatDef | null,
@@ -74,7 +78,10 @@ export function RecordsStatBoard({
             type="button"
             onClick={() => {
               setRole(r.id);
-              const next = statsForRole(r.id)[0];
+              const next =
+                (mode === "career"
+                  ? statsForRoleCareer(r.id)
+                  : statsForRole(r.id))[0];
               if (next) setStatId(next.id);
             }}
             className={cn(
