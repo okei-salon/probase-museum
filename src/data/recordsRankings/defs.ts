@@ -19,7 +19,7 @@ export type RecordsEligibility =
   | "ip_qualified" // 規定投球回（チーム試合数×1.0 または保存フラグ）
   | "wins_13" // 勝率（シーズン記録）：13勝以上 ※通算は ip_100 を使用
   | "ip_100" // 勝率・QS率：100投球回×シーズン数（アウト数で判定）
-  | "risp_50" // 得点圏打席50以上
+  | "risp_50" // 得点圏打数：シーズン50／通算は CareerQualifiers.rispAbPerSeason（100×N）
   | "cs_30" // 被盗企30以上
   | "relief_30"; // 救援型＋登板30×N・投球回30×N（値は通算ERA/K9）
 
@@ -62,6 +62,9 @@ export type CareerQualifiers = {
 /** RECORDS 通算ランキングの表示上限（同順位は枠内に全員含める） */
 export const RECORDS_CAREER_RANK_LIMIT = 30;
 
+/** 通算得点圏打率：1シーズンあたり最低得点圏打数 */
+export const CAREER_RISP_AB_PER_SEASON = 100;
+
 /** 勝率・QS率：1シーズンあたり100投球回＝300アウト */
 export const CAREER_IP_100_OUTS_PER_SEASON = 300;
 
@@ -72,8 +75,12 @@ function buildCareerQualifiers(gamesPerSeason: number): CareerQualifiers {
     paPerSeason: requiredPlateAppearances(gamesPerSeason),
     ipPerSeason: gamesPerSeason,
     ipOutsPerSeason: requiredIpOuts(gamesPerSeason),
-    // 得点圏・盗塁阻止・救援は143試合基準を試合数比で縮小（交流戦で到達不能にしない）
-    rispAbPerSeason: Math.max(1, Math.floor(50 * scale)),
+    // 得点圏通算は100打数×シーズン。交流戦は試合数比で縮小（到達不能にしない）
+    rispAbPerSeason: Math.max(
+      1,
+      Math.round(CAREER_RISP_AB_PER_SEASON * scale),
+    ),
+    // 盗塁阻止・救援は143試合基準を試合数比で縮小
     csAttemptedPerSeason: Math.max(1, Math.floor(30 * scale)),
     reliefIpPerSeason: reliefIp,
     reliefIpOutsPerSeason: reliefIp * 3,
@@ -275,7 +282,7 @@ export function careerStatDescription(def: RecordsStatDef): string {
     case "ops":
       return "出塁率＋長打率。対象：規定打席（443打席×シーズン数）以上。";
     case "risp":
-      return "得点圏での打率。対象：得点圏打数50×シーズン数以上。";
+      return "得点圏に走者がいる場面での打率。対象：得点圏100打数×シーズン数以上。";
     case "sac":
       return "通算犠打数。多い順に表示。";
     case "csRate":
@@ -362,4 +369,13 @@ export function formatCareerHqsRateValueText(
   gs: number,
 ): string {
   return `${formatRecordsValue("pct", hqsRate)}（${gs}先発／${hqs}HQS）`;
+}
+
+/** 通算得点圏打率の表示：.368（171打数／63安打）※順位は未丸めの rispH÷rispAb */
+export function formatCareerRispValueText(
+  rispAvg: number,
+  rispAb: number,
+  rispH: number,
+): string {
+  return `${formatRecordsValue("avg", rispAvg)}（${rispAb}打数／${rispH}安打）`;
 }

@@ -23,6 +23,7 @@ import {
   careerQualifiersForScope,
   formatCareerHqsRateValueText,
   formatCareerQsRateValueText,
+  formatCareerRispValueText,
   formatCareerWinPctValueText,
   formatRecordsValue,
   RECORDS_CAREER_RANK_LIMIT,
@@ -179,8 +180,13 @@ function careerBatterValue(
       return d.slg;
     case "ops":
       return d.ops;
-    case "risp":
-      return d.rispAvg;
+    case "risp": {
+      // 順位は未丸めの通算 rispH÷rispAb（シーズン率の平均・round3は使わない）
+      const ab = c.rispAb;
+      const h = c.rispH;
+      if (ab == null || ab <= 0 || h == null) return null;
+      return h / ab;
+    }
     case "sac":
       return c.sac ?? null;
     case "csRate":
@@ -291,6 +297,7 @@ function eligibleCareerBatter(
     case "risp_50": {
       if (bundle.rispUnknown) return { ok: false, unknown: true };
       if (c.rispAb == null) return { ok: false, unknown: true };
+      if (c.rispAb <= 0) return { ok: false, unknown: false };
       return {
         ok: c.rispAb >= q.rispAbPerSeason * n,
         unknown: false,
@@ -458,12 +465,21 @@ function buildCareerPool(
       const value = careerBatterValue(bundle, def);
       // 0 / .000 は正式値。null・非有限のみ除外
       if (value == null || !Number.isFinite(value)) continue;
+      let valueText: string | undefined;
+      if (def.id === "risp") {
+        valueText = formatCareerRispValueText(
+          value,
+          bundle.counting.rispAb ?? 0,
+          bundle.counting.rispH ?? 0,
+        );
+      }
       pool.push({
         playerId: bundle.playerId,
         playerName: bundle.playerName,
         teamShort: bundle.teamShort,
         year: bundle.seasonCount,
         value,
+        valueText,
       });
     }
   } else {
@@ -626,9 +642,8 @@ export function getPlayerCareerStatCards(
     }
 
     let valueText = formatRecordsValue(def.format, rawValue);
-    if (role === "pitcher" && mine) {
-      // mine がある場合は pool 行の注記付き表示を優先
-      if (mine.valueText) valueText = mine.valueText;
+    if (mine?.valueText) {
+      valueText = mine.valueText;
     } else if (role === "pitcher") {
       const pitchers = lines.filter(
         (l): l is PitcherSeasonLine => l.role === "pitcher",
@@ -656,6 +671,20 @@ export function getPlayerCareerStatCards(
             bundle.counting.gs ?? 0,
           );
         }
+      }
+    } else if (role === "batter" && def.id === "risp") {
+      const batters = lines.filter(
+        (l): l is BatterSeasonLine => l.role === "batter",
+      );
+      const bundle = groupBatterCareers(batters).find(
+        (b) => b.playerId === playerId,
+      );
+      if (bundle) {
+        valueText = formatCareerRispValueText(
+          rawValue,
+          bundle.counting.rispAb ?? 0,
+          bundle.counting.rispH ?? 0,
+        );
       }
     }
 

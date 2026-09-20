@@ -13,6 +13,7 @@ export {
   careerStatDescription,
   formatCareerHqsRateValueText,
   formatCareerQsRateValueText,
+  formatCareerRispValueText,
   formatCareerWinPctValueText,
   formatRecordsValue,
   statsForRole,
