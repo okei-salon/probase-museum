@@ -242,7 +242,14 @@ function top5(
       qualified: true,
       historyLabel:
         rank === 1
-          ? getTitleHistoryLabel(def.id, league, c.playerId, year, world)
+          ? getTitleHistoryLabel(
+              def.id,
+              league,
+              c.playerId,
+              year,
+              world,
+              c.playerName,
+            )
           : undefined,
     };
   });

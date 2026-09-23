@@ -17,13 +17,18 @@ import {
   normalizeBestNinePosition,
 } from "@/data/awards";
 import { getRegisteredSeasonHighlightStats } from "@/data/playerSeasonStats";
-import { formatSeasonAwardHistory } from "@/lib/awardHistory";
+import {
+  seasonCareerLabelFromOccurrences,
+  type AwardCareerScope,
+  type AwardOccurrence,
+} from "@/lib/awardCareerCount";
 import type { AnnualAwardKind } from "@/lib/sop/rules";
 import {
   AWARD_NONE_PLAYER_ID,
   isRegisteredAwardNone,
 } from "@/lib/import/partnerPaste/awardOutcome";
 import {
+  listRegisteredAwards,
   listRegisteredAwardsForSeason,
   type RegisteredSeasonAward,
 } from "@/data/sop/awardsRegistry";
@@ -45,6 +50,58 @@ function emptyCard(
     position,
     stats: null,
   };
+}
+
+function careerScopeForKind(kind: AnnualAwardKind): AwardCareerScope | null {
+  switch (kind) {
+    case "mvp":
+      return { type: "mvp" };
+    case "rookie":
+      return { type: "rookie" };
+    case "sawamura":
+      return { type: "sawamura" };
+    case "bestNine":
+      return { type: "bestNine" };
+    case "goldenGlove":
+      return { type: "goldenGlove" };
+    case "japanSeriesMvp":
+      return { type: "japanSeriesMvp" };
+    case "interleagueMvp":
+      return { type: "interleagueMvp" };
+    case "monthlyMvp":
+      return null;
+    default:
+      return null;
+  }
+}
+
+function awardToOccurrence(a: RegisteredSeasonAward): AwardOccurrence {
+  return {
+    year: a.year,
+    month: a.month,
+    world: a.world ?? null,
+    slotKey: `${a.league ?? ""}|${a.position ?? ""}`,
+    playerId: a.playerId,
+    playerName: a.playerName,
+  };
+}
+
+function historyLabelForRegistered(
+  a: RegisteredSeasonAward,
+  currentYear: number,
+): string {
+  const scope = careerScopeForKind(a.kind);
+  if (!scope) return "初受賞";
+  const occurrences = listRegisteredAwards()
+    .filter((x) => x.kind === a.kind && !isRegisteredAwardNone(x))
+    .map(awardToOccurrence);
+  return seasonCareerLabelFromOccurrences({
+    scope,
+    occurrences,
+    currentYear,
+    world: a.world ?? null,
+    player: { playerId: a.playerId, playerName: a.playerName },
+  });
 }
 
 function toCard(
@@ -69,7 +126,7 @@ function toCard(
     playerId: a.playerId,
     playerName: a.playerName,
     teamName: a.teamShort ?? "—",
-    historyLabel: formatSeasonAwardHistory([a.year], currentYear),
+    historyLabel: historyLabelForRegistered(a, currentYear),
     league: a.league,
     position: a.position,
     stats,

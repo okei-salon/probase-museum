@@ -198,6 +198,8 @@ type MvpMonthBucket = {
   pitcherEra: string;
   pitcherWins: string;
   pitcherLosses: string;
+  pitcherHp: string;
+  pitcherSaves: string;
   batterName: string;
   batterTeam: string;
   batterAvg: string;
@@ -218,6 +220,8 @@ function emptyMvpBucket(
     pitcherEra: "",
     pitcherWins: "",
     pitcherLosses: "",
+    pitcherHp: "",
+    pitcherSaves: "",
     batterName: "",
     batterTeam: "",
     batterAvg: "",
@@ -278,6 +282,8 @@ function buildMvpDraftFromBucket(
   draft.pitcher.era = parsePartnerNumber(bucket.pitcherEra);
   draft.pitcher.wins = parsePartnerNumber(bucket.pitcherWins);
   draft.pitcher.losses = parsePartnerNumber(bucket.pitcherLosses);
+  draft.pitcher.hp = parsePartnerNumber(bucket.pitcherHp);
+  draft.pitcher.saves = parsePartnerNumber(bucket.pitcherSaves);
   const pr = resolveImportPlayer({
     gameDisplayName: pitcherName,
     team: draft.pitcher.teamName,
@@ -371,6 +377,14 @@ export function parseMonthlyMvpPartner(
     }
     if (key === "PITCHER_LOSSES") {
       bucket.pitcherLosses = val;
+      continue;
+    }
+    if (key === "PITCHER_HP") {
+      bucket.pitcherHp = val;
+      continue;
+    }
+    if (key === "PITCHER_S" || key === "PITCHER_SV" || key === "PITCHER_SAVES") {
+      bucket.pitcherSaves = val;
       continue;
     }
     if (key === "BATTER") {

@@ -27,6 +27,10 @@ export type MonthlyMvpPitcherDraft = {
   era: number | null;
   wins: number | null;
   losses: number | null;
+  /** 任意。中継ぎ・抑え用 */
+  hp: number | null;
+  /** 任意。セーブ */
+  saves: number | null;
   playerRef: PlayerRef;
   resolvedName: string;
 };
@@ -100,6 +104,10 @@ export type SavedMonthlyMvpRecord = {
     era: number;
     wins: number;
     losses: number;
+    /** 任意。未保存の既存データは undefined */
+    hp?: number | null;
+    /** 任意。セーブ。未保存の既存データは undefined */
+    saves?: number | null;
   };
   batter: {
     playerId: string | null;

@@ -497,6 +497,8 @@ export async function processMonthlyMvpByTemplate(
       era: asNumber(values.pitcher_era),
       wins: asNumber(values.pitcher_wins),
       losses: asNumber(values.pitcher_losses),
+      hp: null,
+      saves: null,
       playerRef: pitcherMatch.playerRef,
       resolvedName: pitcherMatch.displayName,
     },
@@ -613,6 +615,8 @@ function emptyDraft(): MonthlyMvpImportDraft {
       era: null,
       wins: null,
       losses: null,
+      hp: null,
+      saves: null,
       playerRef: createUnknownPlayerRef({
         gameDisplayName: "",
         team: "",

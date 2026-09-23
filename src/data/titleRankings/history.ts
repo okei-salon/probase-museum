@@ -1,4 +1,8 @@
-import { formatSeasonAwardHistory } from "@/lib/awardHistory";
+import {
+  seasonCareerLabelFromOccurrences,
+  type AwardOccurrence,
+} from "@/lib/awardCareerCount";
+import { sameAwardPlayer } from "@/lib/awardPlayerNormalize";
 import type { LeagueSide } from "@/data/playerStats";
 import {
   matchSeason,
@@ -187,20 +191,50 @@ export function getTitleHistoryLabel(
   playerId: string,
   currentYear: number,
   world?: SeasonWorld | null,
+  playerName?: string,
 ): string {
   const w = normalizeSeasonWorld(world);
-  const years = listTitleWinHistory()
+  const player = {
+    playerId,
+    playerName: playerName ?? "",
+  };
+  const occurrences: AwardOccurrence[] = listTitleWinHistory()
     .filter(
       (r) =>
         r.titleId === titleId &&
         r.league === league &&
-        r.playerId === playerId &&
         (r.rank ?? 1) === 1 &&
         r.year <= currentYear &&
-        normalizeSeasonWorld(r.world) === w,
+        normalizeSeasonWorld(r.world) === w &&
+        sameAwardPlayer(player, {
+          playerId: r.playerId,
+          playerName: r.playerName ?? playerName ?? "",
+        }),
     )
-    .map((r) => r.year);
-  // 当年1位を含めて判定
-  if (!years.includes(currentYear)) years.push(currentYear);
-  return formatSeasonAwardHistory(years, currentYear);
+    .map((r) => ({
+      year: r.year,
+      world: r.world ?? null,
+      slotKey: r.league,
+      playerId: r.playerId,
+      playerName: r.playerName ?? playerName ?? "",
+    }));
+
+  // 当年1位を履歴に含めて判定（未保存でも表示できる）
+  if (!occurrences.some((o) => o.year === currentYear)) {
+    occurrences.push({
+      year: currentYear,
+      world: w,
+      slotKey: league,
+      playerId,
+      playerName: playerName ?? "",
+    });
+  }
+
+  return seasonCareerLabelFromOccurrences({
+    scope: { type: "title", titleId, league },
+    occurrences,
+    currentYear,
+    world: w,
+    player,
+  });
 }

@@ -273,6 +273,8 @@ export function MonthlyMvpReview({
         era: synced.pitcher.era!,
         wins: synced.pitcher.wins!,
         losses: synced.pitcher.losses!,
+        hp: synced.pitcher.hp ?? null,
+        saves: synced.pitcher.saves ?? null,
       },
       batter: {
         playerId: batterId,
@@ -478,7 +480,7 @@ export function MonthlyMvpReview({
               </button>
             ) : null}
           </p>
-          <div className="mt-2 grid grid-cols-3 gap-2">
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
             <Field label="防御率">
               <input
                 className={inputClass}
@@ -508,6 +510,29 @@ export function MonthlyMvpReview({
                 onChange={(e) =>
                   patchPitcher({
                     losses:
+                      e.target.value === "" ? null : Number(e.target.value),
+                  })
+                }
+              />
+            </Field>
+            <Field label="HP（任意）">
+              <input
+                className={inputClass}
+                value={draft.pitcher.hp ?? ""}
+                onChange={(e) =>
+                  patchPitcher({
+                    hp: e.target.value === "" ? null : Number(e.target.value),
+                  })
+                }
+              />
+            </Field>
+            <Field label="S（任意）">
+              <input
+                className={inputClass}
+                value={draft.pitcher.saves ?? ""}
+                onChange={(e) =>
+                  patchPitcher({
+                    saves:
                       e.target.value === "" ? null : Number(e.target.value),
                   })
                 }

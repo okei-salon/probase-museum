@@ -143,6 +143,11 @@ export function PostseasonPage({
                   {js.mvp.playerName}
                 </p>
                 <p className="mt-1 text-[13px] text-white/80">{js.mvp.teamName}</p>
+                {js.mvp.historyLabel ? (
+                  <p className="mt-1 text-[12px] text-white/55">
+                    {js.mvp.historyLabel}
+                  </p>
+                ) : null}
                 <MvpStats mvp={js.mvp} />
               </div>
             </div>

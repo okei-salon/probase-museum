@@ -48,6 +48,8 @@ export type JapanSeriesMvpAward = {
   playerName: string;
   teamId: TeamId | null;
   teamName: string;
+  /** 通算受賞ラベル（初受賞 / 2年連続2回目 など） */
+  historyLabel?: string;
   /** 打撃指標（投手MVP時は空でも可） */
   avg?: string | null;
   hr?: number | null;

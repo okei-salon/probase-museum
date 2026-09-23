@@ -11,7 +11,10 @@ import { listSavedMonthlyMvpRecords } from "@/data/import/store";
 import type { SavedMonthlyMvpRecord } from "@/data/import/types";
 import { MonthlyWinnerCell } from "@/components/awards/AwardCards";
 import { LeagueTabs } from "@/components/awards/LeagueTabs";
-import { formatMonthlyMvpCareerLabel } from "@/lib/awardHistory";
+import {
+  countMonthlyMvpCareerTimes,
+  formatAwardTimesLabel,
+} from "@/lib/awardCareerCount";
 import {
   allowsLayoutSampleFallback,
   normalizeSeasonWorld,
@@ -31,13 +34,6 @@ type MonthlyMvpBoardProps = {
 
 type MvpRole = "pitcher" | "batter";
 
-type MvpOccurrence = {
-  year: number;
-  world: SeasonWorld | null;
-  league: LeagueSide;
-  month: number;
-};
-
 function emptyMonthlyCard(
   month: number,
   role: MvpRole,
@@ -55,97 +51,28 @@ function emptyMonthlyCard(
   };
 }
 
-function normalizePlayerName(name: string): string {
-  return name.replace(/\s+/g, "").trim();
-}
-
-function isRealPlayerName(name: string): boolean {
-  const n = normalizePlayerName(name);
-  return Boolean(n) && n !== "未登録" && !n.includes("登録待ち");
-}
-
-function occurrenceKey(o: MvpOccurrence, role: MvpRole): string {
-  return `${o.year}|${o.world ?? ""}|${o.league}|${o.month}|${role}`;
-}
-
-function occurrenceSortKey(o: MvpOccurrence): number {
-  const w = o.world === "BLUE" ? 0 : o.world === "RED" ? 1 : 2;
-  const lg = o.league === "central" ? 0 : 1;
-  return o.year * 10000 + o.month * 100 + w * 10 + lg;
-}
-
-/**
- * 選手 × WORLD × 部門（投手/野手）の通算何回目かを返す。
- * - BLUE と RED は合算しない（他WORLD fallback なし）
- * - YEAR をまたいでも同一 WORLD・同一部門なら通算
- * - セ/パは同一部門として通算（YEAR×WORLD×LEAGUE×MONTH で重複排除）
- * - その受賞（current）を含めた回数
- */
-export function countMonthlyMvpCareerTimes(
-  all: SavedMonthlyMvpRecord[],
-  role: MvpRole,
-  player: { playerId: string | null; playerName: string },
-  current: MvpOccurrence,
-): number {
-  if (!isRealPlayerName(player.playerName)) return 1;
-
-  const targetName = normalizePlayerName(player.playerName);
-  const targetId = player.playerId;
-  const currentWorld = normalizeSeasonWorld(current.world);
-  const seen = new Set<string>();
-  const list: MvpOccurrence[] = [];
-
-  for (const r of all) {
-    // WORLD 厳格分離：選択中 WORLD 以外は参照しない
-    if (normalizeSeasonWorld(r.world) !== currentWorld) continue;
-
-    const side = role === "pitcher" ? r.pitcher : r.batter;
-    if (!isRealPlayerName(side.playerName)) continue;
-
-    const sameId =
-      Boolean(targetId) &&
-      Boolean(side.playerId) &&
-      targetId === side.playerId;
-    const sameName = normalizePlayerName(side.playerName) === targetName;
-    if (!sameId && !sameName) continue;
-
-    const occ: MvpOccurrence = {
-      year: r.year,
-      world: normalizeSeasonWorld(r.world),
-      league: r.league,
-      month: r.month,
-    };
-    const key = occurrenceKey(occ, role);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    list.push(occ);
-  }
-
-  const curKey = occurrenceKey(current, role);
-  if (!seen.has(curKey)) {
-    list.push(current);
-  }
-
-  list.sort((a, b) => occurrenceSortKey(a) - occurrenceSortKey(b));
-
-  const idx = list.findIndex(
-    (o) =>
-      o.year === current.year &&
-      o.month === current.month &&
-      o.league === current.league &&
-      normalizeSeasonWorld(o.world) === currentWorld,
-  );
-  return idx >= 0 ? idx + 1 : list.length;
-}
-
-function formatPitcherStats(era: number, wins: number, losses: number) {
+function formatPitcherStats(
+  era: number,
+  wins: number,
+  losses: number,
+  hp?: number | null,
+  saves?: number | null,
+) {
   const eraText = Number.isFinite(era) ? era.toFixed(2) : "—";
   const w = Number.isFinite(wins) ? wins : 0;
   const l = Number.isFinite(losses) ? losses : 0;
-  return [
+  const stats: { label: string; value: string }[] = [
     { label: "防御率", value: eraText },
-    { label: "", value: `${w}勝${l}敗` },
+    { label: "", value: `${w}勝` },
+    { label: "", value: `${l}敗` },
   ];
+  if (hp != null && Number.isFinite(hp) && hp >= 1) {
+    stats.push({ label: "", value: `${hp}HP` });
+  }
+  if (saves != null && Number.isFinite(saves) && saves >= 1) {
+    stats.push({ label: "", value: `${saves}S` });
+  }
+  return stats;
 }
 
 function formatBatterStats(
@@ -369,7 +296,7 @@ function mergePitcher(
     playerId: rec.pitcher.playerId ?? fallback.playerId,
     playerName: rec.pitcher.playerName,
     teamName: rec.pitcher.teamName,
-    historyLabel: formatMonthlyMvpCareerLabel(times),
+    historyLabel: formatAwardTimesLabel(times),
     month,
     role: "pitcher",
     league,
@@ -377,6 +304,8 @@ function mergePitcher(
       rec.pitcher.era,
       rec.pitcher.wins,
       rec.pitcher.losses,
+      rec.pitcher.hp,
+      rec.pitcher.saves,
     ),
   };
 }
@@ -407,7 +336,7 @@ function mergeBatter(
     playerId: rec.batter.playerId ?? fallback.playerId,
     playerName: rec.batter.playerName,
     teamName: rec.batter.teamName,
-    historyLabel: formatMonthlyMvpCareerLabel(times),
+    historyLabel: formatAwardTimesLabel(times),
     month,
     role: "batter",
     league,

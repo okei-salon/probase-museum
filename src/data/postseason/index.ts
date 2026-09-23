@@ -14,9 +14,11 @@ import {
   type SeasonWorld,
 } from "@/data/seasons";
 import {
+  listRegisteredAwards,
   listRegisteredAwardsForSeason,
   type RegisteredSeasonAward,
 } from "@/data/sop/awardsRegistry";
+import { seasonCareerLabelFromOccurrences } from "@/lib/awardCareerCount";
 import { resolveMuseumPlayerName } from "@/lib/playerMaster";
 import { postseasonByYear, placeholderSeason } from "./catalog";
 import {
@@ -107,20 +109,55 @@ export function getPostseason(
   return placeholderSeason(yearStr, identity.world);
 }
 
+function japanSeriesMvpHistoryLabel(
+  playerId: string | null,
+  playerName: string,
+  year: number,
+  world: SeasonWorld | null,
+): string {
+  try {
+    const occurrences = listRegisteredAwards()
+      .filter((a) => a.kind === "japanSeriesMvp")
+      .map((a) => ({
+        year: a.year,
+        world: a.world ?? null,
+        playerId: a.playerId,
+        playerName: a.playerName,
+      }));
+    return seasonCareerLabelFromOccurrences({
+      scope: { type: "japanSeriesMvp" },
+      occurrences,
+      currentYear: year,
+      world,
+      player: { playerId, playerName },
+    });
+  } catch {
+    return "初受賞";
+  }
+}
+
 function awardToJapanSeriesMvp(
   a: RegisteredSeasonAward,
 ): JapanSeriesMvpAward {
   const team = a.teamShort
     ? npbTeams.find((t) => t.short === a.teamShort) ?? null
     : null;
+  const playerName = resolveMuseumPlayerName(a.playerId, a.playerName);
+  const world = normalizeSeasonWorld(a.world);
   return {
     award: "japan-series-mvp",
     year: String(a.year),
-    world: normalizeSeasonWorld(a.world),
+    world,
     playerId: a.playerId,
-    playerName: resolveMuseumPlayerName(a.playerId, a.playerName),
+    playerName,
     teamId: (team?.id as TeamId | undefined) ?? null,
     teamName: team?.name ?? a.teamShort ?? "登録待ち",
+    historyLabel: japanSeriesMvpHistoryLabel(
+      a.playerId,
+      playerName,
+      a.year,
+      world,
+    ),
   };
 }
 
@@ -144,10 +181,20 @@ export function getJapanSeriesMvp(
   }
 
   const fromPs = getPostseason(identity).japanSeries.mvp;
+  const playerName = resolveMuseumPlayerName(fromPs.playerId, fromPs.playerName);
+  const world = normalizeSeasonWorld(fromPs.world ?? identity.world);
   return {
     ...fromPs,
-    playerName: resolveMuseumPlayerName(fromPs.playerId, fromPs.playerName),
-    world: normalizeSeasonWorld(fromPs.world ?? identity.world),
+    playerName,
+    world,
+    historyLabel:
+      fromPs.historyLabel ??
+      japanSeriesMvpHistoryLabel(
+        fromPs.playerId,
+        playerName,
+        Number(fromPs.year) || identity.year,
+        world,
+      ),
   };
 }
 

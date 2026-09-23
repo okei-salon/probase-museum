@@ -401,6 +401,8 @@ export function MonthlyMvpImportPanel() {
             era: d.pitcher.era!,
             wins: d.pitcher.wins!,
             losses: d.pitcher.losses!,
+            hp: d.pitcher.hp ?? null,
+            saves: d.pitcher.saves ?? null,
           },
           batter: {
             playerId: batterId,
@@ -543,6 +545,8 @@ export function MonthlyMvpImportPanel() {
                       <th className="px-2 py-1.5 font-normal">防御率</th>
                       <th className="px-2 py-1.5 font-normal">勝</th>
                       <th className="px-2 py-1.5 font-normal">敗</th>
+                      <th className="px-2 py-1.5 font-normal">HP</th>
+                      <th className="px-2 py-1.5 font-normal">S</th>
                       <th className="px-2 py-1.5 font-normal">野手</th>
                       <th className="px-2 py-1.5 font-normal">球団</th>
                       <th className="px-2 py-1.5 font-normal">打率</th>
@@ -595,6 +599,12 @@ export function MonthlyMvpImportPanel() {
                         </td>
                         <td className="px-2 py-1.5 tabular-nums">
                           {d.pitcher.losses ?? "—"}
+                        </td>
+                        <td className="px-2 py-1.5 tabular-nums">
+                          {d.pitcher.hp ?? "—"}
+                        </td>
+                        <td className="px-2 py-1.5 tabular-nums">
+                          {d.pitcher.saves ?? "—"}
                         </td>
                         <td className="px-2 py-1.5 align-top">
                           <PlayerNameAutocomplete
