@@ -42,7 +42,7 @@ function titleKingLabel(titleId: string, baseLabel: string): string {
   if (titleId === "so") return "最多奪三振";
   if (titleId === "h") return "最多安打";
   if (titleId === "sv") return "最多セーブ";
-  if (titleId === "hp") return "最多HP";
+  if (titleId === "hp") return "最多ホールドポイント";
   return `${baseLabel}王`;
 }
 

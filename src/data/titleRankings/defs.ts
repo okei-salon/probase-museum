@@ -227,7 +227,7 @@ export const PITCHER_TITLES: TitleDef[] = [
   },
   {
     id: "hp",
-    label: "ホールド",
+    label: "ホールドポイント（HP）",
     role: "pitcher",
     valueKey: "hp",
     format: "int",

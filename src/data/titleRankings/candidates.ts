@@ -154,8 +154,9 @@ function fromPitcherLine(
       qsRate: d.qsRate ?? 0,
       hqsRate: d.hqsRate ?? 0,
       g: c.g,
-      hp: c.hld ?? c.hp ?? 0,
-      hld: c.hld ?? c.hp ?? 0,
+      /** タイトル「ホールドポイント」は保存済み HP のみ（ホールド数や勝利数からの代用なし） */
+      hp: c.hp ?? 0,
+      hld: c.hld ?? 0,
       sv: c.sv ?? 0,
       reliefEra: reliefEra ?? 0,
       reliefSoRate: reliefSoRate ?? 0,
@@ -177,8 +178,8 @@ function fromPitcherLine(
       qsRate: d.qsRate != null && starterOk,
       hqsRate: d.hqsRate != null && starterOk,
       g: true,
-      hp: c.hld != null || c.hp != null,
-      hld: c.hld != null || c.hp != null,
+      hp: c.hp != null,
+      hld: c.hld != null,
       sv: c.sv != null,
       // 救援タイトルは年度ERA/奪三振率が取れれば対象（救援型・救援IPは不要）
       reliefEra: reliefEra != null,
