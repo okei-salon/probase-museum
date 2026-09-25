@@ -15,13 +15,19 @@ export {
   listPennantSeasonIdentities,
   hydrateSeasonLinesFromCloud,
   restoreEmptyBatterOffenseFromPeers,
+  compactSeasonLinesLocalStorage,
   upsertBatterSeasonLine,
   upsertBatterSeasonLineAsync,
   upsertPitcherSeasonLine,
   upsertPitcherSeasonLineAsync,
   upsertSeasonLine,
   upsertSeasonLineAsync,
+  upsertSeasonLinesLocalBatch,
+  upsertSeasonLinesBatchAsync,
+  syncSeasonLinesToCloud,
+  SEASON_LINES_STORAGE_KEY,
 } from "./store";
+export type { SeasonLinesBatchResult } from "./store";
 export {
   hasOffensiveBatterCounting,
   pickBatterBasePreferringOffense,

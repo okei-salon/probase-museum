@@ -16,6 +16,10 @@ import {
   hydrateLocalArrayFromCloud,
   putMuseumCollectionRecord,
 } from "@/lib/museumCloud/clientSync";
+import {
+  LocalStorageQuotaError,
+  setLocalStorageJson,
+} from "@/lib/museumStorage/localJson";
 import type {
   BatterSeasonLine,
   PitcherSeasonLine,
@@ -24,12 +28,12 @@ import type {
   SeasonLineScope,
 } from "./types";
 import { seasonLineKey } from "./types";
-import {
-  mergeSeasonLinePreferOffense,
-} from "./restoreEmptyBatterOffense";
+import { mergeSeasonLinePreferOffense } from "./restoreEmptyBatterOffense";
 
 const STORAGE_KEY = "probase-museum.season-lines.v1";
 const COLLECTION = "season_lines";
+
+export { STORAGE_KEY as SEASON_LINES_STORAGE_KEY };
 
 function canUseStorage() {
   return typeof window !== "undefined";
@@ -58,6 +62,25 @@ function normalizeLine(line: PlayerSeasonLine): PlayerSeasonLine {
     counting,
     derived: computePitcherDerived(counting),
   };
+}
+
+/**
+ * localStorage には counting を残し derived は省略（読み込み時に再計算）。
+ * 同一データの二重肥大化を抑え、容量超過を緩和する。レコード自体は消さない。
+ */
+function toPersistableSeasonLine(
+  line: PlayerSeasonLine,
+): Record<string, unknown> {
+  const { derived: _derived, ...rest } = line;
+  return rest;
+}
+
+function persistSeasonLinesList(list: PlayerSeasonLine[]): void {
+  if (!canUseStorage()) return;
+  setLocalStorageJson(
+    STORAGE_KEY,
+    list.map((line) => toPersistableSeasonLine(line)),
+  );
 }
 
 /** WORLD 表示順: BLUE → RED → レガシー（null） */
@@ -102,8 +125,36 @@ function readRawSeasonLines(): PlayerSeasonLine[] {
 }
 
 function writeRawSeasonLines(list: PlayerSeasonLine[]): void {
-  if (!canUseStorage()) return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  persistSeasonLinesList(list);
+}
+
+/**
+ * 既存行を削除せず、derived 省略形式へ書き直して容量を確保する。
+ * 失敗してもデータは消さない（書き込み失敗時は旧値が残る）。
+ */
+export function compactSeasonLinesLocalStorage(): {
+  ok: boolean;
+  bytesBefore: number;
+  bytesAfter: number;
+  error?: string;
+} {
+  if (!canUseStorage()) {
+    return { ok: false, bytesBefore: 0, bytesAfter: 0, error: "no_window" };
+  }
+  const before = window.localStorage.getItem(STORAGE_KEY)?.length ?? 0;
+  try {
+    const list = readRawSeasonLines();
+    persistSeasonLinesList(list);
+    const after = window.localStorage.getItem(STORAGE_KEY)?.length ?? 0;
+    return { ok: true, bytesBefore: before, bytesAfter: after };
+  } catch (e) {
+    return {
+      ok: false,
+      bytesBefore: before,
+      bytesAfter: before,
+      error: e instanceof Error ? e.message : "compact_failed",
+    };
+  }
 }
 
 export function listSeasonLines(): PlayerSeasonLine[] {
@@ -145,18 +196,57 @@ export function listSeasonLinesByPlayer(
     .sort(compareSeasonLines);
 }
 
-function upsertSeasonLineLocal(record: PlayerSeasonLine): PlayerSeasonLine {
+function mergeRecordsIntoList(
+  list: PlayerSeasonLine[],
+  records: PlayerSeasonLine[],
+): { list: PlayerSeasonLine[]; saved: PlayerSeasonLine[] } {
+  const next = [...list];
+  const saved: PlayerSeasonLine[] = [];
   const now = new Date().toISOString();
-  const normalized = normalizeLine({
-    ...record,
-    updatedAt: record.updatedAt || now,
-  });
+  for (const record of records) {
+    const normalized = normalizeLine({
+      ...record,
+      updatedAt: record.updatedAt || now,
+    });
+    const idx = next.findIndex((r) => r.id === normalized.id);
+    if (idx >= 0) next[idx] = normalized;
+    else next.push(normalized);
+    saved.push(normalized);
+  }
+  return { list: next, saved };
+}
+
+function writeSeasonLinesWithCompactRetry(list: PlayerSeasonLine[]): void {
+  try {
+    persistSeasonLinesList(list);
+  } catch (e) {
+    if (!(e instanceof LocalStorageQuotaError)) throw e;
+    // 既存キャッシュを derived 省略形へ縮めてから再試行（削除なし）
+    const compacted = compactSeasonLinesLocalStorage();
+    if (!compacted.ok) throw e;
+    persistSeasonLinesList(list);
+  }
+}
+
+function upsertSeasonLineLocal(record: PlayerSeasonLine): PlayerSeasonLine {
   const list = readRawSeasonLines();
-  const idx = list.findIndex((r) => r.id === normalized.id);
-  if (idx >= 0) list[idx] = normalized;
-  else list.push(normalized);
-  writeRawSeasonLines(list);
-  return normalized;
+  const { list: next, saved } = mergeRecordsIntoList(list, [record]);
+  writeSeasonLinesWithCompactRetry(next);
+  return saved[0]!;
+}
+
+/**
+ * 一括 local upsert（localStorage への setItem は1回）。
+ * 同一 id は置換のみ。既存他件は消さない。
+ */
+export function upsertSeasonLinesLocalBatch(
+  records: PlayerSeasonLine[],
+): PlayerSeasonLine[] {
+  if (records.length === 0) return [];
+  const list = readRawSeasonLines();
+  const { list: next, saved } = mergeRecordsIntoList(list, records);
+  writeSeasonLinesWithCompactRetry(next);
+  return saved;
 }
 
 export function upsertSeasonLine(
@@ -182,6 +272,52 @@ export async function upsertSeasonLineAsync(
   return {
     record: saved,
     cloud: { ok: cloud.ok, error: cloud.error },
+  };
+}
+
+export type SeasonLinesBatchResult = {
+  /** localStorage に保存できた件数（upsert 成功） */
+  localSaved: PlayerSeasonLine[];
+  cloudOk: number;
+  cloudFails: Array<{ id: string; playerName: string; error?: string }>;
+  storage: "localStorage";
+  storageKey: string;
+};
+
+/**
+ * 一括: localStorage は1回書き込み → 各行をクラウドへ PUT。
+ * 再実行は同一 id の更新のみ（重複行を増やさない）。
+ */
+export async function upsertSeasonLinesBatchAsync(
+  records: PlayerSeasonLine[],
+): Promise<SeasonLinesBatchResult> {
+  const localSaved = upsertSeasonLinesLocalBatch(records);
+  return syncSeasonLinesToCloud(localSaved);
+}
+
+/** local 済み行のクラウド再送のみ（localStorage は触らない） */
+export async function syncSeasonLinesToCloud(
+  records: PlayerSeasonLine[],
+): Promise<SeasonLinesBatchResult> {
+  let cloudOk = 0;
+  const cloudFails: SeasonLinesBatchResult["cloudFails"] = [];
+  for (const rec of records) {
+    const cloud = await putMuseumCollectionRecord(COLLECTION, rec);
+    if (cloud.ok) cloudOk += 1;
+    else {
+      cloudFails.push({
+        id: rec.id,
+        playerName: rec.playerName,
+        error: cloud.error,
+      });
+    }
+  }
+  return {
+    localSaved: records,
+    cloudOk,
+    cloudFails,
+    storage: "localStorage",
+    storageKey: STORAGE_KEY,
   };
 }
 

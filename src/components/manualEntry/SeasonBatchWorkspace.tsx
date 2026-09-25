@@ -29,10 +29,16 @@ import {
 import {
   getSeasonLine,
   seasonLineKey,
-  upsertBatterSeasonLineAsync,
-  upsertPitcherSeasonLineAsync,
+  syncSeasonLinesToCloud,
+  upsertSeasonLinesBatchAsync,
+  upsertSeasonLinesLocalBatch,
+  type PlayerSeasonLine,
   type SeasonLineScope,
 } from "@/data/playerSeasonLines";
+import {
+  formatStorageFailureMessage,
+  LocalStorageQuotaError,
+} from "@/lib/museumStorage/localJson";
 import {
   DEMO_SEASON_YEAR,
   FORMAL_SEASON_START_YEAR,
@@ -545,9 +551,7 @@ export function SeasonBatchWorkspace({
       }
 
       const now = new Date().toISOString();
-      const recordIds: string[] = [];
-      let cloudFails = 0;
-      let lastCloudError: string | undefined;
+      const pendingLines: PlayerSeasonLine[] = [];
 
       for (const row of resolvedRows) {
         if (!row.playerId) continue;
@@ -572,7 +576,7 @@ export function SeasonBatchWorkspace({
             throw new Error(`${row.playerName}: 投手成績の変換に失敗しました`);
           }
           const derived = computePitcherDerived(counting);
-          const line = {
+          pendingLines.push({
             id,
             playerId: row.playerId,
             playerName: row.playerName,
@@ -581,22 +585,13 @@ export function SeasonBatchWorkspace({
             teamId,
             teamName,
             scope,
-            role: "pitcher" as const,
-            source: "ocr" as const,
+            role: "pitcher",
+            source: "ocr",
             counting,
             derived,
             createdAt: existing?.createdAt ?? now,
             updatedAt: now,
-          };
-          if (useSandbox) {
-            upsertDemoSeasonLine(line);
-          } else {
-            const { cloud } = await upsertPitcherSeasonLineAsync(line);
-            if (!cloud.ok) {
-              cloudFails += 1;
-              lastCloudError = cloud.error;
-            }
-          }
+          });
         } else if (role === "catcher") {
           // 捕手・守備: 同一 WORLD の既存野手行へ CS のみマージ（打撃は絶対に触らない）
           const cs = rowToCatcherCounting(row);
@@ -607,7 +602,7 @@ export function SeasonBatchWorkspace({
             cs,
           );
           const derived = computeBatterDerived(counting);
-          const line = {
+          pendingLines.push({
             id,
             playerId: row.playerId,
             playerName: row.playerName || existingBatter?.playerName || "",
@@ -616,22 +611,13 @@ export function SeasonBatchWorkspace({
             teamId: existingBatter?.teamId || teamId,
             teamName: existingBatter?.teamName || teamName,
             scope,
-            role: "batter" as const,
-            source: existingBatter?.source ?? ("ocr" as const),
+            role: "batter",
+            source: existingBatter?.source ?? "ocr",
             counting,
             derived,
             createdAt: existingBatter?.createdAt ?? now,
             updatedAt: now,
-          };
-          if (useSandbox) {
-            upsertDemoSeasonLine(line);
-          } else {
-            const { cloud } = await upsertBatterSeasonLineAsync(line);
-            if (!cloud.ok) {
-              cloudFails += 1;
-              lastCloudError = cloud.error;
-            }
-          }
+          });
         } else {
           const incoming = rowToBatterCounting(row);
           const existingBatter =
@@ -641,7 +627,7 @@ export function SeasonBatchWorkspace({
             existingBatter?.counting,
           );
           const derived = computeBatterDerived(counting);
-          const line = {
+          pendingLines.push({
             id,
             playerId: row.playerId,
             playerName: row.playerName,
@@ -650,33 +636,93 @@ export function SeasonBatchWorkspace({
             teamId,
             teamName,
             scope,
-            role: "batter" as const,
-            source: "ocr" as const,
+            role: "batter",
+            source: "ocr",
             counting,
             derived,
             createdAt: existingBatter?.createdAt ?? now,
             updatedAt: now,
-          };
-          if (useSandbox) {
-            upsertDemoSeasonLine(line);
-          } else {
-            const { cloud } = await upsertBatterSeasonLineAsync(line);
-            if (!cloud.ok) {
-              cloudFails += 1;
-              lastCloudError = cloud.error;
-            }
-          }
+          });
         }
-        recordIds.push(id);
       }
 
-      if (recordIds.length === 0) {
+      if (pendingLines.length === 0) {
         const msg =
           "成績の保存対象が0件でした。入力内容と球団・選手の紐付けを確認してください。";
         setConfirmError(msg);
         setError(msg);
         return;
       }
+
+      let localCount = 0;
+      let cloudOk = 0;
+      let cloudFailCount = 0;
+      let lastCloudError: string | undefined;
+
+      if (useSandbox) {
+        for (const line of pendingLines) {
+          upsertDemoSeasonLine(line);
+        }
+        localCount = pendingLines.length;
+      } else {
+        try {
+          const batch = await upsertSeasonLinesBatchAsync(pendingLines);
+          localCount = batch.localSaved.length;
+          cloudOk = batch.cloudOk;
+          cloudFailCount = batch.cloudFails.length;
+          lastCloudError = batch.cloudFails[0]?.error;
+        } catch (e) {
+          // バッチ失敗時: 可能なら1件ずつ保存して部分成功を報告（同一 id 更新のみ）
+          if (
+            e instanceof LocalStorageQuotaError ||
+            /quota/i.test(e instanceof Error ? e.message : "")
+          ) {
+            const savedIds: string[] = [];
+            for (const line of pendingLines) {
+              try {
+                upsertSeasonLinesLocalBatch([line]);
+                savedIds.push(line.id);
+              } catch {
+                break;
+              }
+            }
+            localCount = savedIds.length;
+            const quotaMsg = formatStorageFailureMessage(e);
+            const msg =
+              localCount > 0
+                ? `${quotaMsg} 端末キャッシュへ ${localCount}/${pendingLines.length} 件まで保存済み（同一選手の再実行は上書きのみ）。クラウド同期は未完了の可能性があります。`
+                : `${quotaMsg} 端末キャッシュへは0/${pendingLines.length} 件（既存データは削除していません）。`;
+            setConfirmError(msg);
+            setError(msg);
+            if (localCount > 0) {
+              // 部分ローカル保存後、保存済み分だけクラウド再送（local は再書き込みしない）
+              try {
+                const partial = pendingLines.filter((l) =>
+                  savedIds.includes(l.id),
+                );
+                const batch = await syncSeasonLinesToCloud(partial);
+                cloudOk = batch.cloudOk;
+                cloudFailCount = batch.cloudFails.length;
+                lastCloudError = batch.cloudFails[0]?.error;
+                setConfirmError(
+                  `${quotaMsg} 端末 ${localCount}/${pendingLines.length} 件保存 / 共有DB同期成功 ${cloudOk}件・失敗 ${cloudFailCount}件${lastCloudError ? `（${lastCloudError}）` : ""}。未保存分は容量確保後に再実行してください（既存 id は重複しません）。`,
+                );
+                setError(null);
+                setMessage(
+                  `部分登録: 端末 ${localCount}/${pendingLines.length}・共有DB ${cloudOk}成功/${cloudFailCount}失敗`,
+                );
+              } catch {
+                /* keep quota message */
+              }
+              notifyImportStoreChanged();
+            }
+            return;
+          }
+          throw e;
+        }
+      }
+
+      const recordIds = pendingLines.map((l) => l.id).slice(0, localCount);
 
       const hist = {
         id: `hist-${Date.now()}`,
@@ -688,7 +734,7 @@ export function SeasonBatchWorkspace({
           role === "pitcher"
             ? ("player_pitching" as const)
             : ("player_batting" as const),
-        summary: `${formatSeasonLineLabel({ year, world })} ${scope === "interleague" ? "交流戦" : ""}${ROLE_OPTIONS.find((r) => r.id === role)?.label ?? ""} ${recordIds.length}人を一括登録`,
+        summary: `${formatSeasonLineLabel({ year, world })} ${scope === "interleague" ? "交流戦" : ""}${ROLE_OPTIONS.find((r) => r.id === role)?.label ?? ""} ${localCount}人を一括登録`,
         recordIds,
       };
       if (useSandbox) appendDemoImportHistory(hist);
@@ -701,16 +747,17 @@ export function SeasonBatchWorkspace({
       setError(null);
       setMessage(
         useSandbox
-          ? `${recordIds.length}人分を分離デモ領域に登録しました（SEASONSには反映されません）。`
-          : cloudFails > 0
-            ? `${recordIds.length}人分をこの端末に保存しました（共有DB同期失敗 ${cloudFails}件${lastCloudError ? `: ${lastCloudError}` : ""}）。ページ再読み込みで再送を試みます。`
+          ? `${localCount}人分を分離デモ領域に登録しました（SEASONSには反映されません）。`
+          : cloudFailCount > 0
+            ? `${localCount}人分を端末キャッシュ（localStorage）へ保存。共有DB同期は成功 ${cloudOk}件 / 失敗 ${cloudFailCount}件${lastCloudError ? `: ${lastCloudError}` : ""}。再実行は同一 id の更新のみです。`
             : year === DEMO_SEASON_YEAR
-              ? `${recordIds.length}人分を正式ストアへ登録しました。SEASONS → ${DEMO_SEASON_YEAR} → 個人成績で確認できます。`
-              : `${recordIds.length}人分を登録しました。同一選手・同一シーズン（WORLD×年度${scope === "interleague" ? "・交流戦" : ""}）は1件に統合済みです。`,
+              ? `${localCount}人分を正式ストアへ登録しました。SEASONS → ${DEMO_SEASON_YEAR} → 個人成績で確認できます。`
+              : `${localCount}人分を登録しました（端末キャッシュ＋共有DB同期 ${cloudOk}件）。同一選手・同一シーズン（WORLD×年度${scope === "interleague" ? "・交流戦" : ""}）は1件に統合済みです。`,
       );
       setSession(createEmptySession(role, year));
     } catch (e) {
-      const msg = `一括登録に失敗しました: ${e instanceof Error ? e.message : "不明なエラー"}`;
+      const detail = formatStorageFailureMessage(e);
+      const msg = `一括登録に失敗しました: ${detail}`;
       setConfirmError(msg);
       setError(msg);
     } finally {
