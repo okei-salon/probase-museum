@@ -16,8 +16,11 @@ export {
   hydrateSeasonLinesFromCloud,
   restoreEmptyBatterOffenseFromPeers,
   upsertBatterSeasonLine,
+  upsertBatterSeasonLineAsync,
   upsertPitcherSeasonLine,
+  upsertPitcherSeasonLineAsync,
   upsertSeasonLine,
+  upsertSeasonLineAsync,
 } from "./store";
 export {
   hasOffensiveBatterCounting,

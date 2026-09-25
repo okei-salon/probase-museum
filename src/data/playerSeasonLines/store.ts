@@ -84,7 +84,18 @@ function readRawSeasonLines(): PlayerSeasonLine[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as PlayerSeasonLine[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.map(normalizeLine);
+    const out: PlayerSeasonLine[] = [];
+    for (const item of parsed) {
+      try {
+        out.push(normalizeLine(item));
+      } catch {
+        // 壊れた1件で全件を空にしない（誤消去防止）
+        if (item && typeof item === "object" && "id" in item) {
+          out.push(item as PlayerSeasonLine);
+        }
+      }
+    }
+    return out;
   } catch {
     return [];
   }
@@ -134,9 +145,7 @@ export function listSeasonLinesByPlayer(
     .sort(compareSeasonLines);
 }
 
-export function upsertSeasonLine(
-  record: PlayerSeasonLine,
-): PlayerSeasonLine {
+function upsertSeasonLineLocal(record: PlayerSeasonLine): PlayerSeasonLine {
   const now = new Date().toISOString();
   const normalized = normalizeLine({
     ...record,
@@ -147,8 +156,33 @@ export function upsertSeasonLine(
   if (idx >= 0) list[idx] = normalized;
   else list.push(normalized);
   writeRawSeasonLines(list);
+  return normalized;
+}
+
+export function upsertSeasonLine(
+  record: PlayerSeasonLine,
+): PlayerSeasonLine {
+  const normalized = upsertSeasonLineLocal(record);
   void putMuseumCollectionRecord(COLLECTION, normalized);
   return normalized;
+}
+
+/**
+ * local upsert → クラウド PUT を await。失敗しても local は残す。
+ * 同一 id のみ置換（他選手・他WORLDは消さない）。
+ */
+export async function upsertSeasonLineAsync(
+  record: PlayerSeasonLine,
+): Promise<{
+  record: PlayerSeasonLine;
+  cloud: { ok: boolean; error?: string };
+}> {
+  const saved = upsertSeasonLineLocal(record);
+  const cloud = await putMuseumCollectionRecord(COLLECTION, saved);
+  return {
+    record: saved,
+    cloud: { ok: cloud.ok, error: cloud.error },
+  };
 }
 
 export function upsertBatterSeasonLine(
@@ -161,6 +195,32 @@ export function upsertPitcherSeasonLine(
   record: PitcherSeasonLine,
 ): PitcherSeasonLine {
   return upsertSeasonLine(record) as PitcherSeasonLine;
+}
+
+export async function upsertBatterSeasonLineAsync(
+  record: BatterSeasonLine,
+): Promise<{
+  record: BatterSeasonLine;
+  cloud: { ok: boolean; error?: string };
+}> {
+  const result = await upsertSeasonLineAsync(record);
+  return {
+    record: result.record as BatterSeasonLine,
+    cloud: result.cloud,
+  };
+}
+
+export async function upsertPitcherSeasonLineAsync(
+  record: PitcherSeasonLine,
+): Promise<{
+  record: PitcherSeasonLine;
+  cloud: { ok: boolean; error?: string };
+}> {
+  const result = await upsertSeasonLineAsync(record);
+  return {
+    record: result.record as PitcherSeasonLine,
+    cloud: result.cloud,
+  };
 }
 
 export async function hydrateSeasonLinesFromCloud(): Promise<PlayerSeasonLine[]> {

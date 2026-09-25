@@ -29,8 +29,8 @@ import {
 import {
   getSeasonLine,
   seasonLineKey,
-  upsertBatterSeasonLine,
-  upsertPitcherSeasonLine,
+  upsertBatterSeasonLineAsync,
+  upsertPitcherSeasonLineAsync,
   type SeasonLineScope,
 } from "@/data/playerSeasonLines";
 import {
@@ -126,6 +126,8 @@ export function SeasonBatchWorkspace({
   const [progress, setProgress] = useState("");
   const [editRowId, setEditRowId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [overlayUrl, setOverlayUrl] = useState<string | null>(null);
@@ -175,6 +177,8 @@ export function SeasonBatchWorkspace({
     setSession(createEmptySession(next, year));
     setEditRowId(null);
     setConfirmOpen(false);
+    setSaving(false);
+    setConfirmError(null);
     setMessage(null);
     setError(null);
     setOverlayUrl(null);
@@ -412,240 +416,306 @@ export function SeasonBatchWorkspace({
     return { ok: blockers.length === 0, blockers };
   }
 
-  function saveAll(forceOverwrite: boolean) {
+  async function saveAll(forceOverwrite: boolean) {
+    if (saving) return;
+
+    setConfirmError(null);
+    setError(null);
+    setMessage(null);
+
     const { ok, blockers } = prepareSave();
     if (!ok) {
-      setError(blockers.slice(0, 5).join(" / "));
-      setConfirmOpen(false);
+      const msg = blockers.slice(0, 5).join(" / ");
+      setConfirmError(msg);
+      setError(msg);
       return;
     }
 
-    const useSandbox = shouldUseIsolatedDemoStore(year, world);
-    const lineRole = role === "pitcher" ? "pitcher" : "batter";
+    setSaving(true);
+    try {
+      const useSandbox = shouldUseIsolatedDemoStore(year, world);
+      const lineRole = role === "pitcher" ? "pitcher" : "batter";
 
-    // 既存 playerId の上書き確認を、新規マスター作成より先に行う
-    // （マスターだけ作成されて成績が未保存、の中途半端を減らす）
-    if (!forceOverwrite) {
-      const existingNames: string[] = [];
+      // 既存 playerId の上書き確認を、新規マスター作成より先に行う
+      // （マスターだけ作成されて成績が未保存、の中途半端を減らす）
+      if (!forceOverwrite) {
+        const existingNames: string[] = [];
+        for (const row of session.rows) {
+          if (!row.playerId) continue;
+          const id = seasonLineKey(row.playerId, year, lineRole, scope, world);
+          const existing = useSandbox
+            ? getDemoSeasonLine(id)
+            : getSeasonLine(row.playerId, year, lineRole, scope, world);
+          if (existing) existingNames.push(row.playerName);
+        }
+        if (existingNames.length) {
+          const msg = `既存データあり: ${existingNames.join("、")}。上書きする場合は「上書きして一括登録」を選んでください。`;
+          // モーダル内に表示（ページ側エラーは背面で見えない）
+          setConfirmError(msg);
+          setError(msg);
+          return;
+        }
+      }
+
+      // 1) 新規選手予定を先にマスターへ作成（明示選択のみ）
+      // 2) 続けて同じループ後に成績保存（作成失敗時は成績を書かない）
+      const resolvedRows: SeasonBatchPlayerRow[] = [];
       for (const row of session.rows) {
-        if (!row.playerId) continue;
-        const id = seasonLineKey(row.playerId, year, lineRole, scope, world);
-        const existing = useSandbox
-          ? getDemoSeasonLine(id)
-          : getSeasonLine(row.playerId, year, lineRole, scope, world);
-        if (existing) existingNames.push(row.playerName);
+        if (row.playerId) {
+          resolvedRows.push({ ...row, pendingNewPlayer: false });
+          continue;
+        }
+        if (!row.pendingNewPlayer) continue;
+        const teamId =
+          row.teamId ?? (teamIdFromShort(row.teamShort) as TeamId | undefined);
+        if (!teamId) {
+          const msg = `${row.playerName}: 球団が未設定のため新規登録できません`;
+          setConfirmError(msg);
+          setError(msg);
+          return;
+        }
+        try {
+          const created = registerNewPlayer({
+            fullName: row.playerName.trim(),
+            observation: {
+              gameDisplayName: row.ocrName || row.playerName,
+              team: row.teamShort,
+              year,
+              world,
+              position:
+                role === "pitcher"
+                  ? "投手"
+                  : role === "catcher"
+                    ? "捕手"
+                    : "内野手",
+            },
+            isRealPlayer: true,
+          });
+          resolvedRows.push({
+            ...row,
+            playerId: created.player.playerId,
+            playerName: created.player.fullName,
+            teamId,
+            teamName:
+              row.teamName ?? teamNameFromShort(row.teamShort) ?? row.teamShort,
+            pendingNewPlayer: false,
+            nameStatus: "ok",
+          });
+        } catch (e) {
+          const msg = `${row.playerName}: 選手マスター登録に失敗しました（${e instanceof Error ? e.message : "不明"}）。成績は保存していません。`;
+          setConfirmError(msg);
+          setError(msg);
+          return;
+        }
       }
-      if (existingNames.length) {
-        setError(
-          `既存データあり: ${existingNames.join("、")}。上書きする場合は「上書きして一括登録」を選んでください。`,
-        );
-        return;
-      }
-    }
 
-    // 1) 新規選手予定を先にマスターへ作成（明示選択のみ）
-    // 2) 続けて同じループ後に成績保存（作成失敗時は成績を書かない）
-    const resolvedRows: SeasonBatchPlayerRow[] = [];
-    for (const row of session.rows) {
-      if (row.playerId) {
-        resolvedRows.push({ ...row, pendingNewPlayer: false });
-        continue;
-      }
-      if (!row.pendingNewPlayer) continue;
-      const teamId =
-        row.teamId ?? (teamIdFromShort(row.teamShort) as TeamId | undefined);
-      if (!teamId) {
-        setError(`${row.playerName}: 球団が未設定のため新規登録できません`);
-        setConfirmOpen(false);
+      if (resolvedRows.length === 0) {
+        const msg =
+          "登録対象の選手がいません。既存選手の選択または「新規選手として登録」を確認してください。";
+        setConfirmError(msg);
+        setError(msg);
         return;
       }
-      try {
-        const created = registerNewPlayer({
-          fullName: row.playerName.trim(),
-          observation: {
-            gameDisplayName: row.ocrName || row.playerName,
-            team: row.teamShort,
-            year,
-            world,
-            position:
-              role === "pitcher"
-                ? "投手"
-                : role === "catcher"
-                  ? "捕手"
-                  : "内野手",
-          },
-          isRealPlayer: true,
-        });
-        resolvedRows.push({
-          ...row,
-          playerId: created.player.playerId,
-          playerName: created.player.fullName,
-          teamId,
-          teamName:
-            row.teamName ?? teamNameFromShort(row.teamShort) ?? row.teamShort,
-          pendingNewPlayer: false,
-          nameStatus: "ok",
-        });
-      } catch (e) {
-        setError(
-          `${row.playerName}: 選手マスター登録に失敗しました（${e instanceof Error ? e.message : "不明"}）。成績は保存していません。`,
-        );
-        setConfirmOpen(false);
-        return;
-      }
-    }
 
-    // 新規作成で既存選手に解決された場合の上書き確認
-    if (!forceOverwrite) {
-      const existingNames: string[] = [];
+      // 新規作成で既存選手に解決された場合の上書き確認
+      if (!forceOverwrite) {
+        const existingNames: string[] = [];
+        for (const row of resolvedRows) {
+          if (!row.playerId) continue;
+          const existing = useSandbox
+            ? getDemoSeasonLine(
+                seasonLineKey(row.playerId, year, lineRole, scope, world),
+              )
+            : getSeasonLine(row.playerId, year, lineRole, scope, world);
+          if (existing) existingNames.push(row.playerName);
+        }
+        if (existingNames.length) {
+          setSession((s) => ({
+            ...s,
+            rows: s.rows.map((r) => {
+              const hit = resolvedRows.find((x) => x.rowId === r.rowId);
+              return hit ?? r;
+            }),
+          }));
+          const msg = `既存データあり: ${existingNames.join("、")}。上書きする場合は「上書きして一括登録」を選んでください。`;
+          setConfirmError(msg);
+          setError(msg);
+          return;
+        }
+      }
+
+      const now = new Date().toISOString();
+      const recordIds: string[] = [];
+      let cloudFails = 0;
+      let lastCloudError: string | undefined;
+
       for (const row of resolvedRows) {
         if (!row.playerId) continue;
+        const teamId =
+          row.teamId ?? (teamIdFromShort(row.teamShort) as TeamId | undefined);
+        const teamName =
+          row.teamName ?? teamNameFromShort(row.teamShort) ?? row.teamShort;
+        if (!teamId) {
+          throw new Error(
+            `${row.playerName}: 球団が未設定のため成績を保存できません`,
+          );
+        }
+
         const id = seasonLineKey(row.playerId, year, lineRole, scope, world);
         const existing = useSandbox
           ? getDemoSeasonLine(id)
           : getSeasonLine(row.playerId, year, lineRole, scope, world);
-        if (existing) existingNames.push(row.playerName);
+
+        if (lineRole === "pitcher") {
+          const counting = rowToPitcherCounting(row);
+          if (!counting) {
+            throw new Error(`${row.playerName}: 投手成績の変換に失敗しました`);
+          }
+          const derived = computePitcherDerived(counting);
+          const line = {
+            id,
+            playerId: row.playerId,
+            playerName: row.playerName,
+            year,
+            world,
+            teamId,
+            teamName,
+            scope,
+            role: "pitcher" as const,
+            source: "ocr" as const,
+            counting,
+            derived,
+            createdAt: existing?.createdAt ?? now,
+            updatedAt: now,
+          };
+          if (useSandbox) {
+            upsertDemoSeasonLine(line);
+          } else {
+            const { cloud } = await upsertPitcherSeasonLineAsync(line);
+            if (!cloud.ok) {
+              cloudFails += 1;
+              lastCloudError = cloud.error;
+            }
+          }
+        } else if (role === "catcher") {
+          // 捕手・守備: 同一 WORLD の既存野手行へ CS のみマージ（打撃は絶対に触らない）
+          const cs = rowToCatcherCounting(row);
+          const existingBatter =
+            existing && existing.role === "batter" ? existing : null;
+          const counting = applyCatcherCsToCounting(
+            existingBatter?.counting,
+            cs,
+          );
+          const derived = computeBatterDerived(counting);
+          const line = {
+            id,
+            playerId: row.playerId,
+            playerName: row.playerName || existingBatter?.playerName || "",
+            year,
+            world,
+            teamId: existingBatter?.teamId || teamId,
+            teamName: existingBatter?.teamName || teamName,
+            scope,
+            role: "batter" as const,
+            source: existingBatter?.source ?? ("ocr" as const),
+            counting,
+            derived,
+            createdAt: existingBatter?.createdAt ?? now,
+            updatedAt: now,
+          };
+          if (useSandbox) {
+            upsertDemoSeasonLine(line);
+          } else {
+            const { cloud } = await upsertBatterSeasonLineAsync(line);
+            if (!cloud.ok) {
+              cloudFails += 1;
+              lastCloudError = cloud.error;
+            }
+          }
+        } else {
+          const incoming = rowToBatterCounting(row);
+          const existingBatter =
+            existing && existing.role === "batter" ? existing : null;
+          const counting = mergeBatterCountingPreserveCatcherCs(
+            incoming,
+            existingBatter?.counting,
+          );
+          const derived = computeBatterDerived(counting);
+          const line = {
+            id,
+            playerId: row.playerId,
+            playerName: row.playerName,
+            year,
+            world,
+            teamId,
+            teamName,
+            scope,
+            role: "batter" as const,
+            source: "ocr" as const,
+            counting,
+            derived,
+            createdAt: existingBatter?.createdAt ?? now,
+            updatedAt: now,
+          };
+          if (useSandbox) {
+            upsertDemoSeasonLine(line);
+          } else {
+            const { cloud } = await upsertBatterSeasonLineAsync(line);
+            if (!cloud.ok) {
+              cloudFails += 1;
+              lastCloudError = cloud.error;
+            }
+          }
+        }
+        recordIds.push(id);
       }
-      if (existingNames.length) {
-        setSession((s) => ({
-          ...s,
-          rows: s.rows.map((r) => {
-            const hit = resolvedRows.find((x) => x.rowId === r.rowId);
-            return hit ?? r;
-          }),
-        }));
-        setError(
-          `既存データあり: ${existingNames.join("、")}。上書きする場合は「上書きして一括登録」を選んでください。`,
-        );
+
+      if (recordIds.length === 0) {
+        const msg =
+          "成績の保存対象が0件でした。入力内容と球団・選手の紐付けを確認してください。";
+        setConfirmError(msg);
+        setError(msg);
         return;
       }
+
+      const hist = {
+        id: `hist-${Date.now()}`,
+        at: now,
+        year,
+        fileName:
+          session.images.map((i) => i.fileName).join(", ") || "season-batch",
+        screenType:
+          role === "pitcher"
+            ? ("player_pitching" as const)
+            : ("player_batting" as const),
+        summary: `${formatSeasonLineLabel({ year, world })} ${scope === "interleague" ? "交流戦" : ""}${ROLE_OPTIONS.find((r) => r.id === role)?.label ?? ""} ${recordIds.length}人を一括登録`,
+        recordIds,
+      };
+      if (useSandbox) appendDemoImportHistory(hist);
+      else appendImportHistory(hist);
+
+      if (!useSandbox) notifyImportStoreChanged();
+
+      setConfirmOpen(false);
+      setConfirmError(null);
+      setError(null);
+      setMessage(
+        useSandbox
+          ? `${recordIds.length}人分を分離デモ領域に登録しました（SEASONSには反映されません）。`
+          : cloudFails > 0
+            ? `${recordIds.length}人分をこの端末に保存しました（共有DB同期失敗 ${cloudFails}件${lastCloudError ? `: ${lastCloudError}` : ""}）。ページ再読み込みで再送を試みます。`
+            : year === DEMO_SEASON_YEAR
+              ? `${recordIds.length}人分を正式ストアへ登録しました。SEASONS → ${DEMO_SEASON_YEAR} → 個人成績で確認できます。`
+              : `${recordIds.length}人分を登録しました。同一選手・同一シーズン（WORLD×年度${scope === "interleague" ? "・交流戦" : ""}）は1件に統合済みです。`,
+      );
+      setSession(createEmptySession(role, year));
+    } catch (e) {
+      const msg = `一括登録に失敗しました: ${e instanceof Error ? e.message : "不明なエラー"}`;
+      setConfirmError(msg);
+      setError(msg);
+    } finally {
+      setSaving(false);
     }
-
-    const now = new Date().toISOString();
-    const recordIds: string[] = [];
-
-    for (const row of resolvedRows) {
-      if (!row.playerId) continue;
-      const teamId =
-        row.teamId ?? (teamIdFromShort(row.teamShort) as TeamId | undefined);
-      const teamName =
-        row.teamName ?? teamNameFromShort(row.teamShort) ?? row.teamShort;
-      if (!teamId) continue;
-
-      const lineRole = role === "pitcher" ? "pitcher" : "batter";
-      const id = seasonLineKey(row.playerId, year, lineRole, scope, world);
-      const existing = useSandbox
-        ? getDemoSeasonLine(id)
-        : getSeasonLine(row.playerId, year, lineRole, scope, world);
-
-      if (lineRole === "pitcher") {
-        const counting = rowToPitcherCounting(row);
-        if (!counting) continue;
-        const derived = computePitcherDerived(counting);
-        const line = {
-          id,
-          playerId: row.playerId,
-          playerName: row.playerName,
-          year,
-          world,
-          teamId,
-          teamName,
-          scope,
-          role: "pitcher" as const,
-          source: "ocr" as const,
-          counting,
-          derived,
-          createdAt: existing?.createdAt ?? now,
-          updatedAt: now,
-        };
-        if (useSandbox) upsertDemoSeasonLine(line);
-        else upsertPitcherSeasonLine(line);
-      } else if (role === "catcher") {
-        // 捕手・守備: 同一 WORLD の既存野手行へ CS のみマージ（打撃は絶対に触らない）
-        const cs = rowToCatcherCounting(row);
-        const existingBatter =
-          existing && existing.role === "batter" ? existing : null;
-        const counting = applyCatcherCsToCounting(
-          existingBatter?.counting,
-          cs,
-        );
-        const derived = computeBatterDerived(counting);
-        const line = {
-          id,
-          playerId: row.playerId,
-          playerName: row.playerName || existingBatter?.playerName || "",
-          year,
-          world,
-          teamId: existingBatter?.teamId || teamId,
-          teamName: existingBatter?.teamName || teamName,
-          scope,
-          role: "batter" as const,
-          source: existingBatter?.source ?? ("ocr" as const),
-          counting,
-          derived,
-          createdAt: existingBatter?.createdAt ?? now,
-          updatedAt: now,
-        };
-        if (useSandbox) upsertDemoSeasonLine(line);
-        else upsertBatterSeasonLine(line);
-      } else {
-        const incoming = rowToBatterCounting(row);
-        const existingBatter =
-          existing && existing.role === "batter" ? existing : null;
-        const counting = mergeBatterCountingPreserveCatcherCs(
-          incoming,
-          existingBatter?.counting,
-        );
-        const derived = computeBatterDerived(counting);
-        const line = {
-          id,
-          playerId: row.playerId,
-          playerName: row.playerName,
-          year,
-          world,
-          teamId,
-          teamName,
-          scope,
-          role: "batter" as const,
-          source: "ocr" as const,
-          counting,
-          derived,
-          createdAt: existingBatter?.createdAt ?? now,
-          updatedAt: now,
-        };
-        if (useSandbox) upsertDemoSeasonLine(line);
-        else upsertBatterSeasonLine(line);
-      }
-      recordIds.push(id);
-    }
-
-    const hist = {
-      id: `hist-${Date.now()}`,
-      at: now,
-      year,
-      fileName: session.images.map((i) => i.fileName).join(", ") || "season-batch",
-      screenType:
-        role === "pitcher"
-          ? ("player_pitching" as const)
-          : ("player_batting" as const),
-      summary: `${formatSeasonLineLabel({ year, world })} ${scope === "interleague" ? "交流戦" : ""}${ROLE_OPTIONS.find((r) => r.id === role)?.label ?? ""} ${recordIds.length}人を一括登録`,
-      recordIds,
-    };
-    if (useSandbox) appendDemoImportHistory(hist);
-    else appendImportHistory(hist);
-
-    if (!useSandbox) notifyImportStoreChanged();
-
-    setConfirmOpen(false);
-    setError(null);
-    setMessage(
-      useSandbox
-        ? `${recordIds.length}人分を分離デモ領域に登録しました（SEASONSには反映されません）。`
-        : year === DEMO_SEASON_YEAR
-          ? `${recordIds.length}人分を正式ストアへ登録しました。SEASONS → ${DEMO_SEASON_YEAR} → 個人成績で確認できます。`
-          : `${recordIds.length}人分を登録しました。同一選手・同一シーズン（WORLD×年度${scope === "interleague" ? "・交流戦" : ""}）は1件に統合済みです。`,
-    );
-    setSession(createEmptySession(role, year));
   }
 
   return (
@@ -969,9 +1039,10 @@ export function SeasonBatchWorkspace({
           </div>
           <button
             type="button"
-            disabled={!canOpenConfirm}
+            disabled={!canOpenConfirm || saving}
             onClick={() => {
               setError(null);
+              setConfirmError(null);
               const prep = prepareSave();
               if (!prep.ok) {
                 setError(prep.blockers.slice(0, 5).join(" / "));
@@ -981,7 +1052,7 @@ export function SeasonBatchWorkspace({
             }}
             className={cn(
               "rounded-md border px-3 py-2 text-[12px]",
-              !canOpenConfirm
+              !canOpenConfirm || saving
                 ? "cursor-not-allowed border-white/10 text-white/30"
                 : "border-[color:var(--museum-accent,#d4af37)] bg-[color:var(--museum-accent,#d4af37)]/15 text-[color:var(--museum-accent,#d4af37)]",
             )}
@@ -1041,8 +1112,8 @@ export function SeasonBatchWorkspace({
       ) : null}
 
       {confirmOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-lg rounded-xl border border-white/15 bg-[#0c0c0c] p-5">
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 p-4 sm:items-center">
+          <div className="my-auto w-full max-w-lg rounded-xl border border-white/15 bg-[#0c0c0c] p-5 shadow-xl">
             <h3 className="text-[13px] tracking-[0.1em] text-[color:var(--museum-accent,#d4af37)]">
               一括登録の確認
             </h3>
@@ -1066,6 +1137,14 @@ export function SeasonBatchWorkspace({
               <p className="mt-2 text-[12px] text-amber-200">
                 数値要確認があります（ゲーム表示と再計算の差）。問題なければ入力値のまま登録を続行できます。
               </p>
+            ) : null}
+            {confirmError ? (
+              <p className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-100">
+                {confirmError}
+              </p>
+            ) : null}
+            {saving ? (
+              <p className="mt-3 text-[12px] text-white/70">登録処理中です…</p>
             ) : null}
             <ul className="mt-3 max-h-48 space-y-1 overflow-y-auto text-[12px] text-white/75">
               {session.rows.map((r) => {
@@ -1094,24 +1173,31 @@ export function SeasonBatchWorkspace({
             <div className="mt-4 flex flex-wrap justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setConfirmOpen(false)}
-                className="rounded-md border border-white/15 px-3 py-2 text-[12px] text-white/70"
+                disabled={saving}
+                onClick={() => {
+                  if (saving) return;
+                  setConfirmOpen(false);
+                  setConfirmError(null);
+                }}
+                className="rounded-md border border-white/15 px-3 py-2 text-[12px] text-white/70 disabled:opacity-40"
               >
                 戻る
               </button>
               <button
                 type="button"
-                onClick={() => saveAll(true)}
-                className="rounded-md border border-white/20 px-3 py-2 text-[12px] text-white/80"
+                disabled={saving || unresolvedNameCount > 0}
+                onClick={() => void saveAll(true)}
+                className="rounded-md border border-white/20 px-3 py-2 text-[12px] text-white/80 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                上書きして一括登録
+                {saving ? "登録中…" : "上書きして一括登録"}
               </button>
               <button
                 type="button"
-                onClick={() => saveAll(false)}
-                className="rounded-md border border-[color:var(--museum-accent,#d4af37)] bg-[color:var(--museum-accent,#d4af37)]/20 px-3 py-2 text-[12px] text-[color:var(--museum-accent,#d4af37)]"
+                disabled={saving || unresolvedNameCount > 0}
+                onClick={() => void saveAll(false)}
+                className="rounded-md border border-[color:var(--museum-accent,#d4af37)] bg-[color:var(--museum-accent,#d4af37)]/20 px-3 py-2 text-[12px] text-[color:var(--museum-accent,#d4af37)] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                一括登録
+                {saving ? "登録中…" : "一括登録"}
               </button>
             </div>
           </div>
