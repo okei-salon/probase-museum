@@ -25,9 +25,18 @@ export {
   upsertSeasonLinesLocalBatch,
   upsertSeasonLinesBatchAsync,
   syncSeasonLinesToCloud,
+  getSeasonLinesCacheState,
+  resetSeasonLinesCacheForTests,
   SEASON_LINES_STORAGE_KEY,
+  SEASON_LINES_LOCAL_BUDGET_BYTES,
 } from "./store";
 export type { SeasonLinesBatchResult } from "./store";
+export {
+  estimateSeasonLinesLocalCapacity,
+  SEASON_LINE_BYTES_COMPRESSED,
+  SEASON_LINE_BYTES_WITH_DERIVED,
+} from "./capacity";
+export type { SeasonLinesCapacityEstimate } from "./capacity";
 export {
   hasOffensiveBatterCounting,
   pickBatterBasePreferringOffense,

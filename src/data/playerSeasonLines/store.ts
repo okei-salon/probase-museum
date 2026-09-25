@@ -1,3 +1,13 @@
+/**
+ * 個人成績ストア。
+ *
+ * 正本: Neon (museum_documents / season_lines)
+ * localStorage: 未同期 outbox（hydrate 成功後）。hydrate 前は従来どおり全件キャッシュ可。
+ * 実行時メモリ: Neon+outbox のマージ結果（画面の同期読み取り用）
+ *
+ * 既存の未同期行は hydrate 時にアップロードしてからローカルを縮小する。削除・初期化はしない。
+ */
+
 import {
   computeBatterDerived,
   computePitcherDerived,
@@ -13,7 +23,7 @@ import {
   type SeasonWorld,
 } from "@/data/seasons";
 import {
-  hydrateLocalArrayFromCloud,
+  fetchMuseumCollectionRecords,
   putMuseumCollectionRecord,
 } from "@/lib/museumCloud/clientSync";
 import {
@@ -33,10 +43,29 @@ import { mergeSeasonLinePreferOffense } from "./restoreEmptyBatterOffense";
 const STORAGE_KEY = "probase-museum.season-lines.v1";
 const COLLECTION = "season_lines";
 
+/** オリジン全体 ~5MB のうち season-lines に使える現実的予算（他キーと共有） */
+export const SEASON_LINES_LOCAL_BUDGET_BYTES = 2_000_000;
+
 export { STORAGE_KEY as SEASON_LINES_STORAGE_KEY };
+
+/** Neon hydrate 後の実行時キャッシュ（全件）。localStorage には載せていない。 */
+let runtimeCache: PlayerSeasonLine[] | null = null;
+/** true のとき localStorage は未同期 outbox のみを保持する */
+let cloudHydrated = false;
 
 function canUseStorage() {
   return typeof window !== "undefined";
+}
+
+function isStrictlyNewer(
+  a: string | undefined,
+  b: string | undefined,
+): boolean {
+  const ta = Date.parse(a ?? "");
+  const tb = Date.parse(b ?? "");
+  if (!Number.isFinite(ta)) return false;
+  if (!Number.isFinite(tb)) return true;
+  return ta > tb;
 }
 
 function normalizeLine(line: PlayerSeasonLine): PlayerSeasonLine {
@@ -66,7 +95,6 @@ function normalizeLine(line: PlayerSeasonLine): PlayerSeasonLine {
 
 /**
  * localStorage には counting を残し derived は省略（読み込み時に再計算）。
- * 同一データの二重肥大化を抑え、容量超過を緩和する。レコード自体は消さない。
  */
 function toPersistableSeasonLine(
   line: PlayerSeasonLine,
@@ -100,7 +128,7 @@ function compareSeasonLines(a: PlayerSeasonLine, b: PlayerSeasonLine): number {
   );
 }
 
-function readRawSeasonLines(): PlayerSeasonLine[] {
+function readDiskSeasonLines(): PlayerSeasonLine[] {
   if (!canUseStorage()) return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -112,7 +140,6 @@ function readRawSeasonLines(): PlayerSeasonLine[] {
       try {
         out.push(normalizeLine(item));
       } catch {
-        // 壊れた1件で全件を空にしない（誤消去防止）
         if (item && typeof item === "object" && "id" in item) {
           out.push(item as PlayerSeasonLine);
         }
@@ -128,9 +155,13 @@ function writeRawSeasonLines(list: PlayerSeasonLine[]): void {
   persistSeasonLinesList(list);
 }
 
+function readEffectiveLines(): PlayerSeasonLine[] {
+  if (runtimeCache) return runtimeCache;
+  return readDiskSeasonLines();
+}
+
 /**
  * 既存行を削除せず、derived 省略形式へ書き直して容量を確保する。
- * 失敗してもデータは消さない（書き込み失敗時は旧値が残る）。
  */
 export function compactSeasonLinesLocalStorage(): {
   ok: boolean;
@@ -143,7 +174,7 @@ export function compactSeasonLinesLocalStorage(): {
   }
   const before = window.localStorage.getItem(STORAGE_KEY)?.length ?? 0;
   try {
-    const list = readRawSeasonLines();
+    const list = readDiskSeasonLines();
     persistSeasonLinesList(list);
     const after = window.localStorage.getItem(STORAGE_KEY)?.length ?? 0;
     return { ok: true, bytesBefore: before, bytesAfter: after };
@@ -158,13 +189,9 @@ export function compactSeasonLinesLocalStorage(): {
 }
 
 export function listSeasonLines(): PlayerSeasonLine[] {
-  return excludeDemoRecords(readRawSeasonLines());
+  return excludeDemoRecords(readEffectiveLines());
 }
 
-/**
- * シーズン画面用: identity（world + year）に一致する行のみ。
- * BLUE / RED / レガシー・DEMO を matchSeason で厳密に分離する。
- */
 export function listSeasonLinesForSeason(
   identity: SeasonIdentity,
 ): PlayerSeasonLine[] {
@@ -184,10 +211,6 @@ export function getSeasonLine(
   return listSeasonLines().find((r) => r.id === key) ?? null;
 }
 
-/**
- * 選手の全シーズン行（通算・年度別用）。
- * BLUE / RED は別行のまま両方返す（同一年でも合算しない／除外しない）。
- */
 export function listSeasonLinesByPlayer(
   playerId: string,
 ): PlayerSeasonLine[] {
@@ -221,7 +244,6 @@ function writeSeasonLinesWithCompactRetry(list: PlayerSeasonLine[]): void {
     persistSeasonLinesList(list);
   } catch (e) {
     if (!(e instanceof LocalStorageQuotaError)) throw e;
-    // 既存キャッシュを derived 省略形へ縮めてから再試行（削除なし）
     const compacted = compactSeasonLinesLocalStorage();
     if (!compacted.ok) throw e;
     persistSeasonLinesList(list);
@@ -229,38 +251,61 @@ function writeSeasonLinesWithCompactRetry(list: PlayerSeasonLine[]): void {
 }
 
 function upsertSeasonLineLocal(record: PlayerSeasonLine): PlayerSeasonLine {
-  const list = readRawSeasonLines();
-  const { list: next, saved } = mergeRecordsIntoList(list, [record]);
-  writeSeasonLinesWithCompactRetry(next);
+  const current = readEffectiveLines();
+  const { list: next, saved } = mergeRecordsIntoList(current, [record]);
+  runtimeCache = next;
+
+  if (cloudHydrated) {
+    const outbox = mergeRecordsIntoList(readDiskSeasonLines(), saved).list;
+    writeSeasonLinesWithCompactRetry(outbox);
+  } else {
+    writeSeasonLinesWithCompactRetry(next);
+  }
   return saved[0]!;
 }
 
 /**
- * 一括 local upsert（localStorage への setItem は1回）。
- * 同一 id は置換のみ。既存他件は消さない。
+ * 一括 local upsert。
+ * hydrate 後: メモリ全件更新 + localStorage は outbox のみ更新（setItem 1回）。
+ * hydrate 前: 従来どおりディスク全件更新。
  */
 export function upsertSeasonLinesLocalBatch(
   records: PlayerSeasonLine[],
 ): PlayerSeasonLine[] {
   if (records.length === 0) return [];
-  const list = readRawSeasonLines();
-  const { list: next, saved } = mergeRecordsIntoList(list, records);
-  writeSeasonLinesWithCompactRetry(next);
+  const current = readEffectiveLines();
+  const { list: next, saved } = mergeRecordsIntoList(current, records);
+  runtimeCache = next;
+
+  if (cloudHydrated) {
+    const outbox = mergeRecordsIntoList(readDiskSeasonLines(), saved).list;
+    writeSeasonLinesWithCompactRetry(outbox);
+  } else {
+    writeSeasonLinesWithCompactRetry(next);
+  }
   return saved;
+}
+
+function removeSyncedFromOutbox(syncedIds: Set<string>): void {
+  if (!cloudHydrated || syncedIds.size === 0) return;
+  const outbox = readDiskSeasonLines().filter((r) => !syncedIds.has(r.id));
+  try {
+    writeSeasonLinesWithCompactRetry(outbox);
+  } catch {
+    // outbox 整理失敗でもメモリ上の成績は残す
+  }
 }
 
 export function upsertSeasonLine(
   record: PlayerSeasonLine,
 ): PlayerSeasonLine {
   const normalized = upsertSeasonLineLocal(record);
-  void putMuseumCollectionRecord(COLLECTION, normalized);
+  void putMuseumCollectionRecord(COLLECTION, normalized).then((cloud) => {
+    if (cloud.ok) removeSyncedFromOutbox(new Set([normalized.id]));
+  });
   return normalized;
 }
 
-/**
- * local upsert → クラウド PUT を await。失敗しても local は残す。
- * 同一 id のみ置換（他選手・他WORLDは消さない）。
- */
 export async function upsertSeasonLineAsync(
   record: PlayerSeasonLine,
 ): Promise<{
@@ -269,6 +314,7 @@ export async function upsertSeasonLineAsync(
 }> {
   const saved = upsertSeasonLineLocal(record);
   const cloud = await putMuseumCollectionRecord(COLLECTION, saved);
+  if (cloud.ok) removeSyncedFromOutbox(new Set([saved.id]));
   return {
     record: saved,
     cloud: { ok: cloud.ok, error: cloud.error },
@@ -276,35 +322,26 @@ export async function upsertSeasonLineAsync(
 }
 
 export type SeasonLinesBatchResult = {
-  /** localStorage に保存できた件数（upsert 成功） */
   localSaved: PlayerSeasonLine[];
   cloudOk: number;
   cloudFails: Array<{ id: string; playerName: string; error?: string }>;
   storage: "localStorage";
   storageKey: string;
+  mode: "full-mirror" | "outbox";
 };
 
-/**
- * 一括: localStorage は1回書き込み → 各行をクラウドへ PUT。
- * 再実行は同一 id の更新のみ（重複行を増やさない）。
- */
-export async function upsertSeasonLinesBatchAsync(
-  records: PlayerSeasonLine[],
-): Promise<SeasonLinesBatchResult> {
-  const localSaved = upsertSeasonLinesLocalBatch(records);
-  return syncSeasonLinesToCloud(localSaved);
-}
-
-/** local 済み行のクラウド再送のみ（localStorage は触らない） */
 export async function syncSeasonLinesToCloud(
   records: PlayerSeasonLine[],
 ): Promise<SeasonLinesBatchResult> {
   let cloudOk = 0;
   const cloudFails: SeasonLinesBatchResult["cloudFails"] = [];
+  const syncedIds = new Set<string>();
   for (const rec of records) {
     const cloud = await putMuseumCollectionRecord(COLLECTION, rec);
-    if (cloud.ok) cloudOk += 1;
-    else {
+    if (cloud.ok) {
+      cloudOk += 1;
+      syncedIds.add(rec.id);
+    } else {
       cloudFails.push({
         id: rec.id,
         playerName: rec.playerName,
@@ -312,13 +349,22 @@ export async function syncSeasonLinesToCloud(
       });
     }
   }
+  removeSyncedFromOutbox(syncedIds);
   return {
     localSaved: records,
     cloudOk,
     cloudFails,
     storage: "localStorage",
     storageKey: STORAGE_KEY,
+    mode: cloudHydrated ? "outbox" : "full-mirror",
   };
+}
+
+export async function upsertSeasonLinesBatchAsync(
+  records: PlayerSeasonLine[],
+): Promise<SeasonLinesBatchResult> {
+  const localSaved = upsertSeasonLinesLocalBatch(records);
+  return syncSeasonLinesToCloud(localSaved);
 }
 
 export function upsertBatterSeasonLine(
@@ -359,33 +405,107 @@ export async function upsertPitcherSeasonLineAsync(
   };
 }
 
+/**
+ * Neon から一覧取得 → 未同期 local をアップロード → メモリに全件展開 →
+ * localStorage は未同期 outbox のみ残す（同期済みの重複キャッシュを落とす）。
+ * 未同期・アップロード失敗行は絶対に捨てない。
+ */
 export async function hydrateSeasonLinesFromCloud(): Promise<PlayerSeasonLine[]> {
   if (!canUseStorage()) return [];
-  await hydrateLocalArrayFromCloud({
-    collection: COLLECTION,
-    readRaw: readRawSeasonLines,
-    writeRaw: writeRawSeasonLines,
-    normalize: normalizeLine,
-    filterPublic: excludeDemoRecords,
-    // 同一 id の local↔cloud のみ。別 WORLD / legacy / demo からの推測復元はしない
-    mergeOne: mergeSeasonLinePreferOffense,
-  });
+
+  const localBeforeList = readDiskSeasonLines();
+
+  const cloudListRaw =
+    await fetchMuseumCollectionRecords<PlayerSeasonLine>(COLLECTION);
+  if (!cloudListRaw) {
+    runtimeCache = localBeforeList;
+    cloudHydrated = false;
+    return listSeasonLines();
+  }
+
+  const cloudList = cloudListRaw.map(normalizeLine);
+  const cloudById = new Map(cloudList.map((c) => [c.id, c]));
+
+  const pending: PlayerSeasonLine[] = [];
+  for (const local of localBeforeList) {
+    const cloud = cloudById.get(local.id);
+    if (!cloud) {
+      pending.push(local);
+      continue;
+    }
+    if (isStrictlyNewer(local.updatedAt, cloud.updatedAt)) {
+      pending.push(
+        mergeSeasonLinePreferOffense(local, cloud) as PlayerSeasonLine,
+      );
+    }
+  }
+
+  const stillPending: PlayerSeasonLine[] = [];
+  let pendingUploaded = 0;
+  for (const p of pending) {
+    const cloud = await putMuseumCollectionRecord(COLLECTION, p);
+    if (cloud.ok) pendingUploaded += 1;
+    else stillPending.push(p);
+  }
+
+  const map = new Map<string, PlayerSeasonLine>();
+  for (const c of cloudList) map.set(c.id, c);
+  for (const p of stillPending) {
+    const cloud = map.get(p.id);
+    map.set(
+      p.id,
+      cloud
+        ? (mergeSeasonLinePreferOffense(p, cloud) as PlayerSeasonLine)
+        : p,
+    );
+  }
+  // アップロード成功した pending もメモリにはローカル内容を反映
+  for (const p of pending) {
+    if (stillPending.some((x) => x.id === p.id)) continue;
+    map.set(p.id, p);
+  }
+
+  runtimeCache = [...map.values()];
+  cloudHydrated = true;
+
+  try {
+    writeSeasonLinesWithCompactRetry(stillPending);
+  } catch {
+    // outbox 書き込み失敗時もメモリは保持。次回 hydrate で再試行。
+  }
+
   return listSeasonLines();
 }
 
-/**
- * 自動ピア復元は無効（他 WORLD / legacy / demo からの推測コピー禁止）。
- * 復元待ちの空打撃行は触らず、現状のまま返す。
- */
+/** テスト／診断用 */
+export function getSeasonLinesCacheState(): {
+  cloudHydrated: boolean;
+  runtimeRows: number | null;
+  diskRows: number;
+  diskBytes: number;
+} {
+  const disk = canUseStorage()
+    ? (window.localStorage.getItem(STORAGE_KEY) ?? "")
+    : "";
+  return {
+    cloudHydrated,
+    runtimeRows: runtimeCache ? runtimeCache.length : null,
+    diskRows: readDiskSeasonLines().length,
+    diskBytes: disk.length,
+  };
+}
+
+/** テスト用リセット（本番 UI からは呼ばない） */
+export function resetSeasonLinesCacheForTests(): void {
+  runtimeCache = null;
+  cloudHydrated = false;
+}
+
 export function restoreEmptyBatterOffenseFromPeers(): PlayerSeasonLine[] {
   if (!canUseStorage()) return [];
   return listSeasonLines();
 }
 
-/**
- * pennant 行から WORLD × YEAR の SeasonIdentity 一覧を構築。
- * SOP・RECORDS・YEARBOOK など横断集計で再利用する。
- */
 export function listPennantSeasonIdentities(): SeasonIdentity[] {
   const map = new Map<string, SeasonIdentity>();
   for (const l of listSeasonLines().filter((x) => x.scope === "pennant")) {
