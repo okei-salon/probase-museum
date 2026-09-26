@@ -225,6 +225,11 @@ export const PITCHER_FEATS = {
     { min: 15, points: 10 },
     { min: 10, points: 5 },
   ],
+  /** 連勝：セ／パ各リーグ1位ボーナス（段階点とは別加算。同率含む） */
+  winStreakLeagueLeader: {
+    points: 5,
+    label: "連勝 リーグ1位",
+  },
   undefeated10: { points: 10, label: "シーズン無敗（10勝以上0敗）" },
 } as const;
 

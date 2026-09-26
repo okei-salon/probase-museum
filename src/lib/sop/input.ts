@@ -40,6 +40,8 @@ export type SopFeatsInput = {
   /** 1試合奪三振 リーグ1位（基準点とは別加算。同率含む） */
   gameSoLeagueLeader?: boolean;
   winStreak?: number | null;
+  /** 連勝 リーグ1位（段階点とは別加算。同率含む） */
+  winStreakLeagueLeader?: boolean;
   /** シーズン代打本塁打 */
   pinchHr?: number | null;
 };

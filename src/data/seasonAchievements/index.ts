@@ -28,6 +28,7 @@ export {
   computeRepeatLabel,
   peerYearsForAchievement,
   withRepeatLabels,
+  consecutiveYearBonusForAchievement,
 } from "./achievementRepeat";
 export { detectAchievementsFromSeasonLines, formatAvgDot, formatAvgHrRbiLabel } from "./detectSeason";
 export {

@@ -258,6 +258,16 @@ function scorePitcherFeats(
       points: ws.points,
     });
   }
+  if (feats.winStreakLeagueLeader) {
+    items.push({
+      id: "feat:winStreakLeagueLeader",
+      category: "feats_streaks",
+      label: PITCHER_FEATS.winStreakLeagueLeader.label,
+      points: PITCHER_FEATS.winStreakLeagueLeader.points,
+      detail:
+        feats.winStreak != null ? `${feats.winStreak}連勝` : undefined,
+    });
+  }
   if (s.w != null && s.l != null && s.w >= 10 && s.l === 0) {
     items.push({
       id: "feat:undefeated10",
@@ -336,9 +346,9 @@ function consecutiveBonus(
       items.push({
         id: `consec:combo:${id}`,
         category: "consecutive_year",
-        label: `連続年（複合）`,
+        label: `連続年ボーナス +${CONSECUTIVE_YEAR_BONUS.combo}点`,
         points: CONSECUTIVE_YEAR_BONUS.combo,
-        detail: id,
+        detail: `複合達成（${id}）`,
       });
     }
   }
@@ -347,9 +357,9 @@ function consecutiveBonus(
       items.push({
         id: `consec:basic:${id}`,
         category: "consecutive_year",
-        label: `連続年（基本）`,
+        label: `連続年ボーナス +${CONSECUTIVE_YEAR_BONUS.basic}点`,
         points: CONSECUTIVE_YEAR_BONUS.basic,
-        detail: id,
+        detail: `基本達成（${id}）`,
       });
     }
   }

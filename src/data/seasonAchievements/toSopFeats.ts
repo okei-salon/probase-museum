@@ -111,6 +111,9 @@ export function mergeSopFeats(
       primary.gameSoLeagueLeader || fallback.gameSoLeagueLeader,
     ),
     winStreak: maxOr(primary.winStreak, fallback.winStreak),
+    winStreakLeagueLeader: Boolean(
+      primary.winStreakLeagueLeader || fallback.winStreakLeagueLeader,
+    ),
     pinchHr: maxOr(primary.pinchHr, fallback.pinchHr),
   };
 }

@@ -8,13 +8,14 @@ import { sopPointsForRecordType } from "@/lib/import/achievementSopPoints";
 import { BATTER_FEATS } from "@/lib/sop/rules";
 import type { SeasonAchievement } from "./types";
 
-/** 記録・偉業画面でリーグ最高のみ残す項目（連続5種＋1試合奪三振） */
+/** 記録・偉業画面でリーグ最高のみ残す項目（連続5種＋1試合奪三振＋連勝） */
 export const FEATS_DISPLAY_STREAK_TYPES = new Set([
   "hit_streak",
   "on_base_streak",
   "hr_streak",
   "pa_hr_streak",
   "ab_hit_streak",
+  "win_streak",
 ]);
 
 /** リーグ1位ボーナス対象（表示絞り込み＋SOP +5） */

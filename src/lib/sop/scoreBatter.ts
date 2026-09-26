@@ -317,9 +317,9 @@ function consecutiveBonus(
       items.push({
         id: `consec:combo:${id}`,
         category: "consecutive_year",
-        label: "連続年（複合達成）",
+        label: `連続年ボーナス +${CONSECUTIVE_YEAR_BONUS.combo}点`,
         points: CONSECUTIVE_YEAR_BONUS.combo,
-        detail: id,
+        detail: `複合達成（${id}）`,
       });
     }
   }
@@ -329,9 +329,9 @@ function consecutiveBonus(
       items.push({
         id: `consec:basic:${id}`,
         category: "consecutive_year",
-        label: "連続年（基本達成）",
+        label: `連続年ボーナス +${CONSECUTIVE_YEAR_BONUS.basic}点`,
         points: CONSECUTIVE_YEAR_BONUS.basic,
-        detail: id,
+        detail: `基本達成（${id}）`,
       });
     }
   }

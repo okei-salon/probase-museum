@@ -177,6 +177,7 @@ function featsFor(
     paHr: Set<string>;
     abHit: Set<string>;
     gameSo: Set<string>;
+    winStreak: Set<string>;
   },
 ): SopFeatsInput {
   const fromAchievements = achievementsToSopFeats(
@@ -218,6 +219,8 @@ function featsFor(
         }
       : {
           gameSoLeagueLeader: streakLeaders?.gameSo.has(playerId) ?? false,
+          winStreakLeagueLeader:
+            streakLeaders?.winStreak.has(playerId) ?? false,
         };
 
   return mergeSopFeats(
@@ -227,7 +230,7 @@ function featsFor(
 }
 
 /**
- * 連続系5種＋1試合奪三振のリーグ1位（同率含む）playerId 集合。
+ * 連続系5種＋1試合奪三振＋連勝のリーグ1位（同率含む）playerId 集合。
  * SOP +5 ボーナス専用（表示フィルタとは別経路）。
  *
  * 判定単位: YEAR × WORLD × リーグ（セ／パ）× 記録項目
@@ -243,9 +246,17 @@ function seasonFeatLeagueLeaders(
   paHr: Set<string>;
   abHit: Set<string>;
   gameSo: Set<string>;
+  winStreak: Set<string>;
 } {
   type Row = { playerId: string; league: "central" | "pacific"; value: number };
-  type Bucket = "hit" | "onBase" | "hr" | "paHr" | "abHit" | "gameSo";
+  type Bucket =
+    | "hit"
+    | "onBase"
+    | "hr"
+    | "paHr"
+    | "abHit"
+    | "gameSo"
+    | "winStreak";
   const buckets: Record<Bucket, Row[]> = {
     hit: [],
     onBase: [],
@@ -253,6 +264,7 @@ function seasonFeatLeagueLeaders(
     paHr: [],
     abHit: [],
     gameSo: [],
+    winStreak: [],
   };
   const typeToBucket: Record<string, Bucket> = {
     hit_streak: "hit",
@@ -261,6 +273,7 @@ function seasonFeatLeagueLeaders(
     pa_hr_streak: "paHr",
     ab_hit_streak: "abHit",
     game_so: "gameSo",
+    win_streak: "winStreak",
   };
 
   const push = (
@@ -309,6 +322,7 @@ function seasonFeatLeagueLeaders(
     paHr: pickLeagueLeaderPlayerIds(buckets.paHr),
     abHit: pickLeagueLeaderPlayerIds(buckets.abHit),
     gameSo: pickLeagueLeaderPlayerIds(buckets.gameSo),
+    winStreak: pickLeagueLeaderPlayerIds(buckets.winStreak),
   };
 }
 
@@ -546,6 +560,7 @@ function lineToInput(
     paHr: Set<string>;
     abHit: Set<string>;
     gameSo: Set<string>;
+    winStreak: Set<string>;
   },
   teamGamesCtx?: TeamGamesContext | null,
   awardsByPlayer?: Map<string, SopAwardInput[]>,

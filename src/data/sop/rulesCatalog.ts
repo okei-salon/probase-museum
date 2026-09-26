@@ -209,6 +209,10 @@ export function buildSopRulesCatalog(): SopRuleSection[] {
           pointsText: `+${PITCHER_FEATS.gameSoLeagueLeader.points}点（基準点とは別加算）`,
         },
         ...tierLines("連勝", PITCHER_FEATS.winStreak, "連勝"),
+        {
+          label: PITCHER_FEATS.winStreakLeagueLeader.label,
+          pointsText: `+${PITCHER_FEATS.winStreakLeagueLeader.points}点（段階点とは別加算・同率含む）`,
+        },
       ],
     },
     {
