@@ -33,6 +33,10 @@ export {
   groupSopItemsByCategory,
 } from "./computeSeasonSop";
 export {
+  CATEGORY_ORDER_FOR_DISPLAY,
+  itemsAccountedInDisplay,
+} from "./sopBreakdownDisplay";
+export {
   SOP_RANKING_DISPLAY_LIMIT,
   limitSopRankingsForDisplay,
   buildOverallSeasonSopRankings,
@@ -41,6 +45,10 @@ export {
   type SopOverallClassification,
 } from "./limitSopRankingsDisplay";
 export { scoreTwoWaySop } from "./scoreTwoWay";
+export {
+  consecutiveYearBonusLineLabel,
+  sopAchievementLabelJa,
+} from "./displayLabels";
 
 export type {
   SopPlayerYearInput,

@@ -223,7 +223,7 @@ export function buildInterleagueSopItemsForSeason(
       list.push({
         id: `interleague:${board.def.id}:${entry.rank}`,
         category: "interleague_titles",
-        label: `${board.def.label}${entry.rank}位`,
+        label: `交流戦${board.def.label}${entry.rank}位`,
         points: entry.points,
         detail: formatSeasonLineLabel(identity),
         rank: entry.rank,

@@ -143,7 +143,8 @@ const second = computeSeasonSop(
 const consec = second.items.filter((i) => i.category === "consecutive_year");
 assert.equal(consec.length, 1);
 assert.equal(consec[0]!.points, CONSECUTIVE_YEAR_BONUS.combo);
-assert.match(consec[0]!.label, /連続年ボーナス \+5点/);
+assert.match(consec[0]!.label, /本塁打×盗塁複合・2年連続 \+5点/);
+assert.ok(!/hrSbCombo/.test(consec[0]!.label));
 assert.ok(second.items.some((i) => i.id.startsWith("combo:hrSbCombo")));
 
 // カード表示: 基礎点 + 連続年

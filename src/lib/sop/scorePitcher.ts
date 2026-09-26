@@ -19,6 +19,7 @@ import {
   evaluateG30Ip30Qualified,
   evaluateWinPctQualified,
 } from "@/lib/stats";
+import { consecutiveYearBonusLineLabel } from "./displayLabels";
 
 type BasicHit = { id: string; label: string; points: number };
 
@@ -346,9 +347,8 @@ function consecutiveBonus(
       items.push({
         id: `consec:combo:${id}`,
         category: "consecutive_year",
-        label: `連続年ボーナス +${CONSECUTIVE_YEAR_BONUS.combo}点`,
+        label: consecutiveYearBonusLineLabel(id, "combo"),
         points: CONSECUTIVE_YEAR_BONUS.combo,
-        detail: `複合達成（${id}）`,
       });
     }
   }
@@ -357,9 +357,8 @@ function consecutiveBonus(
       items.push({
         id: `consec:basic:${id}`,
         category: "consecutive_year",
-        label: `連続年ボーナス +${CONSECUTIVE_YEAR_BONUS.basic}点`,
+        label: consecutiveYearBonusLineLabel(id, "basic"),
         points: CONSECUTIVE_YEAR_BONUS.basic,
-        detail: `基本達成（${id}）`,
       });
     }
   }

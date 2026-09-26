@@ -10,24 +10,14 @@ import {
   groupSopItemsByCategory,
   limitSopRankingsForDisplay,
   SOP_CATEGORY_LABELS,
-  type SopCategoryId,
+  CATEGORY_ORDER_FOR_DISPLAY,
   type SopRankEntry,
   type SopRole,
   type SopSeasonResult,
 } from "@/lib/sop";
 import { cn } from "@/lib/cn";
 
-const CATEGORY_ORDER: SopCategoryId[] = [
-  "annual_awards",
-  "titles",
-  "season_basic",
-  "combo",
-  "feats_streaks",
-  "historic",
-  "consecutive_year",
-  "npb_record",
-  "two_way",
-];
+const CATEGORY_ORDER = CATEGORY_ORDER_FOR_DISPLAY;
 
 type SeasonSopBoardProps = {
   year: number;
@@ -232,6 +222,8 @@ export function SopDetailPanel({
   headingSuffix?: string;
 }) {
   const groups = groupSopItemsByCategory(result);
+  const itemsTotal = result.items.reduce((s, it) => s + it.points, 0);
+  const totalsMatch = itemsTotal === result.total;
 
   return (
     <section className="rounded-xl border border-[color:var(--museum-accent-border,#d4af3773)] bg-black/45 p-3 sm:p-4">
@@ -247,7 +239,16 @@ export function SopDetailPanel({
           </h3>
           <p className="mt-1 text-[13px] text-[color:var(--museum-accent,#d4af37)]">
             順位 {rank ?? "—"}　SOP合計 {result.total}
+            <span className="ml-2 text-[11px] text-museum-ivory-soft">
+              （内訳合計 {itemsTotal}
+              {totalsMatch ? "" : " ※不一致"}）
+            </span>
           </p>
+          {!totalsMatch ? (
+            <p className="mt-1 text-[11px] text-amber-200/90">
+              合計と内訳の点数が一致しません。表示漏れがないか確認してください。
+            </p>
+          ) : null}
           {result.meta?.pitcherClass ? (
             <p className="mt-0.5 text-[11px] text-museum-ivory-soft">
               投手分類:{" "}
