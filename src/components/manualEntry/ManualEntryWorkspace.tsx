@@ -83,6 +83,7 @@ type BatterFields = {
   hrStreak: string;
   paHrStreak: string;
   abHitStreak: string;
+  pinchHr: string;
   multiHit: string;
   csAttempted: string;
   csAllowed: string;
@@ -139,6 +140,7 @@ const emptyBatter = (): BatterFields => ({
   hrStreak: "",
   paHrStreak: "",
   abHitStreak: "",
+  pinchHr: "",
   multiHit: "",
   csAttempted: "",
   csAllowed: "",
@@ -320,6 +322,7 @@ export function ManualEntryWorkspace({
       hrStreak: optInt(batter.hrStreak) ?? null,
       paHrStreak: optInt(batter.paHrStreak) ?? null,
       abHitStreak: optInt(batter.abHitStreak) ?? null,
+      pinchHr: optInt(batter.pinchHr) ?? null,
       multiHit: optInt(batter.multiHit) ?? null,
       csAttempted: optInt(batter.csAttempted) ?? null,
       csAllowed: optInt(batter.csAllowed) ?? null,
@@ -883,6 +886,13 @@ export function ManualEntryWorkspace({
                     optional
                     value={batter.abHitStreak}
                     onChange={(v) => patchBatter("abHitStreak", v)}
+                    normalize={normalizeIntegerInput}
+                  />
+                  <StatNumberField
+                    label="代打本塁打"
+                    optional
+                    value={batter.pinchHr}
+                    onChange={(v) => patchBatter("pinchHr", v)}
                     normalize={normalizeIntegerInput}
                   />
                   <StatNumberField

@@ -225,7 +225,9 @@ export function SpecialRecordsImportWorkspace() {
       value,
       unit: catalog.unit ?? null,
       valueLabel: needsValue
-        ? `${value}${catalog.unit ?? ""}`
+        ? catalog.unit
+          ? `${value}${catalog.unit}`
+          : String(value)
         : catalog.recordName,
       sopPoints,
       source: "manual" as const,

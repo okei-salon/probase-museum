@@ -423,6 +423,7 @@ export function SeasonPlayerDetailEditor({
                 ["hrStreak", "連続試合本塁打", true],
                 ["paHrStreak", "連続打席本塁打", true],
                 ["abHitStreak", "連続打数安打", true],
+                ["pinchHr", "代打本塁打", true],
                 ["multiHit", "猛打賞", true],
                 ["csAttempted", "被盗塁企図数", true],
                 ["csAllowed", "許盗塁数", true],

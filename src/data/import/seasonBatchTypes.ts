@@ -59,6 +59,7 @@ export type BatterBatchFieldKey =
   | "hrStreak"
   | "paHrStreak"
   | "abHitStreak"
+  | "pinchHr"
   | "hitlessStreak"
   | "multiHit"
   | "csAttempted"

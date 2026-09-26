@@ -46,6 +46,14 @@ function isPinchHrAchievement(a: SeasonAchievement): boolean {
   return /代打本塁打/.test(a.recordName);
 }
 
+function resolveNumericValue(a: SeasonAchievement): number | null {
+  if (a.value != null && Number.isFinite(a.value)) return a.value;
+  const m = a.valueLabel?.match(/(\d+(?:\.\d+)?)/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
 function isSeasonDoublesAchievement(a: SeasonAchievement): boolean {
   if (a.recordType === "season_doubles" || a.recordType === "npb_2b") {
     return true;
@@ -82,13 +90,34 @@ export function annotateNpbAchievements(
 
     // シーズン代打本塁打
     if (isPinchHrAchievement(item)) {
-      const cls = classifyNpbRecord(item.value, PINCH_HR_DEF);
+      const value = resolveNumericValue(item);
+      const cls = classifyNpbRecord(value, PINCH_HR_DEF);
       if (!cls) return item;
-      return applyNpbFlags(item, {
-        isUpdate: cls.isUpdate,
-        previous: PINCH_HR_DEF.threshold,
-        unit: item.unit ?? "本",
-      });
+      return applyNpbFlags(
+        {
+          ...item,
+          value: value ?? item.value,
+          unit: item.unit ?? "本",
+          valueLabel:
+            item.valueLabel && item.valueLabel !== "達成"
+              ? item.valueLabel
+              : value != null
+                ? `${value}本`
+                : item.valueLabel,
+          category:
+            item.category === "npb_record" ? item.category : "npb_record",
+          recordType:
+            item.recordType === "pinch_hr" || item.recordType === "season_pinch_hr"
+              ? item.recordType
+              : "pinch_hr",
+          recordName: "シーズン代打本塁打",
+        },
+        {
+          isUpdate: cls.isUpdate,
+          previous: PINCH_HR_DEF.threshold,
+          unit: "本",
+        },
+      );
     }
 
     // その他: 既に category=npb_record で値がある場合のタイ／更新文言補完

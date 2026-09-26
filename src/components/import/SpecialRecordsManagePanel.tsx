@@ -137,7 +137,9 @@ export function SpecialRecordsManagePanel() {
       value,
       unit: catalog.unit ?? null,
       valueLabel: needsValue
-        ? `${value}${catalog.unit ?? ""}`
+        ? catalog.unit
+          ? `${value}${catalog.unit}`
+          : String(value)
         : catalog.recordName,
       sopPoints,
       updatedAt: new Date().toISOString(),

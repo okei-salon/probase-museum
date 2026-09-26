@@ -15,7 +15,11 @@ import {
 import { withRepeatLabels } from "./achievementRepeat";
 import { annotateNpbAchievements } from "./annotateNpb";
 import { getDemoAchievements } from "./demoData";
-import { detectAchievementsFromSeasonLines } from "./detectSeason";
+import {
+  detectAchievementsFromSeasonLines,
+  formatAvgDot,
+  formatAvgHrRbiLabel,
+} from "./detectSeason";
 import { hrSbAchievementLabel } from "./hrSbLabel";
 import { filterStreaksToLeagueLeaders } from "./streakDisplay";
 import {
@@ -88,6 +92,60 @@ function withDisplayHrSbLabel(item: SeasonAchievement): SeasonAchievement {
   return { ...item, recordName: label };
 }
 
+/**
+ * 「達成」だけの複合カードへ、保存済み個人成績から実数値ラベルを付与。
+ * 推測せず、該当年度・WORLDの成績行がある場合のみ。
+ */
+function withSeasonComboStatLabels(
+  items: SeasonAchievement[],
+  pennantLines: ReturnType<typeof listSeasonLinesForSeason>,
+): SeasonAchievement[] {
+  const byPlayer = new Map(
+    pennantLines
+      .filter((l) => l.role === "batter")
+      .map((l) => [l.playerId, l] as const),
+  );
+
+  return items.map((item) => {
+    const needsStats =
+      item.recordType === "avg300_hr30_rbi100" ||
+      item.recordType === "triple_three_rbi100" ||
+      (item.recordType === "triple_three" &&
+        (item.valueLabel == null || item.valueLabel === "達成"));
+    if (!needsStats) return item;
+    if (item.valueLabel && item.valueLabel !== "達成") return item;
+
+    const line = byPlayer.get(item.playerId);
+    if (!line || line.role !== "batter") return { ...item, valueLabel: null };
+
+    const avg = line.derived.avg;
+    const hr = line.counting.hr;
+    const rbi = line.counting.rbi;
+    const sb = line.counting.sb ?? null;
+
+    if (item.recordType === "triple_three" && avg != null && sb != null) {
+      return {
+        ...item,
+        value: avg,
+        secondaryValue: hr,
+        tertiaryValue: sb,
+        valueLabel: `打率${formatAvgDot(avg)}・${hr}本塁打・${sb}盗塁`,
+      };
+    }
+
+    if (avg == null || !Number.isFinite(avg)) {
+      return { ...item, valueLabel: null };
+    }
+    return {
+      ...item,
+      value: avg,
+      secondaryValue: hr,
+      tertiaryValue: rbi,
+      valueLabel: formatAvgHrRbiLabel(avg, hr, rbi),
+    };
+  });
+}
+
 /** 同一 WORLD の全年度プール（連続年判定用。既存データは消さない） */
 function collectWorldAchievementPool(
   world: SeasonWorld | null | undefined,
@@ -119,7 +177,8 @@ export function collectYearAchievementsRaw(
   const merged = dedupePreferManual([...auto, ...manual, ...demo]).map(
     withDisplayHrSbLabel,
   );
-  const annotated = annotateNpbAchievements(merged);
+  const withStats = withSeasonComboStatLabels(merged, pennantLines);
+  const annotated = annotateNpbAchievements(withStats);
   const worldPool = collectWorldAchievementPool(identity.world);
   return withRepeatLabels(annotated, worldPool);
 }

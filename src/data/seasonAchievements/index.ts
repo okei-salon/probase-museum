@@ -29,7 +29,7 @@ export {
   peerYearsForAchievement,
   withRepeatLabels,
 } from "./achievementRepeat";
-export { detectAchievementsFromSeasonLines } from "./detectSeason";
+export { detectAchievementsFromSeasonLines, formatAvgDot, formatAvgHrRbiLabel } from "./detectSeason";
 export {
   achievementsToSopFeats,
   mergeSopFeats,

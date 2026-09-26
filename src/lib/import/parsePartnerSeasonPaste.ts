@@ -91,6 +91,10 @@ const BATTER_FIELD_ALIASES: AliasEntry[] = [
     keys: ["連続打数安打", "連打数安", "abHitStreak"],
     field: "abHitStreak",
   },
+  {
+    keys: ["代打本塁打", "代打HR", "pinchHr"],
+    field: "pinchHr",
+  },
   { keys: ["猛打賞", "multiHit"], field: "multiHit" },
   { keys: ["ops", "OPS", "ＯＰＳ"], field: "ops" },
   {

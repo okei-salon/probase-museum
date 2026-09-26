@@ -38,6 +38,20 @@ import type { SeasonAchievement } from "./types";
 const NPB_DOUBLES = NPB_BATTER_SEASON_RECORDS.find((d) => d.field === "doubles")!;
 const NPB_PINCH_HR = NPB_FEAT_RECORDS.find((d) => d.field === "pinchHr")!;
 
+/** 打率.312 形式（先頭0を落とした小数） */
+export function formatAvgDot(avg: number): string {
+  const s = avg.toFixed(3);
+  return s.startsWith("0") ? s.slice(1) : s;
+}
+
+export function formatAvgHrRbiLabel(
+  avg: number,
+  hr: number,
+  rbi: number,
+): string {
+  return `打率${formatAvgDot(avg)}・${hr}本塁打・${rbi}打点`;
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -143,7 +157,10 @@ function detectBatterSeason(
         category: "season",
         recordType: "triple_three_rbi100",
         recordName: BATTER_COMBOS.tripleThreeRbi100.label,
-        valueLabel: "達成",
+        value: avg,
+        secondaryValue: hr,
+        tertiaryValue: rbi,
+        valueLabel: formatAvgHrRbiLabel(avg!, hr, rbi),
         sopPoints: BATTER_COMBOS.tripleThreeRbi100.points,
       });
     } else if (hasTriple) {
@@ -153,7 +170,13 @@ function detectBatterSeason(
         category: "season",
         recordType: "triple_three",
         recordName: BATTER_COMBOS.tripleThree.label,
-        valueLabel: "達成",
+        value: avg,
+        secondaryValue: hr,
+        tertiaryValue: sb,
+        valueLabel:
+          avg != null && sb != null
+            ? `打率${formatAvgDot(avg)}・${hr}本塁打・${sb}盗塁`
+            : null,
         sopPoints: BATTER_COMBOS.tripleThree.points,
       });
     } else if (has300HrRbi) {
@@ -163,7 +186,10 @@ function detectBatterSeason(
         category: "season",
         recordType: "avg300_hr30_rbi100",
         recordName: BATTER_COMBOS.avg300Hr30Rbi100.label,
-        valueLabel: "達成",
+        value: avg,
+        secondaryValue: hr,
+        tertiaryValue: rbi,
+        valueLabel: formatAvgHrRbiLabel(avg!, hr, rbi),
         sopPoints: BATTER_COMBOS.avg300Hr30Rbi100.points,
       });
     }
