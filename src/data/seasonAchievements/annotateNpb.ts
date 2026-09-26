@@ -7,11 +7,13 @@ import {
   classifyNpbRecord,
   NPB_BATTER_SEASON_RECORDS,
   NPB_FEAT_RECORDS,
+  NPB_PITCHER_SEASON_RECORDS,
   NPB_RECORD_BONUS_POINTS,
 } from "@/lib/sop/npbRecords";
 import type { SeasonAchievement } from "./types";
 
 const DOUBLES_DEF = NPB_BATTER_SEASON_RECORDS.find((d) => d.field === "doubles")!;
+const SAVES_DEF = NPB_PITCHER_SEASON_RECORDS.find((d) => d.field === "sv")!;
 const HR_STREAK_DEF = NPB_FEAT_RECORDS.find((d) => d.field === "hrStreak")!;
 const PINCH_HR_DEF = NPB_FEAT_RECORDS.find((d) => d.field === "pinchHr")!;
 
@@ -61,6 +63,17 @@ function isSeasonDoublesAchievement(a: SeasonAchievement): boolean {
   return a.recordName === "シーズン二塁打" || a.recordName === "二塁打";
 }
 
+function isSeasonSavesAchievement(a: SeasonAchievement): boolean {
+  if (
+    a.recordType === "season_saves" ||
+    a.recordType === "season_sv" ||
+    a.recordType === "npb_sv"
+  ) {
+    return true;
+  }
+  return a.recordName === "シーズンセーブ" || a.recordName === "セーブ";
+}
+
 /** 既存カードに NPB フラグを付与（データ削除なし） */
 export function annotateNpbAchievements(
   items: SeasonAchievement[],
@@ -86,6 +99,35 @@ export function annotateNpbAchievements(
         previous: DOUBLES_DEF.threshold,
         unit: item.unit ?? "二塁打",
       });
+    }
+
+    // シーズンセーブ
+    if (isSeasonSavesAchievement(item)) {
+      const value = resolveNumericValue(item);
+      const cls = classifyNpbRecord(value, SAVES_DEF);
+      if (!cls) return item;
+      return applyNpbFlags(
+        {
+          ...item,
+          value: value ?? item.value,
+          unit: item.unit ?? "セーブ",
+          valueLabel:
+            item.valueLabel && item.valueLabel !== "達成"
+              ? item.valueLabel
+              : value != null
+                ? `${value}セーブ`
+                : item.valueLabel,
+          category:
+            item.category === "npb_record" ? item.category : "npb_record",
+          recordType: "season_saves",
+          recordName: "シーズンセーブ",
+        },
+        {
+          isUpdate: cls.isUpdate,
+          previous: SAVES_DEF.threshold,
+          unit: "セーブ",
+        },
+      );
     }
 
     // シーズン代打本塁打

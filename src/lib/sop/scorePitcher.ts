@@ -306,8 +306,15 @@ function scorePitcherNpb(
       items.push({
         id: `npb:${def.id}`,
         category: "npb_record",
-        label: `NPB記録 ${def.label}`,
+        label:
+          def.field === "sv"
+            ? "NPB記録 シーズンセーブ"
+            : `NPB記録 ${def.label}`,
         points: NPB_RECORD_BONUS_POINTS,
+        detail:
+          def.field === "sv" && fieldMap.sv != null
+            ? `${fieldMap.sv}セーブ（従来記録 ${def.threshold}）`
+            : undefined,
       });
     }
   }

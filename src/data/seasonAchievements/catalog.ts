@@ -101,6 +101,13 @@ export const ACHIEVEMENT_CATALOG: AchievementCatalogEntry[] = [
     needsManual: false,
   },
   {
+    recordType: "season_saves",
+    category: "npb_record",
+    recordName: "シーズンセーブ",
+    unit: "セーブ",
+    needsManual: false,
+  },
+  {
     recordType: "pinch_hr",
     category: "npb_record",
     recordName: "シーズン代打本塁打",

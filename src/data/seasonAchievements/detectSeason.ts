@@ -21,6 +21,7 @@ import {
   classifyNpbRecord,
   NPB_BATTER_SEASON_RECORDS,
   NPB_FEAT_RECORDS,
+  NPB_PITCHER_SEASON_RECORDS,
   NPB_RECORD_BONUS_POINTS,
 } from "@/lib/sop/npbRecords";
 import {
@@ -36,6 +37,7 @@ import { hrSbAchievementLabel } from "./hrSbLabel";
 import type { SeasonAchievement } from "./types";
 
 const NPB_DOUBLES = NPB_BATTER_SEASON_RECORDS.find((d) => d.field === "doubles")!;
+const NPB_SAVES = NPB_PITCHER_SEASON_RECORDS.find((d) => d.field === "sv")!;
 const NPB_PINCH_HR = NPB_FEAT_RECORDS.find((d) => d.field === "pinchHr")!;
 
 /** 打率.312 形式（先頭0を落とした小数） */
@@ -430,6 +432,32 @@ function detectPitcherSeason(
       valueLabel: `${c.w}勝0敗`,
       sopPoints: PITCHER_FEATS.undefeated10.points,
     });
+  }
+
+  // シーズンセーブ（NPB基準到達）
+  {
+    const sv = c.sv ?? null;
+    const cls = classifyNpbRecord(sv, NPB_SAVES);
+    if (cls && sv != null) {
+      out.push({
+        ...meta,
+        id: makeId(line, "season_saves"),
+        category: "npb_record",
+        recordType: "season_saves",
+        recordName: "シーズンセーブ",
+        value: sv,
+        unit: "セーブ",
+        valueLabel: `${sv}セーブ`,
+        sopPoints: 0,
+        npbBonusPoints: NPB_RECORD_BONUS_POINTS,
+        isNpbRecord: true,
+        isNpbUpdate: cls.isUpdate,
+        npbPreviousValue: NPB_SAVES.threshold,
+        npbCaption: cls.isUpdate
+          ? `従来記録：${NPB_SAVES.threshold}セーブ`
+          : "歴代1位タイ",
+      });
+    }
   }
 
   return out;
