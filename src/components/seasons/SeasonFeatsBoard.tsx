@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ACHIEVEMENT_CATEGORY_LABELS,
@@ -9,6 +9,7 @@ import {
   type AchievementCategory,
   type SeasonAchievement,
 } from "@/data/seasonAchievements";
+import { subscribeImportDemoMode } from "@/data/import/demoMode";
 import { parseSeasonKey } from "@/data/seasons";
 import { cn } from "@/lib/cn";
 
@@ -29,13 +30,17 @@ type SeasonFeatsBoardProps = {
 };
 
 export function SeasonFeatsBoard({ year, seasonKey }: SeasonFeatsBoardProps) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => subscribeImportDemoMode(() => setTick((t) => t + 1)), []);
+
   const built = useMemo(() => {
+    void tick;
     if (seasonKey) {
       const identity = parseSeasonKey(seasonKey);
       if (identity) return buildYearFeats(identity);
     }
     return buildYearFeats(year);
-  }, [year, seasonKey]);
+  }, [year, seasonKey, tick]);
   const [filter, setFilter] = useState<FilterId>("all");
 
   const items = useMemo(() => {

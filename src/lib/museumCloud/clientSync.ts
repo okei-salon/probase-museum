@@ -72,6 +72,40 @@ export async function putMuseumCollectionRecord<T extends CloudRecordBase>(
   }
 }
 
+/** id 単位の削除。成功時のみ呼び出し側で local を落とすこと。 */
+export async function deleteMuseumCollectionRecord(
+  collection: string,
+  id: string,
+): Promise<{ ok: boolean; deleted?: boolean; error?: string }> {
+  if (!id) return { ok: false, error: "id_required" };
+  try {
+    const res = await fetch(
+      `/api/museum/docs/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+        credentials: "include",
+        cache: "no-store",
+      },
+    );
+    if (!res.ok) {
+      const data = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      return { ok: false, error: data?.error ?? `http_${res.status}` };
+    }
+    const data = (await res.json()) as {
+      ok?: boolean;
+      deleted?: boolean;
+    };
+    return { ok: true, deleted: data.deleted ?? true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "network_error",
+    };
+  }
+}
+
 /**
  * クラウド一覧 ↔ local 配列を merge。
  * - クラウドに無いローカル行 → アップロード

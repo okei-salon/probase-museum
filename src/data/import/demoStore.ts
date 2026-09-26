@@ -248,6 +248,16 @@ export function upsertDemoAchievement(
   return next;
 }
 
+export function removeDemoAchievement(id: string): boolean {
+  if (!id) return false;
+  const store = readStore();
+  const before = store.achievements.length;
+  store.achievements = store.achievements.filter((r) => r.id !== id);
+  if (store.achievements.length === before) return false;
+  writeStore(store);
+  return true;
+}
+
 export function appendDemoImportHistory(entry: ImportHistoryEntry): void {
   const store = readStore();
   store.history = [

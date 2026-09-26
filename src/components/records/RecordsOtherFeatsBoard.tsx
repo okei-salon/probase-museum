@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ACHIEVEMENT_CATEGORY_LABELS,
   type SeasonAchievement,
 } from "@/data/seasonAchievements";
+import { subscribeImportDemoMode } from "@/data/import/demoMode";
 import {
   achievementSeasonLabel,
   buildOtherFeatsSections,
@@ -12,7 +13,12 @@ import {
 import { cn } from "@/lib/cn";
 
 export function RecordsOtherFeatsBoard() {
-  const sections = useMemo(() => buildOtherFeatsSections(), []);
+  const [tick, setTick] = useState(0);
+  useEffect(() => subscribeImportDemoMode(() => setTick((t) => t + 1)), []);
+  const sections = useMemo(() => {
+    void tick;
+    return buildOtherFeatsSections();
+  }, [tick]);
   const total = sections.reduce((n, s) => n + s.items.length, 0);
 
   if (total === 0) {

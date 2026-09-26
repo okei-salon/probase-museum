@@ -93,6 +93,19 @@ export async function upsertMuseumDocument(input: {
  * 既存行がある場合は挿入しない（移行用・上書き禁止）。
  * @returns inserted=true なら新規挿入、false なら既存のためスキップ
  */
+export async function deleteMuseumDocument(
+  collection: string,
+  id: string,
+): Promise<{ deleted: boolean }> {
+  const sql = getDb();
+  const rows = await sql`
+    DELETE FROM museum_documents
+    WHERE collection = ${collection} AND id = ${id}
+    RETURNING id
+  `;
+  return { deleted: rows.length > 0 };
+}
+
 export async function insertMuseumDocumentIfAbsent(input: {
   id: string;
   collection: string;

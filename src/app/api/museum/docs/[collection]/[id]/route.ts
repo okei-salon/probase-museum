@@ -4,6 +4,7 @@ import {
   requireMuseumApiSession,
 } from "@/lib/db/apiGuard";
 import {
+  deleteMuseumDocument,
   getMuseumDocument,
   upsertMuseumDocument,
 } from "@/lib/db/museumDocuments";
@@ -161,6 +162,40 @@ export async function PUT(request: Request, { params }: Params) {
       {
         ok: false,
         error: "upsert_failed",
+        detail: e instanceof Error ? e.message : "unknown",
+      },
+      { status: 500 },
+    );
+  }
+}
+
+/** 汎用削除。id 単位のみ。 */
+export async function DELETE(_request: Request, { params }: Params) {
+  const session = await requireMuseumApiSession();
+  if (session instanceof NextResponse) return session;
+  const dbErr = requireDatabaseOr503();
+  if (dbErr) return dbErr;
+
+  const { collection, id: rawId } = await params;
+  const id = decodeURIComponent(rawId);
+  if (!isMuseumSyncCollection(collection)) {
+    return NextResponse.json(
+      { ok: false, error: "unknown_collection" },
+      { status: 400 },
+    );
+  }
+  if (!id) {
+    return NextResponse.json({ ok: false, error: "id_required" }, { status: 400 });
+  }
+
+  try {
+    const result = await deleteMuseumDocument(collection, id);
+    return NextResponse.json({ ok: true, deleted: result.deleted, id });
+  } catch (e) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "delete_failed",
         detail: e instanceof Error ? e.message : "unknown",
       },
       { status: 500 },

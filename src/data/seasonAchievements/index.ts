@@ -10,8 +10,12 @@ export {
   listStoredAchievements,
   listStoredAchievementsForSeason,
   listStoredAchievementsForSeasonIdentity,
+  getStoredAchievementById,
   upsertStoredAchievement,
+  upsertStoredAchievementAsync,
   removeStoredAchievement,
+  removeStoredAchievementAsync,
+  ensureAchievementRecordId,
   seasonAchievementId,
   hydrateSeasonAchievementsFromCloud,
 } from "./store";

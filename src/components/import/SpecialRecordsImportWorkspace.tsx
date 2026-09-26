@@ -47,6 +47,7 @@ import {
   type PlayerSearchHit,
 } from "@/lib/manualEntry/searchPlayers";
 import { normalizeIntegerInput } from "@/lib/manualEntry/normalizeInput";
+import { SpecialRecordsManagePanel } from "@/components/import/SpecialRecordsManagePanel";
 import { cn } from "@/lib/cn";
 
 const IMPORTABLE = ACHIEVEMENT_CATALOG.filter((c) => c.needsManual);
@@ -507,6 +508,8 @@ export function SpecialRecordsImportWorkspace() {
           </div>
         </div>
       ) : null}
+
+      <SpecialRecordsManagePanel />
     </div>
   );
 }

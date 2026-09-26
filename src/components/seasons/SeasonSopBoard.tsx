@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { buildYearSopRankings } from "@/data/sop";
+import { subscribeImportDemoMode } from "@/data/import/demoMode";
 import { parseSeasonKey } from "@/data/seasons";
 import { RoleTabs } from "@/components/sop/RoleTabs";
 import {
@@ -40,13 +41,17 @@ function entryKey(entry: SopRankEntry): string {
 }
 
 export function SeasonSopBoard({ year, seasonKey }: SeasonSopBoardProps) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => subscribeImportDemoMode(() => setTick((t) => t + 1)), []);
+
   const { rankings, notes } = useMemo(() => {
+    void tick;
     if (seasonKey) {
       const identity = parseSeasonKey(seasonKey);
       if (identity) return buildYearSopRankings(identity);
     }
     return buildYearSopRankings(year);
-  }, [year, seasonKey]);
+  }, [year, seasonKey, tick]);
 
   const [role, setRole] = useState<SopRole>("batter");
   const displayRankings = useMemo(
