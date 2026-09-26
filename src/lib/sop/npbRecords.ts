@@ -94,6 +94,13 @@ export const NPB_FEAT_RECORDS: NpbRecordDef[] = [
     field: "winStreak",
     threshold: 24,
   },
+  {
+    id: "npb_pinch_hr",
+    label: "シーズン代打本塁打",
+    role: "feat",
+    field: "pinchHr",
+    threshold: 7,
+  },
 ];
 
 export function meetsNpbRecord(
@@ -103,4 +110,21 @@ export function meetsNpbRecord(
   if (value == null || !Number.isFinite(value)) return false;
   if (def.lowerIsBetter) return value <= def.threshold && value >= 0;
   return value >= def.threshold;
+}
+
+/**
+ * 到達かつ更新か（タイは isUpdate=false）。
+ * lowerIsBetter: 閾値未満が更新。
+ */
+export function classifyNpbRecord(
+  value: number | null | undefined,
+  def: Pick<NpbRecordDef, "threshold" | "lowerIsBetter">,
+): { meets: boolean; isUpdate: boolean } | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  if (def.lowerIsBetter) {
+    if (value < 0 || value > def.threshold) return null;
+    return { meets: true, isUpdate: value < def.threshold };
+  }
+  if (value < def.threshold) return null;
+  return { meets: true, isUpdate: value > def.threshold };
 }

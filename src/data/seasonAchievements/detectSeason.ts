@@ -18,6 +18,12 @@ import {
   PITCHER_HISTORIC,
 } from "@/lib/sop/rules";
 import {
+  classifyNpbRecord,
+  NPB_BATTER_SEASON_RECORDS,
+  NPB_FEAT_RECORDS,
+  NPB_RECORD_BONUS_POINTS,
+} from "@/lib/sop/npbRecords";
+import {
   buildTeamGamesContext,
   evaluateCsRateQualified,
   evaluateIpQualified,
@@ -28,6 +34,9 @@ import {
 } from "@/lib/stats";
 import { hrSbAchievementLabel } from "./hrSbLabel";
 import type { SeasonAchievement } from "./types";
+
+const NPB_DOUBLES = NPB_BATTER_SEASON_RECORDS.find((d) => d.field === "doubles")!;
+const NPB_PINCH_HR = NPB_FEAT_RECORDS.find((d) => d.field === "pinchHr")!;
 
 function nowIso() {
   return new Date().toISOString();
@@ -213,6 +222,58 @@ function detectBatterSeason(
       valueLabel: `阻止率 ${csRate.toFixed(3)}`,
       sopPoints: BATTER_HISTORIC.csRate800.points,
     });
+  }
+
+  // シーズン二塁打（NPB基準到達）
+  {
+    const doubles = c.doubles;
+    const cls = classifyNpbRecord(doubles, NPB_DOUBLES);
+    if (cls) {
+      out.push({
+        ...meta,
+        id: makeId(line, "season_doubles"),
+        category: "npb_record",
+        recordType: "season_doubles",
+        recordName: "シーズン二塁打",
+        value: doubles,
+        unit: "二塁打",
+        valueLabel: `${doubles}二塁打`,
+        sopPoints: 0,
+        npbBonusPoints: NPB_RECORD_BONUS_POINTS,
+        isNpbRecord: true,
+        isNpbUpdate: cls.isUpdate,
+        npbPreviousValue: NPB_DOUBLES.threshold,
+        npbCaption: cls.isUpdate
+          ? `従来記録：${NPB_DOUBLES.threshold}二塁打`
+          : "歴代1位タイ",
+      });
+    }
+  }
+
+  // シーズン代打本塁打（保存済み pinchHr がある場合のみ）
+  {
+    const pinchHr = c.pinchHr ?? null;
+    const cls = classifyNpbRecord(pinchHr, NPB_PINCH_HR);
+    if (cls && pinchHr != null) {
+      out.push({
+        ...meta,
+        id: makeId(line, "pinch_hr"),
+        category: "npb_record",
+        recordType: "pinch_hr",
+        recordName: "シーズン代打本塁打",
+        value: pinchHr,
+        unit: "本",
+        valueLabel: `${pinchHr}本`,
+        sopPoints: 0,
+        npbBonusPoints: NPB_RECORD_BONUS_POINTS,
+        isNpbRecord: true,
+        isNpbUpdate: cls.isUpdate,
+        npbPreviousValue: NPB_PINCH_HR.threshold,
+        npbCaption: cls.isUpdate
+          ? `従来記録：${NPB_PINCH_HR.threshold}本`
+          : "歴代1位タイ",
+      });
+    }
   }
 
   return out;

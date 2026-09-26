@@ -23,6 +23,12 @@ export {
   SHOW_SEASON_FEATS_DEMO,
   getDemoAchievements,
 } from "./demoData";
+export { annotateNpbAchievements, npbBadgeLabel } from "./annotateNpb";
+export {
+  computeRepeatLabel,
+  peerYearsForAchievement,
+  withRepeatLabels,
+} from "./achievementRepeat";
 export { detectAchievementsFromSeasonLines } from "./detectSeason";
 export {
   achievementsToSopFeats,

@@ -50,6 +50,10 @@ export type SeasonAchievement = {
   isNpbRecord?: boolean;
   isNpbUpdate?: boolean;
   npbPreviousValue?: number | null;
+  /** 表示用: 「従来記録：52二塁打」「歴代1位タイ」 */
+  npbCaption?: string | null;
+  /** 表示用: 「2年連続・2回目」「初達成」「通算○回目」 */
+  repeatLabel?: string | null;
   source: AchievementSource;
   createdAt: string;
   updatedAt: string;
@@ -61,5 +65,5 @@ export const ACHIEVEMENT_CATEGORY_LABELS: Record<AchievementCategory, string> =
     streak: "連続記録",
     single_game: "1試合記録",
     season: "シーズン偉業",
-    npb_record: "NPB史実記録",
+    npb_record: "NPB記録",
   };

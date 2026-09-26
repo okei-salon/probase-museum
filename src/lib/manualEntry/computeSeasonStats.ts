@@ -52,6 +52,8 @@ export type BatterCountingInput = {
   paHrStreak?: number | null;
   /** 連続打数安打 */
   abHitStreak?: number | null;
+  /** 代打本塁打（シーズン） */
+  pinchHr?: number | null;
   /** 猛打賞 */
   multiHit?: number | null;
   // —— 捕手（盗塁阻止）——
@@ -433,6 +435,7 @@ export function normalizeBatterCounting(
     hrStreak: raw.hrStreak ?? null,
     paHrStreak: raw.paHrStreak ?? null,
     abHitStreak: raw.abHitStreak ?? null,
+    pinchHr: raw.pinchHr ?? null,
     multiHit: raw.multiHit ?? null,
     csAttempted: raw.csAttempted ?? null,
     csAllowed: raw.csAllowed ?? null,
@@ -643,6 +646,7 @@ export function aggregateBatterCounting(
     hrStreak: null,
     paHrStreak: null,
     abHitStreak: null,
+    pinchHr: null,
   };
 
   for (const raw of rows) {
@@ -691,6 +695,7 @@ export function aggregateBatterCounting(
     if (r.abHitStreak != null) {
       sum.abHitStreak = Math.max(sum.abHitStreak ?? 0, r.abHitStreak);
     }
+    sum.pinchHr = addNullable(sum.pinchHr, r.pinchHr);
   }
 
   // 盗塁企図が無い場合は 盗塁＋盗塁死 から復元（通算盗塁成功率用）

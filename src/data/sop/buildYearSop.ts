@@ -208,6 +208,7 @@ function featsFor(
           hrStreak: line.counting.hrStreak ?? null,
           paHrStreak: line.counting.paHrStreak ?? null,
           abHitStreak: line.counting.abHitStreak ?? null,
+          pinchHr: line.counting.pinchHr ?? null,
           hitStreakLeagueLeader: streakLeaders?.hit.has(playerId) ?? false,
           onBaseStreakLeagueLeader:
             streakLeaders?.onBase.has(playerId) ?? false,

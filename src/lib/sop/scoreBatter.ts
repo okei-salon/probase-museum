@@ -283,7 +283,9 @@ function scoreBatterNpb(
           ? feats.onBaseStreak
           : def.field === "hrStreak"
             ? feats.hrStreak
-            : null;
+            : def.field === "pinchHr"
+              ? feats.pinchHr
+              : null;
     if (meetsNpbRecord(v, def)) {
       items.push({
         id: `npb:${def.id}`,

@@ -93,6 +93,20 @@ export const ACHIEVEMENT_CATALOG: AchievementCatalogEntry[] = [
     unit: "奪三振",
     needsManual: true,
   },
+  {
+    recordType: "season_doubles",
+    category: "npb_record",
+    recordName: "シーズン二塁打",
+    unit: "二塁打",
+    needsManual: false,
+  },
+  {
+    recordType: "pinch_hr",
+    category: "npb_record",
+    recordName: "シーズン代打本塁打",
+    unit: "本",
+    needsManual: true,
+  },
   // シーズン偉業（自動判定可）
   {
     recordType: "hr_sb_combo",

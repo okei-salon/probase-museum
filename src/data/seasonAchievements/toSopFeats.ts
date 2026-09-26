@@ -20,7 +20,8 @@ export function achievementsToSopFeats(
     if (a.source === "demo") continue;
     // シーズン偉業は成績からSOP側で再計算するためfeats入力には載せない
     if (a.category === "season") continue;
-    if (a.category === "npb_record") continue;
+    // NPBカードでも代打本塁打などは feats に載せる
+    if (a.category === "npb_record" && a.recordType !== "pinch_hr") continue;
 
     switch (a.recordType) {
       case "perfect_game":
@@ -55,6 +56,9 @@ export function achievementsToSopFeats(
         break;
       case "game_so":
         feats.gameSo = Math.max(feats.gameSo ?? 0, a.value ?? 0);
+        break;
+      case "pinch_hr":
+        feats.pinchHr = Math.max(feats.pinchHr ?? 0, a.value ?? 0);
         break;
       default:
         break;
@@ -107,5 +111,6 @@ export function mergeSopFeats(
       primary.gameSoLeagueLeader || fallback.gameSoLeagueLeader,
     ),
     winStreak: maxOr(primary.winStreak, fallback.winStreak),
+    pinchHr: maxOr(primary.pinchHr, fallback.pinchHr),
   };
 }

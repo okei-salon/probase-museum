@@ -5,16 +5,23 @@
  * 連続系5種＋1試合奪三振の画面表示はリーグ最高のみ（SOP加点とは別）。
  */
 
-import { listSeasonLinesForSeason } from "@/data/playerSeasonLines";
+import { listSeasonLines, listSeasonLinesForSeason } from "@/data/playerSeasonLines";
 import {
   identityFromWorldYear,
+  normalizeSeasonWorld,
   type SeasonIdentity,
+  type SeasonWorld,
 } from "@/data/seasons";
+import { withRepeatLabels } from "./achievementRepeat";
+import { annotateNpbAchievements } from "./annotateNpb";
 import { getDemoAchievements } from "./demoData";
 import { detectAchievementsFromSeasonLines } from "./detectSeason";
 import { hrSbAchievementLabel } from "./hrSbLabel";
 import { filterStreaksToLeagueLeaders } from "./streakDisplay";
-import { listStoredAchievementsForSeasonIdentity } from "./store";
+import {
+  listStoredAchievements,
+  listStoredAchievementsForSeasonIdentity,
+} from "./store";
 import type { AchievementCategory, SeasonAchievement } from "./types";
 
 export type YearFeatsResult = {
@@ -42,7 +49,8 @@ function dedupePreferManual(
 
   for (const item of items) {
     const w = item.world ?? "";
-    const key = `${w}:${item.playerId}:${item.role}:${item.recordType}`;
+    // 同一年の手動／自動のみ潰す（年をまたぐ連続判定用プールでは年を含める）
+    const key = `${w}:${item.season}:${item.playerId}:${item.role}:${item.recordType}`;
     const prev = map.get(key);
     if (!prev || rank(item.source) >= rank(prev.source)) {
       map.set(key, item);
@@ -80,6 +88,22 @@ function withDisplayHrSbLabel(item: SeasonAchievement): SeasonAchievement {
   return { ...item, recordName: label };
 }
 
+/** 同一 WORLD の全年度プール（連続年判定用。既存データは消さない） */
+function collectWorldAchievementPool(
+  world: SeasonWorld | null | undefined,
+): SeasonAchievement[] {
+  const w = normalizeSeasonWorld(world);
+  const lines = listSeasonLines().filter(
+    (l) =>
+      l.scope === "pennant" && normalizeSeasonWorld(l.world) === w,
+  );
+  const auto = detectAchievementsFromSeasonLines(lines);
+  const manual = listStoredAchievements().filter(
+    (a) => normalizeSeasonWorld(a.world) === w,
+  );
+  return dedupePreferManual([...auto, ...manual]).map(withDisplayHrSbLabel);
+}
+
 /** 生データ（SOP用）。連続系のリーグ絞り込み前。 */
 export function collectYearAchievementsRaw(
   yearOrIdentity: number | SeasonIdentity,
@@ -92,9 +116,12 @@ export function collectYearAchievementsRaw(
   const manual = listStoredAchievementsForSeasonIdentity(identity);
   const demo =
     identity.world == null ? getDemoAchievements(identity.year) : [];
-  return dedupePreferManual([...auto, ...manual, ...demo]).map(
+  const merged = dedupePreferManual([...auto, ...manual, ...demo]).map(
     withDisplayHrSbLabel,
   );
+  const annotated = annotateNpbAchievements(merged);
+  const worldPool = collectWorldAchievementPool(identity.world);
+  return withRepeatLabels(annotated, worldPool);
 }
 
 export function buildYearFeats(

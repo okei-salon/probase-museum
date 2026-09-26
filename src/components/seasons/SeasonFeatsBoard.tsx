@@ -9,6 +9,7 @@ import {
   type AchievementCategory,
   type SeasonAchievement,
 } from "@/data/seasonAchievements";
+import { npbBadgeLabel } from "@/data/seasonAchievements/annotateNpb";
 import { subscribeImportDemoMode } from "@/data/import/demoMode";
 import { parseSeasonKey } from "@/data/seasons";
 import { cn } from "@/lib/cn";
@@ -45,6 +46,11 @@ export function SeasonFeatsBoard({ year, seasonKey }: SeasonFeatsBoardProps) {
 
   const items = useMemo(() => {
     if (filter === "all") return built.items;
+    if (filter === "npb_record") {
+      return built.items.filter(
+        (i) => i.category === "npb_record" || i.isNpbRecord === true,
+      );
+    }
     return built.items.filter((i) => i.category === filter);
   }, [built.items, filter]);
 
@@ -93,22 +99,29 @@ export function SeasonFeatsBoard({ year, seasonKey }: SeasonFeatsBoardProps) {
   );
 }
 
+function valueDisplay(item: SeasonAchievement): string {
+  if (item.valueLabel) return item.valueLabel;
+  if (item.value != null) return `${item.value}${item.unit ?? ""}`;
+  return "達成";
+}
+
 function AchievementCard({ item }: { item: SeasonAchievement }) {
   const isNpb = item.category === "npb_record" || item.isNpbRecord;
-  const totalSop =
-    (item.sopPoints ?? 0) + (item.npbBonusPoints ?? 0);
+  const badge = npbBadgeLabel(item);
+  const totalSop = (item.sopPoints ?? 0) + (item.npbBonusPoints ?? 0);
+  const valueText = valueDisplay(item);
 
   return (
     <article
       className={cn(
-        "rounded-xl border bg-black/50 p-4 backdrop-blur-sm",
+        "rounded-xl border bg-black/50 p-4 backdrop-blur-sm sm:p-5",
         isNpb
           ? "border-[color:var(--museum-accent,#d4af37)]/55 shadow-[0_0_24px_rgba(212,175,55,0.12)]"
           : "border-white/12",
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <div>
+        <div className="min-w-0">
           <p
             className={cn(
               "text-[10px] tracking-[0.16em]",
@@ -127,38 +140,42 @@ function AchievementCard({ item }: { item: SeasonAchievement }) {
           </p>
           <h3
             className={cn(
-              "mt-1 font-display text-[17px] tracking-[0.04em]",
+              "mt-1 font-display text-[15px] tracking-[0.04em] sm:text-[16px]",
               isNpb
                 ? "text-[color:var(--museum-accent,#d4af37)]"
                 : "text-museum-ivory",
             )}
           >
-            {item.category === "npb_record"
-              ? "NPB RECORD"
-              : item.recordName}
+            {item.recordName}
           </h3>
         </div>
         {totalSop > 0 ? (
-          <div className="shrink-0 rounded-md border border-[color:var(--museum-accent-border,#d4af3773)] px-2 py-1 text-right">
-            <p className="text-[9px] tracking-[0.1em] text-museum-ivory-soft">
-              SOP
-            </p>
-            <p className="text-[14px] tabular-nums text-[color:var(--museum-accent,#d4af37)]">
-              +{totalSop}
-            </p>
-          </div>
+          <p className="shrink-0 pt-0.5 text-[10px] tabular-nums tracking-[0.04em] text-museum-ivory-soft/80">
+            SOP +{totalSop}
+          </p>
         ) : null}
       </div>
 
+      <p
+        className={cn(
+          "mt-3 font-display text-[28px] font-semibold leading-none tracking-[0.02em] tabular-nums sm:text-[34px]",
+          isNpb
+            ? "text-[color:var(--museum-accent,#d4af37)]"
+            : "text-museum-ivory",
+        )}
+      >
+        {valueText}
+      </p>
+
       <div className="mt-3">
         {item.playerId.startsWith("demo-") ? (
-          <p className="text-[15px] font-medium text-museum-ivory">
+          <p className="text-[14px] font-medium text-museum-ivory sm:text-[15px]">
             {item.playerName}
           </p>
         ) : (
           <Link
             href={`/players/${item.playerId}/yearly`}
-            className="text-[15px] font-medium text-museum-ivory underline-offset-2 hover:text-[color:var(--museum-accent,#d4af37)] hover:underline"
+            className="text-[14px] font-medium text-museum-ivory underline-offset-2 hover:text-[color:var(--museum-accent,#d4af37)] hover:underline sm:text-[15px]"
           >
             {item.playerName}
           </Link>
@@ -170,56 +187,29 @@ function AchievementCard({ item }: { item: SeasonAchievement }) {
         </p>
       </div>
 
-      <p className="mt-3 text-[13px] leading-relaxed text-museum-ivory-muted">
-        {item.category === "npb_record" ? (
-          <>
-            {item.valueLabel ?? item.recordName}
-            {item.isNpbUpdate ? (
-              <>
-                <br />
-                <span className="text-[color:var(--museum-accent,#d4af37)]">
-                  NPB歴代シーズン記録更新
-                </span>
-                {item.npbPreviousValue != null ? (
-                  <span className="text-museum-ivory-soft">
-                    {" "}
-                    旧記録：{item.npbPreviousValue}
-                    {item.unit ?? ""}
-                  </span>
-                ) : null}
-              </>
-            ) : (
-              <>
-                <br />
-                <span className="text-[color:var(--museum-accent,#d4af37)]">
-                  NPB歴代シーズン記録到達
-                </span>
-              </>
+      {badge ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span
+            className={cn(
+              "inline-flex items-center rounded-md border px-2.5 py-1 text-[11px] font-semibold tracking-[0.08em]",
+              item.isNpbUpdate
+                ? "border-[color:var(--museum-accent,#d4af37)] bg-[color:var(--museum-accent,#d4af37)]/20 text-[color:var(--museum-accent,#d4af37)]"
+                : "border-sky-300/45 bg-sky-400/15 text-sky-100",
             )}
-          </>
-        ) : (
-          item.valueLabel ??
-          (item.value != null
-            ? `${item.value}${item.unit ?? ""}`
-            : "達成")
-        )}
-      </p>
+          >
+            {badge}
+          </span>
+          {item.npbCaption ? (
+            <span className="text-[11px] text-museum-ivory-soft">
+              {item.npbCaption}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
-      {(item.sopPoints > 0 || (item.npbBonusPoints ?? 0) > 0) &&
-      item.category === "npb_record" ? (
-        <p className="mt-2 text-[11px] text-museum-ivory-soft">
-          SOP史実ボーナス +{item.npbBonusPoints ?? 0}
-        </p>
-      ) : item.sopPoints > 0 && item.npbBonusPoints ? (
-        <p className="mt-2 text-[11px] text-museum-ivory-soft">
-          SOP +{item.sopPoints}
-          {item.npbBonusPoints
-            ? ` ／ 史実ボーナス +${item.npbBonusPoints}`
-            : ""}
-        </p>
-      ) : item.sopPoints > 0 ? (
-        <p className="mt-2 text-[11px] text-museum-ivory-soft">
-          SOP +{item.sopPoints}
+      {item.repeatLabel ? (
+        <p className="mt-2.5 text-[13px] font-medium tracking-[0.04em] text-museum-ivory">
+          {item.repeatLabel}
         </p>
       ) : null}
     </article>

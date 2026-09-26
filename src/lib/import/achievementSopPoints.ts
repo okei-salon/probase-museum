@@ -32,6 +32,9 @@ export function sopPointsForRecordType(
       return tierPoints(PITCHER_FEATS.winStreak, v);
     case "game_so":
       return tierPoints(PITCHER_FEATS.gameSo, v);
+    case "season_doubles":
+    case "pinch_hr":
+      return 0;
     default:
       return 0;
   }
