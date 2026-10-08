@@ -16,12 +16,15 @@ import {
   getSawamuraAwards,
   normalizeBestNinePosition,
 } from "@/data/awards";
+import { listSeasonLinesForSeason } from "@/data/playerSeasonLines";
 import { getRegisteredSeasonHighlightStats } from "@/data/playerSeasonStats";
+import { getTeam } from "@/data/teams";
 import {
   seasonCareerLabelFromOccurrences,
   type AwardCareerScope,
   type AwardOccurrence,
 } from "@/lib/awardCareerCount";
+import { teamIdFromShort } from "@/lib/import/seasonBatchMerge";
 import type { AnnualAwardKind } from "@/lib/sop/rules";
 import {
   AWARD_NONE_PLAYER_ID,
@@ -239,6 +242,71 @@ function pickMajor(
   );
 }
 
+function leagueSideFromTeamShort(
+  teamShort: string | undefined,
+): LeagueSide | null {
+  const short = (teamShort ?? "").trim();
+  if (!short) return null;
+  const id = teamIdFromShort(short);
+  if (!id) return null;
+  return getTeam(id)?.league === "パ" ? "pacific" : "central";
+}
+
+/**
+ * 該当 YEAR×WORLD の個人成績から所属リーグを解決する。
+ * BLUE / RED は identity 経由で分離済みの lines のみ参照する。
+ */
+function leagueSideFromSeasonAffiliation(
+  playerId: string,
+  identity: SeasonIdentity,
+): LeagueSide | null {
+  if (!playerId || playerId === AWARD_NONE_PLAYER_ID) return null;
+  const lines = listSeasonLinesForSeason(identity).filter(
+    (l) => l.playerId === playerId && l.scope === "pennant",
+  );
+  const line = lines.find((l) => l.role === "pitcher") ?? lines[0];
+  if (!line) return null;
+  return getTeam(line.teamId)?.league === "パ" ? "pacific" : "central";
+}
+
+/**
+ * 沢村賞の表示先リーグ。
+ * セ・パ共通賞のため、登録 league 固定ではなく受賞者の所属球団を優先する。
+ */
+export function resolveSawamuraLeagueSideForDisplay(
+  reg: Pick<
+    RegisteredSeasonAward,
+    "teamShort" | "playerId" | "league" | "outcome"
+  >,
+  identity: SeasonIdentity,
+): LeagueSide {
+  const fromTeam = leagueSideFromTeamShort(reg.teamShort);
+  if (fromTeam) return fromTeam;
+
+  if (!isRegisteredAwardNone(reg)) {
+    const fromLine = leagueSideFromSeasonAffiliation(reg.playerId, identity);
+    if (fromLine) return fromLine;
+  }
+
+  if (reg.league === "central" || reg.league === "pacific") {
+    return reg.league;
+  }
+  return "central";
+}
+
+function placeSawamuraCard(
+  card: ResolvedAwardCard,
+  side: LeagueSide,
+): {
+  central: ResolvedAwardCard | null;
+  pacific: ResolvedAwardCard | null;
+} {
+  const placed = { ...card, league: side };
+  return side === "pacific"
+    ? { central: null, pacific: placed }
+    : { central: placed, pacific: null };
+}
+
 function resolveMajorPair(
   identity: SeasonIdentity,
   kind: "mvp" | "rookie" | "sawamura",
@@ -264,10 +332,24 @@ function resolveMajorPair(
   if (kind === "sawamura") {
     const reg = pickMajor(awards, kind, undefined);
     if (reg) {
-      return { central: toMajorCard(reg), pacific: null };
+      const card = toMajorCard(reg);
+      // 「該当なし」は従来どおりセ側にカード表示（反対側は空＝該当なし）
+      if (isRegisteredAwardNone(reg)) {
+        return { central: card, pacific: null };
+      }
+      const side = resolveSawamuraLeagueSideForDisplay(reg, identity);
+      return placeSawamuraCard(card, side);
     }
     if (formal) {
       return { central: emptyCard("central"), pacific: null };
+    }
+    // レガシーサンプルも所属球団で左右を決める
+    if (sample.central && sample.central.playerId) {
+      const side =
+        leagueSideFromTeamShort(sample.central.teamName) ??
+        sample.central.league ??
+        "central";
+      return placeSawamuraCard(sample.central, side);
     }
     return sample;
   }

@@ -440,7 +440,14 @@ export function buildYearbookFullExport(
   };
 
   const awardCount =
-    [mvp.central, mvp.pacific, rookie.central, rookie.pacific, sawamura.central]
+    [
+      mvp.central,
+      mvp.pacific,
+      rookie.central,
+      rookie.pacific,
+      sawamura.central,
+      sawamura.pacific,
+    ]
       .filter((c) => c && c.playerId && c.playerName !== "未登録").length +
     [...bestNine.central, ...bestNine.pacific, ...goldenGlove.central, ...goldenGlove.pacific]
       .filter((c) => c.playerId && c.playerName !== "未登録").length +

@@ -88,6 +88,7 @@ export function buildFormalAnnualAwardsByPlayer(
 
   const sawamura = resolveSawamuraBoard(identity);
   addCard(kindsByPlayer, sawamura.central, "sawamura");
+  addCard(kindsByPlayer, sawamura.pacific, "sawamura");
 
   const bestNine = resolveBestNineBoard(identity);
   for (const card of [...bestNine.central, ...bestNine.pacific]) {

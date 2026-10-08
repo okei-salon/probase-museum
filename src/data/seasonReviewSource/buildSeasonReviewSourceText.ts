@@ -352,7 +352,7 @@ export function buildSeasonReviewSourceText(identity: SeasonIdentity): string {
   push(awardLine("パMVP", mvp.pacific));
   push(awardLine("セ新人王", rookie.central));
   push(awardLine("パ新人王", rookie.pacific));
-  push(awardLine("沢村賞", sawamura.central));
+  push(awardLine("沢村賞", sawamura.central ?? sawamura.pacific));
   if (
     !isPlaceholderName(jsMvp.playerName) &&
     (jsMvp.playerId || jsMvp.playerName)
