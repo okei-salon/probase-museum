@@ -24,6 +24,7 @@ import {
   buildYearSopRankings,
   listRegisteredAwardsForSeason,
 } from "@/data/sop";
+import { mergeRoleSeasonSopTotal } from "@/lib/sop/mergeSeasonSop";
 import {
   resolveBestNineBoard,
   resolveGoldenGloveBoard,
@@ -513,29 +514,40 @@ export function buildYearbookFullExport(
       pitcherItems: ReturnType<typeof serializeSopResult>["items"] | null;
     }
   >();
-  for (const r of sopBuilt.results) {
-    const cur = byPlayerMap.get(r.playerId) ?? {
-      playerId: r.playerId,
-      playerName: nameOf(r.playerId, r.playerName),
-      teamShort: r.teamShort,
-      batterSop: null as number | null,
-      pitcherSop: null as number | null,
-      totalSop: 0,
-      batterItems: null as ReturnType<typeof serializeSopResult>["items"] | null,
-      pitcherItems: null as ReturnType<
-        typeof serializeSopResult
-      >["items"] | null,
-    };
-    const ser = serializeSopResult(r);
-    if (r.role === "batter") {
-      cur.batterSop = r.total;
-      cur.batterItems = ser.items;
-    } else {
-      cur.pitcherSop = r.total;
-      cur.pitcherItems = ser.items;
+  const resultByPlayerRole = new Map<
+    string,
+    {
+      batter: (typeof sopBuilt.results)[number] | null;
+      pitcher: (typeof sopBuilt.results)[number] | null;
     }
-    cur.totalSop = (cur.batterSop ?? 0) + (cur.pitcherSop ?? 0);
-    byPlayerMap.set(r.playerId, cur);
+  >();
+  for (const r of sopBuilt.results) {
+    const cur = resultByPlayerRole.get(r.playerId) ?? {
+      batter: null,
+      pitcher: null,
+    };
+    if (r.role === "batter") cur.batter = r;
+    else cur.pitcher = r;
+    resultByPlayerRole.set(r.playerId, cur);
+  }
+  for (const [playerId, pair] of resultByPlayerRole) {
+    const sample = pair.batter ?? pair.pitcher;
+    if (!sample) continue;
+    const merged = mergeRoleSeasonSopTotal(pair.batter, pair.pitcher);
+    byPlayerMap.set(playerId, {
+      playerId,
+      playerName: nameOf(playerId, sample.playerName),
+      teamShort: sample.teamShort,
+      batterSop: pair.batter ? pair.batter.total : null,
+      pitcherSop: pair.pitcher ? pair.pitcher.total : null,
+      totalSop: merged.total,
+      batterItems: pair.batter
+        ? serializeSopResult(pair.batter).items
+        : null,
+      pitcherItems: pair.pitcher
+        ? serializeSopResult(pair.pitcher).items
+        : null,
+    });
   }
   const sopByPlayer = [...byPlayerMap.values()].sort(
     (a, b) => b.totalSop - a.totalSop,

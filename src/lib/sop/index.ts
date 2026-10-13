@@ -33,6 +33,14 @@ export {
   groupSopItemsByCategory,
 } from "./computeSeasonSop";
 export {
+  SHARED_CROSS_ROLE_SOP_CATEGORIES,
+  isSharedCrossRoleSopCategory,
+  sharedCrossRolePoints,
+  roleUniquePoints,
+  mergeRoleSeasonSopTotal,
+  type MergedSeasonSopBreakdown,
+} from "./mergeSeasonSop";
+export {
   CATEGORY_ORDER_FOR_DISPLAY,
   itemsAccountedInDisplay,
 } from "./sopBreakdownDisplay";

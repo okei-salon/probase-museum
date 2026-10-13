@@ -291,7 +291,7 @@ function OverallTable({
       </div>
       {!selected ? (
         <p className="text-[11px] text-museum-ivory-soft">
-          選手名をクリックすると内訳を表示します。二刀流は野手SOP＋投手SOPの合算です。
+          選手名をクリックすると内訳を表示します。総合SOPは野手固有＋投手固有＋共通加点（年間表彰・二刀流）1回です。個別SOPの単純合算ではありません。
         </p>
       ) : null}
     </div>
@@ -315,12 +315,16 @@ function OverallDetailPanel({
               {row.teamShort}・{overallClassificationLabel(row.classification)}
             </span>
           </h3>
-          <p className="mt-1 text-[13px] text-[color:var(--museum-accent,#d4af37)]">
-            順位 {row.rank}　合計SOP {row.total}
+                      <p className="mt-1 text-[13px] text-[color:var(--museum-accent,#d4af37)]">
+            順位 {row.rank}　総合SOP {row.total}
           </p>
           <p className="mt-0.5 text-[11px] text-museum-ivory-soft">
-            野手SOP {row.batterTotal}点　／　投手SOP {row.pitcherTotal}点　／　合計SOP{" "}
-            {row.total}点
+            野手固有 {row.batterUnique}点　＋　投手固有 {row.pitcherUnique}点　＋　共通加点{" "}
+            {row.sharedTotal}点　＝　総合 {row.total}点
+          </p>
+          <p className="mt-0.5 text-[11px] text-museum-ivory-soft">
+            個別SOP（参考）：野手 {row.batterTotal}点　／　投手 {row.pitcherTotal}
+            点。総合は個別の単純合算ではありません（年間表彰・二刀流は総合で1回）。
           </p>
         </div>
         <div className="flex gap-2">

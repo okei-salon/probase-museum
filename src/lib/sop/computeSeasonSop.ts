@@ -1,4 +1,8 @@
 import type { SopPlayerYearInput } from "./input";
+import {
+  sharedCrossRolePoints,
+  sharedCrossRoleSeasonKey,
+} from "./mergeSeasonSop";
 import { scoreAwards, scoreTitles } from "./scoreAwardsTitles";
 import { scoreBatterSeason } from "./scoreBatter";
 import { scorePitcherSeason } from "./scorePitcher";
@@ -76,13 +80,17 @@ export function rankSopResults(results: SopSeasonResult[]): SopRankEntry[] {
   return out;
 }
 
-/** 年度別 SOP から通算を合算（playerId キー） */
+/**
+ * 年度別 SOP から通算を合算（playerId キー）。
+ * 同一選手・同一 WORLD×YEAR の共有加点（年間表彰・二刀流）は
+ * 野手/投手の双方結果に載るため、通算では1回だけ加算する。
+ * BLUE と RED（別 WORLD）および別年度はそれぞれ累積する。
+ */
 export function aggregateCareerSop(
   seasons: SopSeasonResult[],
 ): SopCareerTotal[] {
   const map = new Map<string, SopCareerTotal>();
-  /** 同一選手・同一年度の二刀流は野手/投手の双方結果に載るため、通算では1回だけ加算 */
-  const twoWayCounted = new Set<string>();
+  const sharedCounted = new Set<string>();
 
   for (const s of seasons) {
     const cur = map.get(s.playerId) ?? {
@@ -93,20 +101,21 @@ export function aggregateCareerSop(
     };
     cur.playerName = s.playerName;
 
-    const twoWayPts = s.items
-      .filter((it) => it.category === "two_way")
-      .reduce((sum, it) => sum + it.points, 0);
-    const basePts = s.total - twoWayPts;
-    let countedTwoWay = 0;
-    if (twoWayPts > 0) {
-      // WORLD + YEAR で二刀流二重計上を防ぐ（同一年 BLUE/RED は別シーズン）
-      const key = `${s.playerId}:${s.world ?? ""}:${s.year}`;
-      if (!twoWayCounted.has(key)) {
-        twoWayCounted.add(key);
-        countedTwoWay = twoWayPts;
+    const sharedPts = sharedCrossRolePoints(s);
+    const uniquePts = s.total - sharedPts;
+    let countedShared = 0;
+    if (sharedPts > 0) {
+      const key = sharedCrossRoleSeasonKey(
+        s.playerId,
+        s.world ?? null,
+        s.year,
+      );
+      if (!sharedCounted.has(key)) {
+        sharedCounted.add(key);
+        countedShared = sharedPts;
       }
     }
-    cur.total += basePts + countedTwoWay;
+    cur.total += uniquePts + countedShared;
     cur.byYear.push({
       year: s.year,
       world: s.world ?? null,
