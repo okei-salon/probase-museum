@@ -2,10 +2,13 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { subscribeImportDemoMode } from "@/data/import/demoMode";
+import { getSeasonLinesCacheState } from "@/data/playerSeasonLines";
 import {
   buildYearSopRankings,
   listSopSeasonIdentities,
 } from "@/data/sop";
+import { resolveSopBoardDataStatus } from "@/data/sop/sopBoardDataStatus";
 import { formatSeasonLineLabel, type SeasonIdentity } from "@/data/seasons";
 import {
   SopCategoryBlocks,
@@ -24,7 +27,8 @@ import { cn } from "@/lib/cn";
 type RoleFilter = "all" | SopRole;
 
 export function SopSeasonHubBoard() {
-  const [ready, setReady] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [tick, setTick] = useState(0);
   const [seasons, setSeasons] = useState<SeasonIdentity[]>([]);
   const [seasonKey, setSeasonKey] = useState<string | null>(null);
   const [role, setRole] = useState<RoleFilter>("all");
@@ -33,11 +37,20 @@ export function SopSeasonHubBoard() {
   const detailRef = useRef<HTMLTableRowElement | null>(null);
 
   useEffect(() => {
+    setMounted(true);
+    return subscribeImportDemoMode(() => setTick((t) => t + 1));
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    void tick;
     const list = listSopSeasonIdentities();
     setSeasons(list);
-    setSeasonKey(list[0]?.seasonKey ?? null);
-    setReady(true);
-  }, []);
+    setSeasonKey((prev) => {
+      if (prev && list.some((s) => s.seasonKey === prev)) return prev;
+      return list[0]?.seasonKey ?? null;
+    });
+  }, [mounted, tick]);
 
   const identity = useMemo(
     () => seasons.find((s) => s.seasonKey === seasonKey) ?? null,
@@ -45,11 +58,12 @@ export function SopSeasonHubBoard() {
   );
 
   const { rankings, results, notes } = useMemo(() => {
-    if (!ready || !identity) {
+    void tick;
+    if (!mounted || !identity) {
       return { rankings: [], results: [], notes: [] as string[] };
     }
     return buildYearSopRankings(identity);
-  }, [ready, identity]);
+  }, [mounted, identity, tick]);
 
   const overallRows = useMemo(
     () => buildOverallSeasonSopRankings(results),
@@ -60,6 +74,16 @@ export function SopSeasonHubBoard() {
     if (role === "all") return [];
     return limitSopRankingsForDisplay(rankings, role);
   }, [rankings, role]);
+
+  const dataStatus = useMemo(() => {
+    void tick;
+    const cache = getSeasonLinesCacheState();
+    return resolveSopBoardDataStatus({
+      mounted,
+      cloudHydrated: cache.cloudHydrated,
+      hasRows: seasons.length > 0,
+    });
+  }, [mounted, seasons.length, tick]);
 
   useEffect(() => {
     setSelectedOverall(null);
@@ -73,11 +97,15 @@ export function SopSeasonHubBoard() {
     });
   }, [selectedOverall]);
 
-  if (!ready) {
-    return <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>;
+  if (dataStatus === "loading") {
+    return (
+      <p className="text-[13px] text-museum-ivory-soft">
+        成績データを読み込み中…
+      </p>
+    );
   }
 
-  if (seasons.length === 0 || !identity) {
+  if (dataStatus === "empty" || !identity) {
     return (
       <div className="space-y-2">
         <p className="text-[13px] text-museum-ivory-soft">

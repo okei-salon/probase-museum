@@ -1,31 +1,43 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { subscribeImportDemoMode } from "@/data/import/demoMode";
+import { getSeasonLinesCacheState } from "@/data/playerSeasonLines";
 import {
   aggregateSopBreakdown,
   buildSopFourKings,
   type SopBreakdownRow,
   type SopCareerRankRow,
 } from "@/data/sop";
+import { resolveSopBoardDataStatus } from "@/data/sop/sopBoardDataStatus";
 import type { SopRole } from "@/lib/sop";
 import { cn } from "@/lib/cn";
 
 export function SopFourKingsBoard() {
-  const [ready, setReady] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [tick, setTick] = useState(0);
   const [role, setRole] = useState<SopRole>("batter");
 
   useEffect(() => {
-    setReady(true);
+    setMounted(true);
+    return subscribeImportDemoMode(() => setTick((t) => t + 1));
   }, []);
 
-  const kings = useMemo(
-    () => (ready ? buildSopFourKings(role) : []),
-    [ready, role],
-  );
+  const kings = useMemo(() => {
+    void tick;
+    if (!mounted) return [];
+    return buildSopFourKings(role);
+  }, [mounted, role, tick]);
 
-  if (!ready) {
-    return <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>;
-  }
+  const dataStatus = useMemo(() => {
+    void tick;
+    const cache = getSeasonLinesCacheState();
+    return resolveSopBoardDataStatus({
+      mounted,
+      cloudHydrated: cache.cloudHydrated,
+      hasRows: kings.length > 0,
+    });
+  }, [mounted, kings.length, tick]);
 
   const first = kings[0] ?? null;
   const rest = kings.slice(1);
@@ -65,7 +77,11 @@ export function SopFourKingsBoard() {
         </p>
       </header>
 
-      {kings.length === 0 ? (
+      {dataStatus === "loading" ? (
+        <p className="text-[13px] text-museum-ivory-soft">
+          成績データを読み込み中…
+        </p>
+      ) : dataStatus === "empty" ? (
         <p className="text-[13px] text-museum-ivory-soft">
           四天王を選出できる通算SOPデータがまだありません。
         </p>
@@ -211,7 +227,7 @@ function BreakdownList({
     <ul className={cn("space-y-1.5", featured ? "md:columns-2 md:gap-x-6" : "")}>
       {visible.map((row) => (
         <li
-          key={`${row.label}-${row.count}-${row.points}`}
+          key={row.display}
           className={cn(
             "break-inside-avoid text-museum-ivory-muted",
             featured ? "text-[13px]" : "text-[11px]",

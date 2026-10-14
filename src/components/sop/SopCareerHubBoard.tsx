@@ -1,34 +1,50 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { subscribeImportDemoMode } from "@/data/import/demoMode";
+import { getSeasonLinesCacheState } from "@/data/playerSeasonLines";
 import {
   buildSopCareerRankings,
   type SopRoleFilter,
 } from "@/data/sop";
+import { resolveSopBoardDataStatus } from "@/data/sop/sopBoardDataStatus";
 import { RoleTabs } from "@/components/sop/RoleTabs";
 
 export function SopCareerHubBoard() {
-  const [ready, setReady] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [tick, setTick] = useState(0);
   const [role, setRole] = useState<SopRoleFilter>("all");
 
   useEffect(() => {
-    setReady(true);
+    setMounted(true);
+    return subscribeImportDemoMode(() => setTick((t) => t + 1));
   }, []);
 
-  const rows = useMemo(
-    () => (ready ? buildSopCareerRankings(role) : []),
-    [ready, role],
-  );
+  const rows = useMemo(() => {
+    void tick;
+    if (!mounted) return [];
+    return buildSopCareerRankings(role);
+  }, [mounted, role, tick]);
 
-  if (!ready) {
-    return <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>;
-  }
+  const dataStatus = useMemo(() => {
+    void tick;
+    const cache = getSeasonLinesCacheState();
+    return resolveSopBoardDataStatus({
+      mounted,
+      cloudHydrated: cache.cloudHydrated,
+      hasRows: rows.length > 0,
+    });
+  }, [mounted, rows.length, tick]);
 
   return (
     <div className="space-y-4">
       <RoleTabs role={role} onChange={setRole} />
 
-      {rows.length === 0 ? (
+      {dataStatus === "loading" ? (
+        <p className="text-[13px] text-museum-ivory-soft">
+          成績データを読み込み中…
+        </p>
+      ) : dataStatus === "empty" ? (
         <p className="text-[13px] text-museum-ivory-soft">
           通算SOPを計算できる個人成績がまだありません。
         </p>

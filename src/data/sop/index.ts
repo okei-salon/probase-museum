@@ -48,6 +48,10 @@ export {
   type SopRoleFilter,
 } from "./careerBoard";
 export {
+  resolveSopBoardDataStatus,
+  type SopBoardDataStatus,
+} from "./sopBoardDataStatus";
+export {
   buildSopRulesCatalog,
   type SopRuleRow,
   type SopRuleSection,

@@ -142,6 +142,9 @@ export function buildSopFourKings(role: SopRole): SopCareerRankRow[] {
 /**
  * 複数シーズンの SOP 内訳を実績ごとに集約
  * 実績名 / 達成回数 / 獲得ポイント
+ *
+ * 集約キーは計算時の item.id 全体（例: title:hr:1 と title:hr:2 は別行）。
+ * 同一 id のみ回数を合算し、ラベルは最初に出現した表記を維持する（後勝ち上書きしない）。
  */
 export function aggregateSopBreakdown(
   seasons: SopSeasonResult[],
@@ -154,21 +157,28 @@ export function aggregateSopBreakdown(
   for (const season of seasons) {
     for (const item of season.items) {
       if (item.points <= 0) continue;
-      const key = item.id.split(":").slice(0, 2).join(":") || item.label;
-      const prev = map.get(key) ?? {
-        label: item.label,
-        count: 0,
-        points: 0,
-      };
-      prev.label = item.label;
+      const key = item.id || item.label;
+      const prev = map.get(key);
+      if (!prev) {
+        map.set(key, {
+          label: item.label,
+          count: 1,
+          points: item.points,
+        });
+        continue;
+      }
       prev.count += 1;
       prev.points += item.points;
-      map.set(key, prev);
     }
   }
 
   return [...map.values()]
-    .sort((a, b) => b.points - a.points || b.count - a.count)
+    .sort(
+      (a, b) =>
+        b.points - a.points ||
+        b.count - a.count ||
+        a.label.localeCompare(b.label, "ja"),
+    )
     .map((r) => ({
       label: r.label,
       count: r.count,
