@@ -1,7 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import { buildPlayerSopCareer } from "@/data/playerDetail";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 import { cn } from "@/lib/cn";
 
 type PlayerSopBoardProps = {
@@ -9,27 +14,31 @@ type PlayerSopBoardProps = {
 };
 
 export function PlayerSopBoard({ playerId }: PlayerSopBoardProps) {
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    setReady(true);
-  }, [playerId]);
+  const { tick } = useMuseumBoardTick();
 
-  const career = useMemo(
-    () => (ready ? buildPlayerSopCareer(playerId) : null),
-    [ready, playerId],
-  );
+  const career = useMemo(() => {
+    void tick;
+    return buildPlayerSopCareer(playerId);
+  }, [tick, playerId]);
 
-  if (!ready) {
+  const hasRows = Boolean(career && career.years.length > 0);
+  const { status } = useMuseumBoardStatus(hasRows);
+
+  if (status !== "ready") {
     return (
-      <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>
+      <MuseumBoardStatusMessage
+        status={status}
+        emptyMessage="この選手のSOPを計算できる年度成績はまだありません。"
+      />
     );
   }
 
-  if (!career || career.years.length === 0) {
+  if (!career) {
     return (
-      <p className="text-[13px] text-museum-ivory-soft">
-        この選手のSOPを計算できる年度成績はまだありません。
-      </p>
+      <MuseumBoardStatusMessage
+        status="empty"
+        emptyMessage="この選手のSOPを計算できる年度成績はまだありません。"
+      />
     );
   }
 

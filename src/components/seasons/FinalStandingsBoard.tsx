@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { DataPanel } from "@/components/category";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import { StandingsTable } from "@/components/views";
+import { MUSEUM_BOARD_LOADING_MESSAGE } from "@/data/museumBoardDataStatus";
 import {
   centralStandings,
   pacificStandings,
@@ -16,6 +18,7 @@ import {
   getYearStandingsAsync,
   type StandingEntry,
 } from "@/data/teamStandings";
+import { useMuseumBoardTick } from "@/hooks/useMuseumBoardStatus";
 import { cn } from "@/lib/cn";
 
 type FinalStandingsBoardProps = {
@@ -37,9 +40,12 @@ export function FinalStandingsBoard({
   compact = false,
   className,
 }: FinalStandingsBoardProps) {
+  const { tick } = useMuseumBoardTick();
   const [central, setCentral] = useState<StandingEntry[] | null>(null);
   const [pacific, setPacific] = useState<StandingEntry[] | null>(null);
   const [hasAnyStored, setHasAnyStored] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const identity = useMemo(
     () => (seasonKey ? parseSeasonKey(seasonKey) : null),
@@ -49,21 +55,44 @@ export function FinalStandingsBoard({
 
   useEffect(() => {
     let cancelled = false;
+    setReady(false);
+    setLoadError(false);
+    void (async () => {
+      try {
+        const stored = identity
+          ? await getStandingsForSeasonAsync(identity)
+          : await getYearStandingsAsync(Number(year));
+        if (cancelled) return;
+        const c = stored?.central?.length ? stored.central : null;
+        const p = stored?.pacific?.length ? stored.pacific : null;
+        setCentral(c);
+        setPacific(p);
+        setHasAnyStored(Boolean(c || p));
+        setReady(true);
+      } catch {
+        if (!cancelled) setLoadError(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [year, identity]);
+
+  useEffect(() => {
+    if (!ready) return;
     void (async () => {
       const stored = identity
         ? await getStandingsForSeasonAsync(identity)
         : await getYearStandingsAsync(Number(year));
-      if (cancelled) return;
       const c = stored?.central?.length ? stored.central : null;
       const p = stored?.pacific?.length ? stored.pacific : null;
       setCentral(c);
       setPacific(p);
       setHasAnyStored(Boolean(c || p));
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [year, identity]);
+    // Local rebuild after Museum notify — standings helpers are cached reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tick-driven refresh
+  }, [tick]);
 
   const useFullSample = allowSample && !hasAnyStored;
 
@@ -81,6 +110,24 @@ export function FinalStandingsBoard({
   const showingSample = useFullSample;
   const bothEmpty = centralRows.length === 0 && pacificRows.length === 0;
 
+  if (loadError) {
+    return (
+      <div className={cn("space-y-2", className)}>
+        <MuseumBoardStatusMessage status="error" />
+      </div>
+    );
+  }
+
+  if (!ready) {
+    return (
+      <div className={cn("space-y-2", className)}>
+        <p className="text-[13px] text-museum-ivory-soft">
+          {MUSEUM_BOARD_LOADING_MESSAGE}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className={cn("space-y-2", className)}>
       {showingSample ? (
@@ -89,9 +136,11 @@ export function FinalStandingsBoard({
         </p>
       ) : null}
       {!showingSample && bothEmpty ? (
-        <p className="rounded-md border border-white/10 bg-black/40 px-3 py-2 text-[11px] text-museum-ivory-soft">
-          最終順位はまだ登録されていません。
-        </p>
+        <MuseumBoardStatusMessage
+          status="empty"
+          emptyMessage="最終順位はまだ登録されていません。"
+          className="rounded-md border border-white/10 bg-black/40 px-3 py-2 text-[11px] text-museum-ivory-soft"
+        />
       ) : null}
       <div className="grid gap-3 lg:grid-cols-2">
         <DataPanel className={compact ? "!p-3 md:!p-3.5" : undefined}>

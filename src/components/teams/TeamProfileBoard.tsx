@@ -1,38 +1,44 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import { buildTeamProfileSummary } from "@/data/teamDetail";
 import type { TeamId } from "@/data/teams";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 
 type Props = { teamId: TeamId };
 
 export function TeamProfileBoard({ teamId }: Props) {
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    setReady(true);
-  }, [teamId]);
+  const { tick } = useMuseumBoardTick();
 
-  const profile = useMemo(
-    () => (ready ? buildTeamProfileSummary(teamId) : null),
-    [ready, teamId],
+  const profile = useMemo(() => {
+    void tick;
+    return buildTeamProfileSummary(teamId);
+  }, [tick, teamId]);
+
+  const hasAny = Boolean(
+    profile &&
+      (profile.careerW != null ||
+        profile.leagueTitles != null ||
+        profile.csAppearances != null ||
+        profile.bestRank != null),
   );
+  const { status } = useMuseumBoardStatus(hasAny);
 
-  if (!ready) {
-    return <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>;
+  if (status === "loading" || status === "error") {
+    return <MuseumBoardStatusMessage status={status} />;
   }
   if (!profile) {
     return (
-      <p className="text-[13px] text-museum-ivory-soft">
-        球団情報を取得できませんでした。
-      </p>
+      <MuseumBoardStatusMessage
+        status="empty"
+        emptyMessage="球団情報を取得できませんでした。"
+      />
     );
   }
-
-  const hasAny =
-    profile.careerW != null ||
-    profile.leagueTitles != null ||
-    profile.csAppearances != null ||
-    profile.bestRank != null;
 
   return (
     <div className="space-y-6">

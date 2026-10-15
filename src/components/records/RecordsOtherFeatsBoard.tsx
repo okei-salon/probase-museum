@@ -1,31 +1,36 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import {
   ACHIEVEMENT_CATEGORY_LABELS,
   type SeasonAchievement,
 } from "@/data/seasonAchievements";
-import { subscribeImportDemoMode } from "@/data/import/demoMode";
 import {
   achievementSeasonLabel,
   buildOtherFeatsSections,
 } from "@/data/recordsRankings";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 import { cn } from "@/lib/cn";
 
 export function RecordsOtherFeatsBoard() {
-  const [tick, setTick] = useState(0);
-  useEffect(() => subscribeImportDemoMode(() => setTick((t) => t + 1)), []);
+  const { tick } = useMuseumBoardTick();
   const sections = useMemo(() => {
     void tick;
     return buildOtherFeatsSections();
   }, [tick]);
   const total = sections.reduce((n, s) => n + s.items.length, 0);
+  const { status } = useMuseumBoardStatus(total > 0);
 
-  if (total === 0) {
+  if (status !== "ready") {
     return (
-      <p className="text-[13px] text-museum-ivory-soft">
-        全年度を通じた偉業はまだありません。SEASON「記録・偉業」への登録・個人成績からの自動判定が反映されます。
-      </p>
+      <MuseumBoardStatusMessage
+        status={status}
+        emptyMessage="全年度を通じた偉業はまだありません。SEASON「記録・偉業」への登録・個人成績からの自動判定が反映されます。"
+      />
     );
   }
 

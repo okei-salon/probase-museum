@@ -1,7 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import { buildPlayerFeatsSummary } from "@/data/playerDetail";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 
 type PlayerOtherRecordsBoardProps = {
   playerId: string;
@@ -10,27 +15,21 @@ type PlayerOtherRecordsBoardProps = {
 export function PlayerOtherRecordsBoard({
   playerId,
 }: PlayerOtherRecordsBoardProps) {
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    setReady(true);
-  }, [playerId]);
+  const { tick } = useMuseumBoardTick();
 
-  const items = useMemo(
-    () => (ready ? buildPlayerFeatsSummary(playerId) : []),
-    [ready, playerId],
-  );
+  const items = useMemo(() => {
+    void tick;
+    return buildPlayerFeatsSummary(playerId);
+  }, [tick, playerId]);
 
-  if (!ready) {
+  const { status } = useMuseumBoardStatus(items.length > 0);
+
+  if (status !== "ready") {
     return (
-      <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>
-    );
-  }
-
-  if (items.length === 0) {
-    return (
-      <p className="text-[13px] text-museum-ivory-soft">
-        この選手の特殊記録・偉業はまだありません。SEASON「記録・偉業」への登録や個人成績からの自動判定が反映されます。
-      </p>
+      <MuseumBoardStatusMessage
+        status={status}
+        emptyMessage="この選手の特殊記録・偉業はまだありません。SEASON「記録・偉業」への登録や個人成績からの自動判定が反映されます。"
+      />
     );
   }
 

@@ -3,12 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import { hydratePlayerMasterFromStorage } from "@/data/playerMaster";
 import {
   groupPlayersByPosition,
   listPlayersOnCurrentTeam,
 } from "@/data/players/directory";
 import type { TeamId } from "@/data/teams";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 import { cn } from "@/lib/cn";
 
 type PlayerTeamRosterBoardProps = {
@@ -21,30 +26,30 @@ export function PlayerTeamRosterBoard({
   teamId,
   teamShort,
 }: PlayerTeamRosterBoardProps) {
-  const [ready, setReady] = useState(false);
+  const { tick: storeTick } = useMuseumBoardTick();
+  const [localTick, setLocalTick] = useState(0);
 
   useEffect(() => {
     hydratePlayerMasterFromStorage();
-    setReady(true);
+    setLocalTick((t) => t + 1);
   }, []);
 
+  const tick = storeTick + localTick;
+
   const groups = useMemo(() => {
-    if (!ready) return [];
+    void tick;
     return groupPlayersByPosition(listPlayersOnCurrentTeam(teamId));
-  }, [ready, teamId]);
+  }, [tick, teamId]);
 
   const total = groups.reduce((s, g) => s + g.players.length, 0);
+  const { status } = useMuseumBoardStatus(total > 0);
 
-  if (!ready) {
-    return <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>;
-  }
-
-  if (total === 0) {
+  if (status !== "ready") {
     return (
-      <p className="text-[13px] text-museum-ivory-soft">
-        {teamShort}
-        に現在所属として登録されている選手はいません。選手名検索から探すか、成績取込で所属を登録してください。
-      </p>
+      <MuseumBoardStatusMessage
+        status={status}
+        emptyMessage={`${teamShort}に現在所属として登録されている選手はいません。選手名検索から探すか、成績取込で所属を登録してください。`}
+      />
     );
   }
 

@@ -1,53 +1,51 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { subscribeImportDemoMode } from "@/data/import/demoMode";
-import { getSeasonLinesCacheState } from "@/data/playerSeasonLines";
+import { useMemo, useState } from "react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import {
-  buildSopCareerRankings,
+  buildSopCareerRankingsFromResults,
+  collectAllSopSeasonResults,
+  limitSopCareerRankingsForDisplay,
   type SopRoleFilter,
 } from "@/data/sop";
-import { resolveSopBoardDataStatus } from "@/data/sop/sopBoardDataStatus";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 import { RoleTabs } from "@/components/sop/RoleTabs";
 
 export function SopCareerHubBoard() {
-  const [mounted, setMounted] = useState(false);
-  const [tick, setTick] = useState(0);
+  const { tick, mounted } = useMuseumBoardTick();
   const [role, setRole] = useState<SopRoleFilter>("all");
 
-  useEffect(() => {
-    setMounted(true);
-    return subscribeImportDemoMode(() => setTick((t) => t + 1));
-  }, []);
-
-  const rows = useMemo(() => {
+  /** 全シーズンSOPは role 切替では再計算しない（fingerprint キャッシュ＋ここでも共有） */
+  const allSeasonResults = useMemo(() => {
     void tick;
     if (!mounted) return [];
-    return buildSopCareerRankings(role);
-  }, [mounted, role, tick]);
+    return collectAllSopSeasonResults();
+  }, [mounted, tick]);
 
-  const dataStatus = useMemo(() => {
-    void tick;
-    const cache = getSeasonLinesCacheState();
-    return resolveSopBoardDataStatus({
-      mounted,
-      cloudHydrated: cache.cloudHydrated,
-      hasRows: rows.length > 0,
-    });
-  }, [mounted, rows.length, tick]);
+  const rankedAll = useMemo(
+    () => buildSopCareerRankingsFromResults(allSeasonResults, role),
+    [allSeasonResults, role],
+  );
+
+  const rows = useMemo(
+    () => limitSopCareerRankingsForDisplay(rankedAll),
+    [rankedAll],
+  );
+
+  const { status } = useMuseumBoardStatus(rows.length > 0);
 
   return (
     <div className="space-y-4">
       <RoleTabs role={role} onChange={setRole} />
 
-      {dataStatus === "loading" ? (
-        <p className="text-[13px] text-museum-ivory-soft">
-          成績データを読み込み中…
-        </p>
-      ) : dataStatus === "empty" ? (
-        <p className="text-[13px] text-museum-ivory-soft">
-          通算SOPを計算できる個人成績がまだありません。
-        </p>
+      {status !== "ready" ? (
+        <MuseumBoardStatusMessage
+          status={status}
+          emptyMessage="通算SOPを計算できる個人成績がまだありません。"
+        />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-white/10">
           <table className="w-full min-w-[520px] border-collapse text-left text-[12px] md:text-[13px]">

@@ -1,46 +1,69 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
+import { MUSEUM_BOARD_LOADING_MESSAGE } from "@/data/museumBoardDataStatus";
 import { buildTeamYearlyBoard } from "@/data/teamDetail";
 import type { TeamId } from "@/data/teams";
+import { useMuseumBoardTick } from "@/hooks/useMuseumBoardStatus";
 
 type Props = { teamId: TeamId };
 
 export function TeamYearlyBoard({ teamId }: Props) {
-  const [ready, setReady] = useState(false);
+  const { tick } = useMuseumBoardTick();
+  const [hydrated, setHydrated] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
+    setHydrated(false);
+    setLoadError(false);
     void (async () => {
-      const [{ hydrateTeamSeasonStatsFromCloud }, { hydrateTeamStandingsFromCloud }] =
-        await Promise.all([
+      try {
+        const [
+          { hydrateTeamSeasonStatsFromCloud },
+          { hydrateTeamStandingsFromCloud },
+        ] = await Promise.all([
           import("@/data/teamSeasonStats"),
           import("@/data/teamStandings"),
         ]);
-      await Promise.all([
-        hydrateTeamSeasonStatsFromCloud(),
-        hydrateTeamStandingsFromCloud(),
-      ]);
-      if (!cancelled) setReady(true);
+        await Promise.all([
+          hydrateTeamSeasonStatsFromCloud(),
+          hydrateTeamStandingsFromCloud(),
+        ]);
+        if (!cancelled) setHydrated(true);
+      } catch {
+        if (!cancelled) setLoadError(true);
+      }
     })();
     return () => {
       cancelled = true;
     };
   }, [teamId]);
 
-  const board = useMemo(
-    () => (ready ? buildTeamYearlyBoard(teamId) : null),
-    [ready, teamId],
-  );
+  const board = useMemo(() => {
+    void tick;
+    return hydrated ? buildTeamYearlyBoard(teamId) : null;
+  }, [hydrated, teamId, tick]);
 
-  if (!ready) {
-    return <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>;
+  if (loadError) {
+    return <MuseumBoardStatusMessage status="error" />;
+  }
+
+  if (!hydrated) {
+    return (
+      <p className="text-[13px] text-museum-ivory-soft">
+        {MUSEUM_BOARD_LOADING_MESSAGE}
+      </p>
+    );
   }
 
   if (!board || board.rows.length === 0) {
     return (
-      <p className="text-[13px] text-museum-ivory-soft">
-        この球団の年度成績はまだありません。チーム打撃・投手成績の登録後に、勝敗・順位が自動で一覧表示されます。
-      </p>
+      <MuseumBoardStatusMessage
+        status="empty"
+        emptyMessage="この球団の年度成績はまだありません。チーム打撃・投手成績の登録後に、勝敗・順位が自動で一覧表示されます。"
+      />
     );
   }
 

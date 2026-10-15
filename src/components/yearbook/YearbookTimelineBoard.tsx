@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import {
   buildYearbookSeasonContext,
   getSeasonReviewBody,
   hydrateSeasonReviewSources,
 } from "@/data/yearbook";
+import { MUSEUM_BOARD_LOADING_MESSAGE } from "@/data/museumBoardDataStatus";
 import {
   formatSeasonLineLabel,
   parseSeasonKey,
@@ -14,6 +16,7 @@ import {
   type SeasonIdentity,
 } from "@/data/seasons";
 import { useMuseumBack } from "@/hooks/useMuseumBack";
+import { useMuseumBoardTick } from "@/hooks/useMuseumBoardStatus";
 
 type Props = {
   seasonKey: string;
@@ -46,37 +49,67 @@ export function YearbookTimelineBoard({ seasonKey, year }: Props) {
     return null;
   }, [seasonKey, year]);
 
+  const { tick } = useMuseumBoardTick();
   const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
   const [hasReview, setHasReview] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setReady(false);
+    setLoadError(false);
     void (async () => {
-      await hydrateSeasonReviewSources();
-      if (cancelled || !identity) return;
-      const ctx = buildYearbookSeasonContext(identity);
-      const next: TimelineEntry[] = ctx.factLines
-        .filter((line) => !line.startsWith("シーズン総評:"))
-        .map((line, i) => {
-          const split = line.indexOf(":");
-          if (split > 0) {
-            return {
-              id: `e-${i}`,
-              label: line.slice(0, split).trim(),
-              detail: line.slice(split + 1).trim(),
-            };
-          }
-          return { id: `e-${i}`, label: "記録", detail: line };
-        });
-      setEntries(next);
-      setHasReview(getSeasonReviewBody(identity) != null);
-      setReady(true);
+      try {
+        await hydrateSeasonReviewSources();
+        if (cancelled || !identity) return;
+        const ctx = buildYearbookSeasonContext(identity);
+        const next: TimelineEntry[] = ctx.factLines
+          .filter((line) => !line.startsWith("シーズン総評:"))
+          .map((line, i) => {
+            const split = line.indexOf(":");
+            if (split > 0) {
+              return {
+                id: `e-${i}`,
+                label: line.slice(0, split).trim(),
+                detail: line.slice(split + 1).trim(),
+              };
+            }
+            return { id: `e-${i}`, label: "記録", detail: line };
+          });
+        setEntries(next);
+        setHasReview(getSeasonReviewBody(identity) != null);
+        setReady(true);
+      } catch {
+        if (!cancelled) setLoadError(true);
+      }
     })();
     return () => {
       cancelled = true;
     };
   }, [identity]);
+
+  useEffect(() => {
+    if (!ready || !identity) return;
+    const ctx = buildYearbookSeasonContext(identity);
+    const next: TimelineEntry[] = ctx.factLines
+      .filter((line) => !line.startsWith("シーズン総評:"))
+      .map((line, i) => {
+        const split = line.indexOf(":");
+        if (split > 0) {
+          return {
+            id: `e-${i}`,
+            label: line.slice(0, split).trim(),
+            detail: line.slice(split + 1).trim(),
+          };
+        }
+        return { id: `e-${i}`, label: "記録", detail: line };
+      });
+    setEntries(next);
+    setHasReview(getSeasonReviewBody(identity) != null);
+    // Local rebuild after Museum notify — no second hydrate.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tick-driven refresh
+  }, [tick]);
 
   if (!identity) {
     return (
@@ -86,8 +119,16 @@ export function YearbookTimelineBoard({ seasonKey, year }: Props) {
     );
   }
 
+  if (loadError) {
+    return <MuseumBoardStatusMessage status="error" />;
+  }
+
   if (!ready) {
-    return <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>;
+    return (
+      <p className="text-[13px] text-museum-ivory-soft">
+        {MUSEUM_BOARD_LOADING_MESSAGE}
+      </p>
+    );
   }
 
   const label = formatSeasonLineLabel(identity);

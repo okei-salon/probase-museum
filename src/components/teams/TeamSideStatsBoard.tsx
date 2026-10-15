@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
+import { MUSEUM_BOARD_LOADING_MESSAGE } from "@/data/museumBoardDataStatus";
 import {
   buildTeamBattingBoard,
   buildTeamPitchingBoard,
@@ -14,6 +16,7 @@ import {
   pitchingFieldLabel,
 } from "@/data/teamSeasonStats";
 import type { TeamId } from "@/data/teams";
+import { useMuseumBoardTick } from "@/hooks/useMuseumBoardStatus";
 import { cn } from "@/lib/cn";
 
 type Props = {
@@ -72,50 +75,80 @@ function fieldMap(fields: TeamStatFieldRow[]): Map<string, string> {
 }
 
 export function TeamSideStatsBoard({ teamId, kind }: Props) {
+  const { tick } = useMuseumBoardTick();
   const loadKey = `${teamId}:${kind}`;
   const [state, setState] = useState<LoadedState | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setState(null);
+    setLoadError(false);
     void (async () => {
-      const { hydrateTeamSeasonStatsFromCloud } = await import(
-        "@/data/teamSeasonStats"
-      );
-      await hydrateTeamSeasonStatsFromCloud();
-      if (cancelled) return;
-      const board =
-        kind === "batting"
-          ? buildTeamBattingBoard(teamId)
-          : buildTeamPitchingBoard(teamId);
-      setState({
-        key: `${teamId}:${kind}`,
-        board,
-        mode: "year",
-      });
+      try {
+        const { hydrateTeamSeasonStatsFromCloud } = await import(
+          "@/data/teamSeasonStats"
+        );
+        await hydrateTeamSeasonStatsFromCloud();
+        if (cancelled) return;
+        const board =
+          kind === "batting"
+            ? buildTeamBattingBoard(teamId)
+            : buildTeamPitchingBoard(teamId);
+        setState({
+          key: `${teamId}:${kind}`,
+          board,
+          mode: "year",
+        });
+      } catch {
+        if (!cancelled) setLoadError(true);
+      }
     })();
     return () => {
       cancelled = true;
     };
   }, [teamId, kind]);
 
+  useEffect(() => {
+    if (!state || state.key !== loadKey) return;
+    const board =
+      kind === "batting"
+        ? buildTeamBattingBoard(teamId)
+        : buildTeamPitchingBoard(teamId);
+    setState((prev) =>
+      prev
+        ? { ...prev, board }
+        : { key: loadKey, board, mode: "year" },
+    );
+    // Rebuild from local store after Museum notify; do not re-hydrate.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tick-driven refresh only
+  }, [tick]);
+
   const columns = useMemo(() => {
     if (!state || state.key !== loadKey) return [];
     return columnsForBoard(kind, state.board, state.mode);
   }, [state, loadKey, kind]);
 
+  if (loadError) {
+    return <MuseumBoardStatusMessage status="error" />;
+  }
+
   if (!state || state.key !== loadKey) {
-    return <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>;
+    return (
+      <p className="text-[13px] text-museum-ivory-soft">
+        {MUSEUM_BOARD_LOADING_MESSAGE}
+      </p>
+    );
   }
 
   const { board, mode } = state;
 
   if (board.years.length === 0 && !board.career) {
     return (
-      <p className="text-[13px] text-museum-ivory-soft">
-        この球団の
-        {kind === "batting" ? "チーム打撃" : "チーム投手"}
-        成績はまだありません。
-      </p>
+      <MuseumBoardStatusMessage
+        status="empty"
+        emptyMessage={`この球団の${kind === "batting" ? "チーム打撃" : "チーム投手"}成績はまだありません。`}
+      />
     );
   }
 

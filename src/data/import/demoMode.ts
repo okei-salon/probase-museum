@@ -56,6 +56,14 @@ export function shouldUseIsolatedDemoStore(
 
 export function notifyImportStoreChanged(): void {
   if (!canUseStorage()) return;
+  // SOP通算キャッシュは行数だけでは内容変更を検知できないため、ストア通知で破棄する
+  void import("@/data/sop/careerBoard")
+    .then((m) => {
+      m.clearSopSeasonResultsCache();
+    })
+    .catch(() => {
+      // ignore（循環・未ロード時）
+    });
   window.dispatchEvent(new Event("probase-demo-mode"));
   window.dispatchEvent(new Event("probase-formal-store"));
 }

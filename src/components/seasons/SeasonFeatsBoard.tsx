@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import {
   ACHIEVEMENT_CATEGORY_LABELS,
   buildYearFeats,
@@ -10,8 +11,11 @@ import {
   type SeasonAchievement,
 } from "@/data/seasonAchievements";
 import { npbBadgeLabel } from "@/data/seasonAchievements/annotateNpb";
-import { subscribeImportDemoMode } from "@/data/import/demoMode";
 import { parseSeasonKey } from "@/data/seasons";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 import { cn } from "@/lib/cn";
 
 type FilterId = "all" | AchievementCategory;
@@ -31,17 +35,17 @@ type SeasonFeatsBoardProps = {
 };
 
 export function SeasonFeatsBoard({ year, seasonKey }: SeasonFeatsBoardProps) {
-  const [tick, setTick] = useState(0);
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-    return subscribeImportDemoMode(() => setTick((t) => t + 1));
-  }, []);
+  const { tick, mounted } = useMuseumBoardTick();
 
   const built = useMemo(() => {
     void tick;
     if (!mounted) {
-      return { items: [] as SeasonAchievement[], demoCount: 0, autoCount: 0, manualCount: 0 };
+      return {
+        items: [] as SeasonAchievement[],
+        demoCount: 0,
+        autoCount: 0,
+        manualCount: 0,
+      };
     }
     if (seasonKey) {
       const identity = parseSeasonKey(seasonKey);
@@ -60,6 +64,8 @@ export function SeasonFeatsBoard({ year, seasonKey }: SeasonFeatsBoardProps) {
     }
     return built.items.filter((i) => i.category === filter);
   }, [built.items, filter]);
+
+  const { status } = useMuseumBoardStatus(built.items.length > 0);
 
   return (
     <div className="space-y-4">
@@ -81,22 +87,30 @@ export function SeasonFeatsBoard({ year, seasonKey }: SeasonFeatsBoardProps) {
         ))}
       </div>
 
-      {!mounted ? (
-        <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>
-      ) : SHOW_SEASON_FEATS_DEMO &&
-        process.env.NODE_ENV === "development" &&
-        built.demoCount > 0 ? (
+      {status === "ready" &&
+      SHOW_SEASON_FEATS_DEMO &&
+      process.env.NODE_ENV === "development" &&
+      built.demoCount > 0 ? (
         <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100/90">
           デモデータを {built.demoCount}{" "}
           件表示中です（開発中のUI確認用）。正式登録データとは混在しません。
         </p>
       ) : null}
 
-      {!mounted ? null : items.length === 0 ? (
-        <p className="text-[13px] text-museum-ivory-soft">
-          この条件に該当する記録・偉業はまだありません。
-          個人成績の登録や、特殊記録の登録後に表示されます。
-        </p>
+      {status !== "ready" ? (
+        <MuseumBoardStatusMessage
+          status={status}
+          emptyMessage={
+            filter === "all"
+              ? "この条件に該当する記録・偉業はまだありません。個人成績の登録や、特殊記録の登録後に表示されます。"
+              : "この条件に該当する記録・偉業はまだありません。個人成績の登録や、特殊記録の登録後に表示されます。"
+          }
+        />
+      ) : items.length === 0 ? (
+        <MuseumBoardStatusMessage
+          status="empty"
+          emptyMessage="この条件に該当する記録・偉業はまだありません。個人成績の登録や、特殊記録の登録後に表示されます。"
+        />
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {items.map((item) => (

@@ -1,27 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import { buildInterleagueSopCareerRankings } from "@/data/sop";
 import type { SopRole } from "@/lib/sop";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 import { cn } from "@/lib/cn";
 
 /** 交流戦だけで獲得したSOPの通算ランキング */
 export function InterleagueSopCareerBoard() {
-  const [ready, setReady] = useState(false);
+  const { tick, mounted } = useMuseumBoardTick();
   const [role, setRole] = useState<SopRole | "all">("all");
 
-  useEffect(() => {
-    setReady(true);
-  }, []);
+  const rows = useMemo(() => {
+    void tick;
+    if (!mounted) return [];
+    return buildInterleagueSopCareerRankings(role).filter((r) => r.total > 0);
+  }, [mounted, role, tick]);
 
-  const rows = useMemo(
-    () => (ready ? buildInterleagueSopCareerRankings(role) : []),
-    [ready, role],
-  );
-
-  if (!ready) {
-    return <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>;
-  }
+  const displayRows = useMemo(() => rows.slice(0, 100), [rows]);
+  const { status } = useMuseumBoardStatus(displayRows.length > 0);
 
   return (
     <div className="space-y-5">
@@ -53,35 +54,43 @@ export function InterleagueSopCareerBoard() {
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/40">
-        <table className="min-w-full text-left text-[12px]">
-          <thead>
-            <tr className="text-white/50">
-              <th className="px-3 py-2">順位</th>
-              <th className="px-3 py-2">選手</th>
-              <th className="px-3 py-2">球団</th>
-              <th className="px-3 py-2">通算</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.slice(0, 50).map((row) => (
-              <tr key={row.playerId} className="border-t border-white/5">
-                <td className="px-3 py-2 tabular-nums">{row.rank}</td>
-                <td className="px-3 py-2 text-museum-ivory">{row.playerName}</td>
-                <td className="px-3 py-2">{row.teamShort}</td>
-                <td className="px-3 py-2 tabular-nums text-[color:var(--museum-accent,#d4af37)]">
-                  {row.total}pt
-                </td>
+      {status === "loading" || status === "error" ? (
+        <MuseumBoardStatusMessage status={status} />
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/40">
+          <table className="min-w-full text-left text-[12px]">
+            <thead>
+              <tr className="text-white/50">
+                <th className="px-3 py-2">順位</th>
+                <th className="px-3 py-2">選手</th>
+                <th className="px-3 py-2">球団</th>
+                <th className="px-3 py-2">通算</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {rows.length === 0 ? (
-          <p className="px-4 py-8 text-center text-[12px] text-white/45">
-            交流戦通算SOPデータがありません。
-          </p>
-        ) : null}
-      </div>
+            </thead>
+            <tbody>
+              {displayRows.map((row) => (
+                <tr key={row.playerId} className="border-t border-white/5">
+                  <td className="px-3 py-2 tabular-nums">{row.rank}</td>
+                  <td className="px-3 py-2 text-museum-ivory">
+                    {row.playerName}
+                  </td>
+                  <td className="px-3 py-2">{row.teamShort}</td>
+                  <td className="px-3 py-2 tabular-nums text-[color:var(--museum-accent,#d4af37)]">
+                    {row.total}pt
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {status === "empty" ? (
+            <MuseumBoardStatusMessage
+              status="empty"
+              emptyMessage="交流戦通算SOPデータがありません。"
+              className="px-4 py-8 text-center text-[12px] text-white/45"
+            />
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

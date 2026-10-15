@@ -1,19 +1,30 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import {
   STREAK_DEPARTMENTS,
   buildStreakBoard,
   type StreakDeptId,
 } from "@/data/recordsRankings";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 import { cn } from "@/lib/cn";
 
 export function RecordsStreakBoard() {
+  const { tick } = useMuseumBoardTick();
   const [deptId, setDeptId] = useState<StreakDeptId>("hit_streak");
   const def =
     STREAK_DEPARTMENTS.find((d) => d.id === deptId) ?? STREAK_DEPARTMENTS[0]!;
 
-  const board = useMemo(() => buildStreakBoard(def), [def]);
+  const board = useMemo(() => {
+    void tick;
+    return buildStreakBoard(def);
+  }, [def, tick]);
+
+  const { status } = useMuseumBoardStatus(board.entries.length > 0);
 
   return (
     <div className="space-y-5">
@@ -43,10 +54,11 @@ export function RecordsStreakBoard() {
           {def.label}
         </h3>
 
-        {!board.entries.length ? (
-          <p className="text-[13px] text-museum-ivory-soft">
-            {board.emptyReason}
-          </p>
+        {status !== "ready" ? (
+          <MuseumBoardStatusMessage
+            status={status}
+            emptyMessage={board.emptyReason}
+          />
         ) : (
           <div className="space-y-3">
             {board.entries.map((row, idx) => (

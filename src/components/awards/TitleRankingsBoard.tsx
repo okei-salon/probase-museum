@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Crown } from "lucide-react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
+import { getMuseumCloudLoadState } from "@/data/museumCloudLoadState";
+import { getSeasonLinesCacheState } from "@/data/playerSeasonLines";
 import {
   buildTitleRankings,
   type TitleRankEntry,
@@ -11,6 +14,10 @@ import {
 } from "@/data/titleRankings";
 import { hydratePlayerMasterFromStorage } from "@/data/playerMaster";
 import { identityFromSeasonKey } from "@/data/sop/seasonAwardsView";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 import { cn } from "@/lib/cn";
 
 type TitleRankingsBoardProps = {
@@ -24,16 +31,20 @@ export function TitleRankingsBoard({
 }: TitleRankingsBoardProps) {
   const y = Number(year);
   const [role, setRole] = useState<TitleRole>("batter");
-  const [tick, setTick] = useState(0);
   const identity = useMemo(
     () => identityFromSeasonKey(seasonKey ?? year, year),
     [seasonKey, year],
   );
 
+  const { tick: storeTick } = useMuseumBoardTick();
+  const [localTick, setLocalTick] = useState(0);
+
   useEffect(() => {
     hydratePlayerMasterFromStorage();
-    setTick((t) => t + 1);
+    setLocalTick((t) => t + 1);
   }, [year, role, seasonKey]);
+
+  const tick = storeTick + localTick;
 
   const result = useMemo(() => {
     void tick;
@@ -42,6 +53,30 @@ export function TitleRankingsBoard({
       identity,
     });
   }, [y, role, tick, identity]);
+
+  const hasLocalOrCloud = useMemo(() => {
+    void tick;
+    const cloudReady =
+      getMuseumCloudLoadState().phase === "ready" ||
+      getSeasonLinesCacheState().cloudHydrated;
+    return (
+      cloudReady ||
+      result.sections.some((s) =>
+        [...s.board.central, ...s.board.pacific].some((e) => e.playerId),
+      )
+    );
+  }, [tick, result.sections]);
+
+  const { status } = useMuseumBoardStatus(hasLocalOrCloud);
+
+  if (status !== "ready") {
+    return (
+      <MuseumBoardStatusMessage
+        status={status}
+        emptyMessage="タイトルランキングを表示できる個人成績がまだありません。"
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">

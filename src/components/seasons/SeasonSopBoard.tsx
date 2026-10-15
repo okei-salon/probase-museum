@@ -2,9 +2,13 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import { buildYearSopRankings } from "@/data/sop";
-import { subscribeImportDemoMode } from "@/data/import/demoMode";
 import { parseSeasonKey } from "@/data/seasons";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 import { RoleTabs } from "@/components/sop/RoleTabs";
 import {
   groupSopItemsByCategory,
@@ -31,8 +35,7 @@ function entryKey(entry: SopRankEntry): string {
 }
 
 export function SeasonSopBoard({ year, seasonKey }: SeasonSopBoardProps) {
-  const [tick, setTick] = useState(0);
-  useEffect(() => subscribeImportDemoMode(() => setTick((t) => t + 1)), []);
+  const { tick } = useMuseumBoardTick();
 
   const { rankings, notes } = useMemo(() => {
     void tick;
@@ -50,6 +53,10 @@ export function SeasonSopBoard({ year, seasonKey }: SeasonSopBoardProps) {
   );
   const [selected, setSelected] = useState<SopRankEntry | null>(null);
   const detailRef = useRef<HTMLTableRowElement | null>(null);
+
+  const { status: dataStatus } = useMuseumBoardStatus(
+    rankings.some((e) => e.result.total > 0),
+  );
 
   useEffect(() => {
     setSelected(null);
@@ -76,12 +83,17 @@ export function SeasonSopBoard({ year, seasonKey }: SeasonSopBoardProps) {
     });
   }
 
-  if (rankings.length === 0) {
+  if (dataStatus === "loading" || dataStatus === "error") {
+    return <MuseumBoardStatusMessage status={dataStatus} />;
+  }
+
+  if (dataStatus === "empty") {
     return (
       <div className="space-y-3">
-        <p className="text-[13px] text-museum-ivory-soft">
-          この年度のSOPを計算できる個人成績がまだありません。
-        </p>
+        <MuseumBoardStatusMessage
+          status="empty"
+          emptyMessage="この年度のSOPを計算できる個人成績がまだありません。"
+        />
         <ul className="space-y-1 text-[11px] text-museum-ivory-soft/80">
           {notes.map((n) => (
             <li key={n}>・ {n}</li>

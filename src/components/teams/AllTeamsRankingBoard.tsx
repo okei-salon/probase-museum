@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import { SortableTeamStatsTable } from "@/components/views/SortableTeamStatsTable";
+import { MUSEUM_BOARD_LOADING_MESSAGE } from "@/data/museumBoardDataStatus";
 import {
   formatSeasonLineLabel,
   listEntrySeasonIdentities,
@@ -15,6 +17,7 @@ import {
   getOfficialTeamPitchingRows,
 } from "@/data/teamSeasonStats";
 import type { TeamStatColumn, TeamStatRow } from "@/data/seasonViews";
+import { useMuseumBoardTick } from "@/hooks/useMuseumBoardStatus";
 import { cn } from "@/lib/cn";
 
 type Kind = "batting" | "pitching";
@@ -35,10 +38,15 @@ function defaultSeasonKey(): string {
  * 既存 teamSeasonStats を読むだけ。通算は WORLD 混在のため今回は対象外。
  */
 export function AllTeamsRankingBoard() {
-  const seasons = useMemo(() => listEntrySeasonIdentities(), []);
+  const { tick } = useMuseumBoardTick();
+  const seasons = useMemo(() => {
+    void tick;
+    return listEntrySeasonIdentities();
+  }, [tick]);
   const [seasonKey, setSeasonKey] = useState(defaultSeasonKey);
   const [kind, setKind] = useState<Kind>("batting");
   const [data, setData] = useState<PanelData | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   const identity: SeasonIdentity | null = useMemo(
     () => parseSeasonKey(seasonKey),
@@ -47,13 +55,50 @@ export function AllTeamsRankingBoard() {
 
   useEffect(() => {
     let cancelled = false;
+    setData(null);
+    setLoadError(false);
     void (async () => {
-      const { hydrateTeamSeasonStatsFromCloud } = await import(
-        "@/data/teamSeasonStats"
-      );
-      await hydrateTeamSeasonStatsFromCloud();
-      if (cancelled || !identity) return;
+      try {
+        const { hydrateTeamSeasonStatsFromCloud } = await import(
+          "@/data/teamSeasonStats"
+        );
+        await hydrateTeamSeasonStatsFromCloud();
+        if (cancelled || !identity) return;
 
+        const columns =
+          kind === "batting"
+            ? formalTeamBattingColumns
+            : formalTeamPitchingColumns;
+        const rows =
+          kind === "batting"
+            ? getOfficialTeamBattingRows(identity.year, "regular", identity)
+            : getOfficialTeamPitchingRows(identity.year, "regular", identity);
+
+        setData({
+          rows,
+          columns,
+          seasonKey: identity.seasonKey,
+          kind,
+        });
+      } catch {
+        if (!cancelled) setLoadError(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [identity, kind]);
+
+  useEffect(() => {
+    if (!identity) return;
+    setData((prev) => {
+      if (
+        !prev ||
+        prev.seasonKey !== identity.seasonKey ||
+        prev.kind !== kind
+      ) {
+        return prev;
+      }
       const columns =
         kind === "batting"
           ? formalTeamBattingColumns
@@ -62,18 +107,16 @@ export function AllTeamsRankingBoard() {
         kind === "batting"
           ? getOfficialTeamBattingRows(identity.year, "regular", identity)
           : getOfficialTeamPitchingRows(identity.year, "regular", identity);
-
-      setData({
+      return {
         rows,
         columns,
         seasonKey: identity.seasonKey,
         kind,
-      });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [identity, kind]);
+      };
+    });
+    // Local rebuild after Museum notify only — no second cloud hydrate.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tick-driven refresh
+  }, [tick]);
 
   const ready =
     data != null &&
@@ -136,14 +179,17 @@ export function AllTeamsRankingBoard() {
         ))}
       </div>
 
-      {!ready ? (
-        <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>
-      ) : data.rows.length === 0 ? (
+      {loadError ? (
+        <MuseumBoardStatusMessage status="error" />
+      ) : !ready ? (
         <p className="text-[13px] text-museum-ivory-soft">
-          {seasonLabel} のチーム
-          {kind === "batting" ? "打撃" : "投手"}
-          成績はまだ登録されていません。
+          {MUSEUM_BOARD_LOADING_MESSAGE}
         </p>
+      ) : data.rows.length === 0 ? (
+        <MuseumBoardStatusMessage
+          status="empty"
+          emptyMessage={`${seasonLabel} のチーム${kind === "batting" ? "打撃" : "投手"}成績はまだ登録されていません。`}
+        />
       ) : (
         <SortableTeamStatsTable
           key={`${seasonKey}:${kind}`}

@@ -1,31 +1,32 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import { buildTeamCareerCards } from "@/data/teamDetail";
 import type { TeamId } from "@/data/teams";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 
 type Props = { teamId: TeamId };
 
 export function TeamCareerBoard({ teamId }: Props) {
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    setReady(true);
-  }, [teamId]);
+  const { tick } = useMuseumBoardTick();
 
-  const cards = useMemo(
-    () => (ready ? buildTeamCareerCards(teamId) : []),
-    [ready, teamId],
-  );
+  const cards = useMemo(() => {
+    void tick;
+    return buildTeamCareerCards(teamId);
+  }, [tick, teamId]);
 
-  if (!ready) {
-    return <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>;
-  }
+  const { status } = useMuseumBoardStatus(cards.length > 0);
 
-  if (cards.length === 0) {
+  if (status !== "ready") {
     return (
-      <p className="text-[13px] text-museum-ivory-soft">
-        通算成績を表示できるデータはまだありません。
-      </p>
+      <MuseumBoardStatusMessage
+        status={status}
+        emptyMessage="通算成績を表示できるデータはまだありません。"
+      />
     );
   }
 

@@ -4,18 +4,20 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import type { LeagueSide, ResolvedAwardCard } from "@/data/awards";
 import { AwardListTable } from "@/components/awards/AwardCards";
 import { LeagueTabs } from "@/components/awards/LeagueTabs";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import { subscribeImportDemoMode } from "@/data/import/demoMode";
-import { listSeasonLines } from "@/data/playerSeasonLines";
+import { getMuseumCloudLoadState } from "@/data/museumCloudLoadState";
+import { getSeasonLinesCacheState, listSeasonLines } from "@/data/playerSeasonLines";
 import { listRegisteredAwards } from "@/data/sop/awardsRegistry";
 import {
   identityFromSeasonKey,
   resolveBestNineBoard,
 } from "@/data/sop/seasonAwardsView";
+import { useMuseumBoardStatus } from "@/hooks/useMuseumBoardStatus";
 
 type BestNineBoardProps = {
   year: string;
   seasonKey?: string;
-  /** レガシー互換: 直接 rows を渡す場合 */
   central?: ResolvedAwardCard[];
   pacific?: ResolvedAwardCard[];
 };
@@ -84,6 +86,32 @@ export function BestNineBoard({
     return resolveBestNineBoard(identity);
   }, [centralProp, pacificProp, identity, awardsVersion, linesVersion]);
   const rows = league === "central" ? resolved.central : resolved.pacific;
+
+  const hasLocalOrCloud = useMemo(() => {
+    void awardsVersion;
+    void linesVersion;
+    const cloudReady =
+      getMuseumCloudLoadState().phase === "ready" ||
+      getSeasonLinesCacheState().cloudHydrated;
+    return (
+      cloudReady ||
+      Boolean(centralProp?.length) ||
+      Boolean(pacificProp?.length) ||
+      resolved.central.length > 0 ||
+      resolved.pacific.length > 0
+    );
+  }, [awardsVersion, linesVersion, centralProp, pacificProp, resolved]);
+
+  const { status } = useMuseumBoardStatus(hasLocalOrCloud);
+
+  if (status !== "ready") {
+    return (
+      <MuseumBoardStatusMessage
+        status={status}
+        emptyMessage="このシーズンのベストナインはまだ登録されていません。"
+      />
+    );
+  }
 
   return (
     <div className="space-y-3">

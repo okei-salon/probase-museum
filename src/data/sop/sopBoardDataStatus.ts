@@ -1,21 +1,30 @@
 /**
- * SOP通算／四天王ボードの表示状態。
- * season_lines は Neon hydrate 前後で空に見えることがあるため、
- * 「未 hydrate」と「hydrate 済みだがデータなし」を分ける。
+ * SOP ボード向けエイリアス（Museum 共通状態の再エクスポート）。
  */
 
-export type SopBoardDataStatus = "loading" | "empty" | "ready";
+import {
+  MUSEUM_BOARD_ERROR_MESSAGE,
+  MUSEUM_BOARD_LOADING_MESSAGE,
+  resolveMuseumBoardDataStatus,
+  type MuseumBoardDataStatus,
+} from "@/data/museumBoardDataStatus";
 
+export type SopBoardDataStatus = MuseumBoardDataStatus;
+
+export const SOP_BOARD_LOADING_MESSAGE = MUSEUM_BOARD_LOADING_MESSAGE;
+export const SOP_BOARD_ERROR_MESSAGE = MUSEUM_BOARD_ERROR_MESSAGE;
+
+/** SOP 既存呼び出し互換（cloudHydrated → cloudReady） */
 export function resolveSopBoardDataStatus(input: {
-  /** クライアントマウント済みか */
   mounted: boolean;
-  /** season_lines の Neon hydrate が完了したか */
   cloudHydrated: boolean;
-  /** 表示対象の行が1件以上あるか */
   hasRows: boolean;
+  cloudLoadError?: boolean;
 }): SopBoardDataStatus {
-  if (!input.mounted) return "loading";
-  if (input.hasRows) return "ready";
-  if (!input.cloudHydrated) return "loading";
-  return "empty";
+  return resolveMuseumBoardDataStatus({
+    mounted: input.mounted,
+    cloudReady: input.cloudHydrated,
+    hasRows: input.hasRows,
+    cloudLoadError: input.cloudLoadError,
+  });
 }

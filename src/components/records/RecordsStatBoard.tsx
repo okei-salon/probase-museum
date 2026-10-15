@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import {
   buildCareerRecordsBoard,
   buildSeasonRecordsBoard,
@@ -13,6 +14,10 @@ import {
   type RecordsStatDef,
 } from "@/data/recordsRankings";
 import type { SeasonLineScope } from "@/data/playerSeasonLines";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 import { cn } from "@/lib/cn";
 
 type Mode = "season" | "career";
@@ -27,6 +32,7 @@ export function RecordsStatBoard({
   mode,
   scope = "pennant",
 }: RecordsStatBoardProps) {
+  const { tick } = useMuseumBoardTick();
   const [role, setRole] = useState<RecordsRole>("batter");
   const defs = useMemo(
     () => (mode === "career" ? statsForRoleCareer(role) : statsForRole(role)),
@@ -35,6 +41,7 @@ export function RecordsStatBoard({
   const [statId, setStatId] = useState(defs[0]?.id ?? "avg");
 
   const board = useMemo(() => {
+    void tick;
     const list =
       mode === "career" ? statsForRoleCareer(role) : statsForRole(role);
     const def = list.find((d) => d.id === statId) ?? list[0];
@@ -48,7 +55,9 @@ export function RecordsStatBoard({
     return mode === "season"
       ? buildSeasonRecordsBoard(def, scope)
       : buildCareerRecordsBoard(def, scope);
-  }, [mode, role, statId, scope]);
+  }, [mode, role, statId, scope, tick]);
+
+  const { status } = useMuseumBoardStatus(board.entries.length > 0);
 
   const modeLabel =
     scope === "interleague"
@@ -156,10 +165,18 @@ export function RecordsStatBoard({
             </p>
           ) : null}
         </div>
-        {board.emptyReason && board.entries.length === 0 ? (
-          <p className="px-4 py-8 text-center text-[12px] text-white/45">
-            {board.emptyReason}
-          </p>
+        {status === "loading" || status === "error" ? (
+          <div className="px-4 py-8 text-center">
+            <MuseumBoardStatusMessage status={status} />
+          </div>
+        ) : status === "empty" ||
+          (board.emptyReason && board.entries.length === 0) ? (
+          <div className="px-4 py-8 text-center">
+            <MuseumBoardStatusMessage
+              status="empty"
+              emptyMessage={board.emptyReason || "表示できる記録がありません。"}
+            />
+          </div>
         ) : (
           <table className="min-w-full text-left text-[12px]">
             <thead>

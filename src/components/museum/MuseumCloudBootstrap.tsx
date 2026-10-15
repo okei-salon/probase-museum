@@ -41,8 +41,16 @@ export function MuseumCloudBootstrap() {
     const signal = { cancelled: false };
 
     void (async () => {
+      const {
+        setMuseumCloudLoadError,
+        setMuseumCloudLoadLoading,
+        setMuseumCloudLoadReady,
+      } = await import("@/data/museumCloudLoadState");
+
       const authed = await waitUntilAuthenticated(signal);
       if (!authed || signal.cancelled) return;
+
+      setMuseumCloudLoadLoading();
 
       try {
         const [
@@ -98,13 +106,25 @@ export function MuseumCloudBootstrap() {
           hydrateSopFeatsFromCloud(),
         ]);
 
+        setMuseumCloudLoadReady();
+
         // 表彰・成績ボードが hydrate 後に再描画できるよう通知
         const { notifyImportStoreChanged } = await import(
           "@/data/import/demoMode"
         );
         notifyImportStoreChanged();
       } catch {
-        // オフライン時は静かにスキップ（各画面の個別 hydrate に任せる）
+        setMuseumCloudLoadError(
+          "データの読み込みに失敗しました。ページを再読み込みしてください。",
+        );
+        try {
+          const { notifyImportStoreChanged } = await import(
+            "@/data/import/demoMode"
+          );
+          notifyImportStoreChanged();
+        } catch {
+          // ignore
+        }
       }
     })();
 

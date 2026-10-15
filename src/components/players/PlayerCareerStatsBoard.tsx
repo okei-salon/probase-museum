@@ -1,11 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import { PlayerSeasonLinesPanel } from "@/components/players/PlayerSeasonLinesPanel";
 import { getPlayerCareerDisplay } from "@/data/playerDetail/careerDisplay";
 import { listSeasonLinesByPlayer } from "@/data/playerSeasonLines";
 import type { SeasonLineScope } from "@/data/playerSeasonLines";
 import type { RecordsRole } from "@/data/recordsRankings";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 import { cn } from "@/lib/cn";
 
 type PlayerCareerStatsBoardProps = {
@@ -15,23 +20,12 @@ type PlayerCareerStatsBoardProps = {
 export function PlayerCareerStatsBoard({
   playerId,
 }: PlayerCareerStatsBoardProps) {
-  const [ready, setReady] = useState(false);
+  const { tick } = useMuseumBoardTick();
   const [role, setRole] = useState<RecordsRole>("batter");
   const [scope, setScope] = useState<SeasonLineScope>("pennant");
 
-  useEffect(() => {
-    setReady(true);
-  }, [playerId]);
-
   const available = useMemo(() => {
-    if (!ready) {
-      return {
-        pennantBatter: false,
-        pennantPitcher: false,
-        ilBatter: false,
-        ilPitcher: false,
-      };
-    }
+    void tick;
     const lines = listSeasonLinesByPlayer(playerId);
     return {
       pennantBatter: lines.some(
@@ -47,20 +41,22 @@ export function PlayerCareerStatsBoard({
         (l) => l.scope === "interleague" && l.role === "pitcher",
       ),
     };
-  }, [ready, playerId]);
+  }, [tick, playerId]);
 
   const hasPennant =
     available.pennantBatter || available.pennantPitcher;
   const hasInterleague = available.ilBatter || available.ilPitcher;
+  const hasAny = hasPennant || hasInterleague;
+  const { status } = useMuseumBoardStatus(hasAny);
 
   useEffect(() => {
-    if (!ready) return;
+    if (status !== "ready") return;
     if (scope === "pennant" && !hasPennant && hasInterleague) {
       setScope("interleague");
     } else if (scope === "interleague" && !hasInterleague && hasPennant) {
       setScope("pennant");
     }
-  }, [ready, scope, hasPennant, hasInterleague]);
+  }, [status, scope, hasPennant, hasInterleague]);
 
   const roleAvailable =
     scope === "pennant"
@@ -71,7 +67,7 @@ export function PlayerCareerStatsBoard({
       : { batter: available.ilBatter, pitcher: available.ilPitcher };
 
   useEffect(() => {
-    if (!ready) return;
+    if (status !== "ready") return;
     if (role === "batter" && !roleAvailable.batter && roleAvailable.pitcher) {
       setRole("pitcher");
     } else if (
@@ -81,24 +77,22 @@ export function PlayerCareerStatsBoard({
     ) {
       setRole("batter");
     }
-  }, [ready, roleAvailable, role]);
+  }, [status, roleAvailable, role]);
 
   const display = useMemo(
-    () => (ready ? getPlayerCareerDisplay(playerId, role, scope) : null),
-    [ready, playerId, role, scope],
+    () =>
+      status === "ready"
+        ? getPlayerCareerDisplay(playerId, role, scope)
+        : null,
+    [status, playerId, role, scope],
   );
 
-  if (!ready) {
+  if (status !== "ready") {
     return (
-      <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>
-    );
-  }
-
-  if (!hasPennant && !hasInterleague) {
-    return (
-      <p className="text-[13px] text-museum-ivory-soft">
-        登録済みの年度成績はまだありません。
-      </p>
+      <MuseumBoardStatusMessage
+        status={status}
+        emptyMessage="登録済みの年度成績はまだありません。"
+      />
     );
   }
 

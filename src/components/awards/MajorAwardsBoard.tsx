@@ -5,6 +5,7 @@ import {
   AwardWinnerCard,
   LeagueTwoColumn,
 } from "@/components/awards/AwardCards";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import { subscribeImportDemoMode } from "@/data/import/demoMode";
 import { listRegisteredAwards } from "@/data/sop/awardsRegistry";
 import {
@@ -13,6 +14,9 @@ import {
   resolveRookieBoard,
   resolveSawamuraBoard,
 } from "@/data/sop/seasonAwardsView";
+import { useMuseumBoardStatus } from "@/hooks/useMuseumBoardStatus";
+import { getMuseumCloudLoadState } from "@/data/museumCloudLoadState";
+import { getSeasonLinesCacheState } from "@/data/playerSeasonLines";
 import { cn } from "@/lib/cn";
 
 type MajorKind = "mvp" | "rookie" | "sawamura";
@@ -48,6 +52,13 @@ function subscribeAwardsStore(onStoreChange: () => void): () => void {
   });
 }
 
+function cardHasWinner(card: { playerId?: string; playerName?: string } | null | undefined) {
+  if (!card) return false;
+  const id = card.playerId ?? "";
+  const name = card.playerName ?? "";
+  return Boolean(id) && id !== "__AWARD_NONE__" && name !== "該当なし" && name !== "未登録";
+}
+
 /** 年間主要表彰：MVP / 新人王 / 沢村賞（レジストリ優先・WORLD 分離） */
 export function MajorAwardsBoard({
   year,
@@ -59,7 +70,6 @@ export function MajorAwardsBoard({
     [seasonKey, year],
   );
 
-  // Neon hydrate / 取込後に再描画（キャッシュ参照を安定化）
   const awardsVersion = useSyncExternalStore(
     subscribeAwardsStore,
     getAwardsSnapshot,
@@ -73,7 +83,30 @@ export function MajorAwardsBoard({
     return resolveMvpBoard(identity);
   }, [kind, identity, awardsVersion]);
 
+  const hasLocalOrCloud = useMemo(() => {
+    void awardsVersion;
+    const cloudReady =
+      getMuseumCloudLoadState().phase === "ready" ||
+      getSeasonLinesCacheState().cloudHydrated;
+    const seasonAwards = awardsVersion.filter(
+      (a) =>
+        a.year === identity.year &&
+        (a.world ?? null) === (identity.world ?? null),
+    );
+    return cloudReady || seasonAwards.length > 0 || cardHasWinner(data.central) || cardHasWinner(data.pacific);
+  }, [awardsVersion, identity, data.central, data.pacific]);
+
+  const { status } = useMuseumBoardStatus(hasLocalOrCloud);
   const badge = TABS.find((t) => t.id === kind)?.badge ?? "MVP";
+
+  if (status !== "ready") {
+    return (
+      <MuseumBoardStatusMessage
+        status={status}
+        emptyMessage="このシーズンの主要表彰はまだ登録されていません。"
+      />
+    );
+  }
 
   return (
     <div className="space-y-5">

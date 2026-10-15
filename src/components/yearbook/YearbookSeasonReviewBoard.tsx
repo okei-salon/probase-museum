@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import {
   buildYearbookSeasonContext,
   getAllSeasonReviewSections,
@@ -10,6 +11,7 @@ import {
   upsertSeasonReviewSection,
   type SeasonReviewKind,
 } from "@/data/yearbook";
+import { MUSEUM_BOARD_LOADING_MESSAGE } from "@/data/museumBoardDataStatus";
 import {
   parseSeasonKey,
   seasonDisplayTitle,
@@ -18,6 +20,7 @@ import {
 import { hydratePlayerMasterFromCloud } from "@/data/playerMaster";
 import { SeasonReviewArticle } from "@/components/yearbook/SeasonReviewArticle";
 import { SeasonReviewSourceCopyPanel } from "@/components/yearbook/SeasonReviewSourceCopyPanel";
+import { useMuseumBoardTick } from "@/hooks/useMuseumBoardStatus";
 import { cn } from "@/lib/cn";
 
 type Props = {
@@ -64,7 +67,9 @@ export function YearbookSeasonReviewBoard({
     return null;
   }, [seasonKey, year]);
 
+  const { tick } = useMuseumBoardTick();
   const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [bodies, setBodies] = useState<Record<SeasonReviewKind, string | null>>(
     {
       general: null,
@@ -84,18 +89,24 @@ export function YearbookSeasonReviewBoard({
 
   useEffect(() => {
     let cancelled = false;
+    setReady(false);
+    setLoadError(false);
     void (async () => {
-      await Promise.allSettled([
-        hydrateSeasonReviewSources(),
-        hydratePlayerMasterFromCloud(),
-      ]);
-      if (cancelled || !identity) return;
-      const next = getAllSeasonReviewSections(identity);
-      setBodies(next);
-      setDraft(next[tab] ?? "");
-      setEditing(false);
-      setReady(true);
-      setContextOpen(false);
+      try {
+        await Promise.allSettled([
+          hydrateSeasonReviewSources(),
+          hydratePlayerMasterFromCloud(),
+        ]);
+        if (cancelled || !identity) return;
+        const next = getAllSeasonReviewSections(identity);
+        setBodies(next);
+        setDraft(next[tab] ?? "");
+        setEditing(false);
+        setReady(true);
+        setContextOpen(false);
+      } catch {
+        if (!cancelled) setLoadError(true);
+      }
     })();
     return () => {
       cancelled = true;
@@ -103,6 +114,15 @@ export function YearbookSeasonReviewBoard({
     // tab intentionally omitted — reload on identity only
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity]);
+
+  useEffect(() => {
+    if (!ready || !identity) return;
+    const next = getAllSeasonReviewSections(identity);
+    setBodies(next);
+    if (!editing) setDraft(next[tab] ?? "");
+    // Local rebuild after Museum notify — no second hydrate.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tick-driven refresh
+  }, [tick]);
 
   const context = useMemo(
     () =>
@@ -152,8 +172,16 @@ export function YearbookSeasonReviewBoard({
     );
   }
 
+  if (loadError) {
+    return <MuseumBoardStatusMessage status="error" />;
+  }
+
   if (!ready) {
-    return <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>;
+    return (
+      <p className="text-[13px] text-museum-ivory-soft">
+        {MUSEUM_BOARD_LOADING_MESSAGE}
+      </p>
+    );
   }
 
   return (
@@ -298,7 +326,7 @@ export function YearbookSeasonReviewBoard({
           </summary>
           <div className="mt-3 space-y-3 text-[12px] text-white/65">
             {!context ? (
-              <p className="text-white/45">読み込み中…</p>
+              <p className="text-white/45">{MUSEUM_BOARD_LOADING_MESSAGE}</p>
             ) : (
               <>
                 {context.available.length > 0 ? (

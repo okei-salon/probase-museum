@@ -6,11 +6,15 @@ import type {
   MonthlyMvpLeagueBoard,
   ResolvedAwardCard,
 } from "@/data/awards";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import { subscribeImportDemoMode } from "@/data/import/demoMode";
 import { listSavedMonthlyMvpRecords } from "@/data/import/store";
 import type { SavedMonthlyMvpRecord } from "@/data/import/types";
+import { getMuseumCloudLoadState } from "@/data/museumCloudLoadState";
+import { getSeasonLinesCacheState } from "@/data/playerSeasonLines";
 import { MonthlyWinnerCell } from "@/components/awards/AwardCards";
 import { LeagueTabs } from "@/components/awards/LeagueTabs";
+import { useMuseumBoardStatus } from "@/hooks/useMuseumBoardStatus";
 import {
   countMonthlyMvpCareerTimes,
   formatAwardTimesLabel,
@@ -203,6 +207,23 @@ export function MonthlyMvpBoard({
     !hasAnySaved &&
     board.pitchers.every((c) => c.playerName === "未登録") &&
     board.batters.every((c) => c.playerName === "未登録");
+
+  const hasLocalOrCloud =
+    getMuseumCloudLoadState().phase === "ready" ||
+    getSeasonLinesCacheState().cloudHydrated ||
+    hasAnySaved ||
+    allowSample ||
+    !allEmpty;
+  const { status } = useMuseumBoardStatus(hasLocalOrCloud);
+
+  if (status !== "ready") {
+    return (
+      <MuseumBoardStatusMessage
+        status={status}
+        emptyMessage="月間MVPはまだ登録されていません。"
+      />
+    );
+  }
 
   return (
     <div className="space-y-3">

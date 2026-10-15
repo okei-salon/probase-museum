@@ -7,6 +7,8 @@ import {
   DataPanel,
   PageHeading,
 } from "@/components/category";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
+import { MUSEUM_BOARD_LOADING_MESSAGE } from "@/data/museumBoardDataStatus";
 import { cn } from "@/lib/cn";
 import type { CategoryThemeId } from "@/config/categoryThemes";
 import {
@@ -23,6 +25,7 @@ import { hydrateSeasonReviewSources } from "@/data/seasonReview";
 import { hydrateSopAwardsFromCloud } from "@/data/sop";
 import { hydrateTeamStandingsFromCloud } from "@/data/teamStandings";
 import { formatSeasonLineLabel, parseSeasonKey } from "@/data/seasons";
+import { useMuseumBoardTick } from "@/hooks/useMuseumBoardStatus";
 
 type SeasonSummaryPageProps = {
   year: string;
@@ -39,27 +42,45 @@ export function SeasonSummaryPage({
   theme = "seasonHub",
   backLabel,
 }: SeasonSummaryPageProps) {
+  const { tick } = useMuseumBoardTick();
   const [data, setData] = useState<SeasonSummaryData | null>(null);
+  const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setReady(false);
+    setLoadError(false);
     void (async () => {
-      await Promise.allSettled([
-        hydrateTeamStandingsFromCloud(),
-        hydrateSopAwardsFromCloud(),
-        hydratePostseasonFromCloud(),
-        hydrateInterleagueFromCloud(),
-        hydratePlayerMasterFromCloud(),
-        hydrateSeasonReviewSources(),
-      ]);
-      if (cancelled) return;
-      const identity = parseSeasonKey(seasonKey);
-      setData(getSeasonSummary(year, identity ?? seasonKey));
+      try {
+        await Promise.allSettled([
+          hydrateTeamStandingsFromCloud(),
+          hydrateSopAwardsFromCloud(),
+          hydratePostseasonFromCloud(),
+          hydrateInterleagueFromCloud(),
+          hydratePlayerMasterFromCloud(),
+          hydrateSeasonReviewSources(),
+        ]);
+        if (cancelled) return;
+        const identity = parseSeasonKey(seasonKey);
+        setData(getSeasonSummary(year, identity ?? seasonKey));
+        setReady(true);
+      } catch {
+        if (!cancelled) setLoadError(true);
+      }
     })();
     return () => {
       cancelled = true;
     };
   }, [year, seasonKey]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const identity = parseSeasonKey(seasonKey);
+    setData(getSeasonSummary(year, identity ?? seasonKey));
+    // Local rebuild after Museum notify — no second hydrate burst.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tick-driven refresh
+  }, [tick]);
 
   const identity = parseSeasonKey(seasonKey);
   const seasonLabel = identity
@@ -80,10 +101,16 @@ export function SeasonSummaryPage({
         subtitle={`${backLabel ?? `${year}シーズン`}`}
         icon="book"
       />
+      {loadError ? (
+        <MuseumBoardStatusMessage status="error" />
+      ) : !ready || !data ? (
+        <p className="mb-6 -mt-2 text-[13px] tracking-[0.04em] text-museum-ivory-soft md:text-sm">
+          {MUSEUM_BOARD_LOADING_MESSAGE}
+        </p>
+      ) : (
+        <>
       <p className="mb-6 -mt-2 text-[13px] tracking-[0.04em] text-museum-ivory-soft md:text-sm">
-        {data
-          ? `「${data.tagline}」`
-          : "登録済みのシーズンデータを読み込み中…"}
+        {data.tagline ? `「${data.tagline}」` : null}
       </p>
 
       <div className="space-y-8 md:space-y-10">
@@ -93,7 +120,7 @@ export function SeasonSummaryPage({
           description="シーズンを代表する4つの優勝"
         >
           <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-3">
-            {(data?.champions ?? emptyChampions()).map((item) => (
+            {(data.champions ?? emptyChampions()).map((item) => (
               <ChampionCard key={item.id} item={item} />
             ))}
           </div>
@@ -105,7 +132,7 @@ export function SeasonSummaryPage({
           description="その年を代表する個人表彰"
         >
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {(data?.awards ?? emptyAwards()).map((item) => (
+            {(data.awards ?? emptyAwards()).map((item) => (
               <AwardCard key={item.id} item={item} />
             ))}
           </div>
@@ -116,7 +143,7 @@ export function SeasonSummaryPage({
           title="SEASON REVIEW"
           description="その年全体を文章で振り返る"
         >
-          {data?.hasSeasonReview ? (
+          {data.hasSeasonReview ? (
             <Link
               href={reviewHref}
               className="block rounded-xl border border-museum-gold/35 bg-black/86 px-4 py-4 backdrop-blur-md transition-colors hover:border-museum-gold/60"
@@ -157,6 +184,8 @@ export function SeasonSummaryPage({
           </p>
         </SummarySection>
       </div>
+        </>
+      )}
     </CategoryShell>
   );
 }

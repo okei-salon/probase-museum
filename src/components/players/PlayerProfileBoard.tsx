@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import { getPlayerMaster } from "@/data/playerMaster";
 import {
   buildPlayerAwardSummary,
@@ -10,6 +11,10 @@ import {
   getPlayerDisplayPosition,
 } from "@/data/playerDetail";
 import { listSeasonLinesByPlayer } from "@/data/playerSeasonLines";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 import { cn } from "@/lib/cn";
 
 type PlayerProfileBoardProps = {
@@ -25,45 +30,49 @@ export function PlayerProfileBoard({
   fallbackTeam,
   fallbackPosition,
 }: PlayerProfileBoardProps) {
-  const [ready, setReady] = useState(false);
+  const { tick } = useMuseumBoardTick();
 
-  useEffect(() => {
-    setReady(true);
-  }, [playerId]);
-
-  const master = ready ? getPlayerMaster(playerId) : null;
+  const master = useMemo(() => {
+    void tick;
+    return getPlayerMaster(playerId);
+  }, [tick, playerId]);
   const name = master?.fullName ?? fallbackName;
-  const team = ready
-    ? getCurrentTeamShort(playerId) ?? fallbackTeam
-    : fallbackTeam;
-  const position = ready
-    ? getPlayerDisplayPosition(playerId) ?? fallbackPosition
-    : fallbackPosition;
+  const team = useMemo(() => {
+    void tick;
+    return getCurrentTeamShort(playerId) ?? fallbackTeam;
+  }, [tick, playerId, fallbackTeam]);
+  const position = useMemo(() => {
+    void tick;
+    return getPlayerDisplayPosition(playerId) ?? fallbackPosition;
+  }, [tick, playerId, fallbackPosition]);
 
-  const timeline = useMemo(
-    () => (ready ? buildTeamTimeline(playerId) : []),
-    [ready, playerId],
-  );
-  const awards = useMemo(
-    () => (ready ? buildPlayerAwardSummary(playerId) : []),
-    [ready, playerId],
-  );
-  const sop = useMemo(
-    () => (ready ? buildPlayerSopCareer(playerId) : null),
-    [ready, playerId],
-  );
-  const hasLines = useMemo(
-    () =>
-      ready
-        ? listSeasonLinesByPlayer(playerId).some((l) => l.scope === "pennant")
-        : false,
-    [ready, playerId],
-  );
+  const timeline = useMemo(() => {
+    void tick;
+    return buildTeamTimeline(playerId);
+  }, [tick, playerId]);
+  const awards = useMemo(() => {
+    void tick;
+    return buildPlayerAwardSummary(playerId);
+  }, [tick, playerId]);
+  const sop = useMemo(() => {
+    void tick;
+    return buildPlayerSopCareer(playerId);
+  }, [tick, playerId]);
+  const hasLines = useMemo(() => {
+    void tick;
+    return listSeasonLinesByPlayer(playerId).some((l) => l.scope === "pennant");
+  }, [tick, playerId]);
 
-  if (!ready) {
-    return (
-      <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>
-    );
+  const hasContent =
+    timeline.length > 0 ||
+    awards.length > 0 ||
+    sop?.careerTotal != null ||
+    hasLines ||
+    Boolean(master);
+  const { status } = useMuseumBoardStatus(hasContent);
+
+  if (status === "loading" || status === "error") {
+    return <MuseumBoardStatusMessage status={status} />;
   }
 
   return (

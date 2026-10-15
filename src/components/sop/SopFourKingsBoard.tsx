@@ -1,27 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { subscribeImportDemoMode } from "@/data/import/demoMode";
-import { getSeasonLinesCacheState } from "@/data/playerSeasonLines";
+import { useMemo, useState } from "react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import {
   aggregateSopBreakdown,
   buildSopFourKings,
   type SopBreakdownRow,
   type SopCareerRankRow,
 } from "@/data/sop";
-import { resolveSopBoardDataStatus } from "@/data/sop/sopBoardDataStatus";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 import type { SopRole } from "@/lib/sop";
 import { cn } from "@/lib/cn";
 
 export function SopFourKingsBoard() {
-  const [mounted, setMounted] = useState(false);
-  const [tick, setTick] = useState(0);
+  const { tick, mounted } = useMuseumBoardTick();
   const [role, setRole] = useState<SopRole>("batter");
-
-  useEffect(() => {
-    setMounted(true);
-    return subscribeImportDemoMode(() => setTick((t) => t + 1));
-  }, []);
 
   const kings = useMemo(() => {
     void tick;
@@ -29,15 +25,7 @@ export function SopFourKingsBoard() {
     return buildSopFourKings(role);
   }, [mounted, role, tick]);
 
-  const dataStatus = useMemo(() => {
-    void tick;
-    const cache = getSeasonLinesCacheState();
-    return resolveSopBoardDataStatus({
-      mounted,
-      cloudHydrated: cache.cloudHydrated,
-      hasRows: kings.length > 0,
-    });
-  }, [mounted, kings.length, tick]);
+  const { status } = useMuseumBoardStatus(kings.length > 0);
 
   const first = kings[0] ?? null;
   const rest = kings.slice(1);
@@ -77,14 +65,11 @@ export function SopFourKingsBoard() {
         </p>
       </header>
 
-      {dataStatus === "loading" ? (
-        <p className="text-[13px] text-museum-ivory-soft">
-          成績データを読み込み中…
-        </p>
-      ) : dataStatus === "empty" ? (
-        <p className="text-[13px] text-museum-ivory-soft">
-          四天王を選出できる通算SOPデータがまだありません。
-        </p>
+      {status !== "ready" ? (
+        <MuseumBoardStatusMessage
+          status={status}
+          emptyMessage="四天王を選出できる通算SOPデータがまだありません。"
+        />
       ) : (
         <div className="space-y-5">
           {first ? <KingCard king={first} featured /> : null}

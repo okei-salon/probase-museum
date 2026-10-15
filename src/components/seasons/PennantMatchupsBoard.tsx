@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { DataPanel } from "@/components/category";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import { MatchMatrix } from "@/components/views";
+import { MUSEUM_BOARD_LOADING_MESSAGE } from "@/data/museumBoardDataStatus";
 import {
   allowsLayoutSampleFallback,
   parseSeasonKey,
@@ -15,6 +17,7 @@ import {
   centralMatrix,
   pacificMatrix,
 } from "@/data/seasonViews";
+import { useMuseumBoardTick } from "@/hooks/useMuseumBoardStatus";
 
 type PennantMatchupsBoardProps = {
   seasonKey: string;
@@ -25,26 +28,34 @@ type PennantMatchupsBoardProps = {
  * 表示時にクラウド hydrate。正式 WORLD は未登録なら空メッセージ。
  */
 export function PennantMatchupsBoard({ seasonKey }: PennantMatchupsBoardProps) {
+  const { tick } = useMuseumBoardTick();
   const identity = parseSeasonKey(seasonKey);
   const showSample = allowsLayoutSampleFallback(identity);
   const [central, setCentral] = useState<PennantMatchupsRecord | null>(null);
   const [pacific, setPacific] = useState<PennantMatchupsRecord | null>(null);
   const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setReady(false);
+    setLoadError(false);
     (async () => {
-      if (!identity) {
+      try {
+        if (!identity) {
+          setReady(true);
+          return;
+        }
+        const { hydratePennantMatchupsFromCloud, getPennantMatchups } =
+          await import("@/data/pennantMatchups");
+        await hydratePennantMatchupsFromCloud();
+        if (cancelled) return;
+        setCentral(getPennantMatchups(identity, "central"));
+        setPacific(getPennantMatchups(identity, "pacific"));
         setReady(true);
-        return;
+      } catch {
+        if (!cancelled) setLoadError(true);
       }
-      const { hydratePennantMatchupsFromCloud, getPennantMatchups } =
-        await import("@/data/pennantMatchups");
-      await hydratePennantMatchupsFromCloud();
-      if (cancelled) return;
-      setCentral(getPennantMatchups(identity, "central"));
-      setPacific(getPennantMatchups(identity, "pacific"));
-      setReady(true);
     })();
     return () => {
       cancelled = true;
@@ -52,10 +63,30 @@ export function PennantMatchupsBoard({ seasonKey }: PennantMatchupsBoardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seasonKey drives identity
   }, [seasonKey]);
 
+  useEffect(() => {
+    if (!ready || !identity) return;
+    void import("@/data/pennantMatchups").then(({ getPennantMatchups }) => {
+      setCentral(getPennantMatchups(identity, "central"));
+      setPacific(getPennantMatchups(identity, "pacific"));
+    });
+    // Local rebuild after Museum notify — no second hydrate.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tick-driven refresh
+  }, [tick]);
+
+  if (loadError) {
+    return (
+      <DataPanel>
+        <MuseumBoardStatusMessage status="error" />
+      </DataPanel>
+    );
+  }
+
   if (!ready) {
     return (
       <DataPanel>
-        <p className="text-[13px] text-museum-ivory-soft">対戦表を読み込み中…</p>
+        <p className="text-[13px] text-museum-ivory-soft">
+          {MUSEUM_BOARD_LOADING_MESSAGE}
+        </p>
       </DataPanel>
     );
   }
@@ -86,9 +117,10 @@ export function PennantMatchupsBoard({ seasonKey }: PennantMatchupsBoardProps) {
     }
     return (
       <DataPanel>
-        <p className="text-[13px] text-museum-ivory-soft">
-          リーグ内対戦成績はまだ登録されていません。
-        </p>
+        <MuseumBoardStatusMessage
+          status="empty"
+          emptyMessage="リーグ内対戦成績はまだ登録されていません。"
+        />
       </DataPanel>
     );
   }

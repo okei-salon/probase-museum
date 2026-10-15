@@ -3,9 +3,14 @@
  * node --import tsx src/data/sop/sopBoardDataStatus.smoke.ts
  */
 import assert from "node:assert/strict";
-import { resolveSopBoardDataStatus } from "./sopBoardDataStatus";
+import {
+  SOP_BOARD_LOADING_MESSAGE,
+  resolveSopBoardDataStatus,
+} from "./sopBoardDataStatus";
 import { aggregateSopBreakdown } from "./careerBoard";
 import type { SopSeasonResult } from "@/lib/sop";
+
+assert.equal(SOP_BOARD_LOADING_MESSAGE, "ただいまデータを読み込み中です…");
 
 // —— hydrate 前後の空状態区別 ——
 assert.equal(
@@ -51,9 +56,18 @@ assert.equal(
   }),
   "ready",
 );
+assert.equal(
+  resolveSopBoardDataStatus({
+    mounted: true,
+    cloudHydrated: false,
+    hasRows: false,
+    cloudLoadError: true,
+  }),
+  "error",
+  "失敗時は読み込み継続ではなく error",
+);
 
-// —— hydrate完了後に再計算される前提: tick相当で内訳が更新される ——
-// （UIは subscribeImportDemoMode → setTick → buildSopFourKings 再実行）
+// —— hydrate完了後に再計算される前提 ——
 function mk(
   year: number,
   world: "BLUE" | "RED",
@@ -73,7 +87,6 @@ function mk(
   };
 }
 
-// 初回（outbox空想定）: 行なし → loading
 assert.equal(
   resolveSopBoardDataStatus({
     mounted: true,
@@ -83,18 +96,19 @@ assert.equal(
   "loading",
 );
 
-// hydrate後に3季分が載った想定で四天王内訳を再計算
 const afterHydrateSeasons = [
   mk(2026, "BLUE", "title:hr:1", "本塁打1位", 10),
   mk(2027, "BLUE", "title:hr:1", "本塁打1位", 10),
   mk(2026, "RED", "title:hr:2", "本塁打2位", 5),
 ];
-const afterHydrateStatus = resolveSopBoardDataStatus({
-  mounted: true,
-  cloudHydrated: true,
-  hasRows: afterHydrateSeasons.length > 0,
-});
-assert.equal(afterHydrateStatus, "ready");
+assert.equal(
+  resolveSopBoardDataStatus({
+    mounted: true,
+    cloudHydrated: true,
+    hasRows: afterHydrateSeasons.length > 0,
+  }),
+  "ready",
+);
 
 const breakdown = aggregateSopBreakdown(afterHydrateSeasons);
 assert.deepEqual(
@@ -107,7 +121,8 @@ console.log(
   JSON.stringify(
     {
       ok: true,
-      statusTransitions: ["loading→ready after hydrate"],
+      loadingMessage: SOP_BOARD_LOADING_MESSAGE,
+      statusTransitions: ["loading→ready after hydrate", "error on fail"],
       satoBreakdown: breakdown.map((r) => r.display),
     },
     null,

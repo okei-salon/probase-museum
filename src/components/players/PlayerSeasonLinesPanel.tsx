@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import {
   listSeasonLinesByPlayer,
   type BatterSeasonLine,
@@ -30,6 +31,10 @@ import {
 import {
   formatAvgDisplay,
 } from "@/lib/manualEntry/normalizeInput";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 import { cn } from "@/lib/cn";
 
 type Role = "batter" | "pitcher";
@@ -63,6 +68,7 @@ export function PlayerSeasonLinesPanel({
 
   const scope = scopeProp ?? scopeState;
   const role = roleProp ?? roleState;
+  const { tick } = useMuseumBoardTick();
 
   function setScope(next: "pennant" | "interleague") {
     onScopeChange?.(next);
@@ -75,7 +81,7 @@ export function PlayerSeasonLinesPanel({
   }
   useEffect(() => {
     setLines(listSeasonLinesByPlayer(playerId));
-  }, [playerId]);
+  }, [playerId, tick]);
 
   const batters = useMemo(
     () =>
@@ -108,16 +114,19 @@ export function PlayerSeasonLinesPanel({
 
   const hasPennant = lines.some((l) => l.scope === "pennant");
   const hasInterleague = lines.some((l) => l.scope === "interleague");
+  const { status } = useMuseumBoardStatus(hasPennant || hasInterleague);
 
   useEffect(() => {
+    if (status !== "ready") return;
     if (scope === "pennant" && !hasPennant && hasInterleague) {
       setScope("interleague");
     } else if (scope === "interleague" && !hasInterleague && hasPennant) {
       setScope("pennant");
     }
-  }, [scope, hasPennant, hasInterleague]);
+  }, [status, scope, hasPennant, hasInterleague]);
 
   useEffect(() => {
+    if (status !== "ready") return;
     if (role === "batter" && batters.length === 0 && pitchers.length > 0) {
       setRole("pitcher");
     } else if (
@@ -127,20 +136,14 @@ export function PlayerSeasonLinesPanel({
     ) {
       setRole("batter");
     }
-  }, [role, batters.length, pitchers.length]);
+  }, [status, role, batters.length, pitchers.length]);
 
-  if (!hasPennant && !hasInterleague) {
+  if (status !== "ready") {
     return (
-      <div className="rounded-xl border border-dashed border-white/15 bg-black/35 px-4 py-8 text-center text-[13px] text-white/45">
-        登録済みの年度成績はまだありません。
-        <br />
-        <a
-          href="/import"
-          className="mt-2 inline-block text-[color:var(--museum-accent,#d4af37)] underline-offset-2 hover:underline"
-        >
-          手入力または画像取込で登録
-        </a>
-      </div>
+      <MuseumBoardStatusMessage
+        status={status}
+        emptyMessage="登録済みの年度成績はまだありません。"
+      />
     );
   }
 

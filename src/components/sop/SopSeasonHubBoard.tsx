@@ -2,18 +2,20 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { subscribeImportDemoMode } from "@/data/import/demoMode";
-import { getSeasonLinesCacheState } from "@/data/playerSeasonLines";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import {
   buildYearSopRankings,
   listSopSeasonIdentities,
 } from "@/data/sop";
-import { resolveSopBoardDataStatus } from "@/data/sop/sopBoardDataStatus";
 import { formatSeasonLineLabel, type SeasonIdentity } from "@/data/seasons";
 import {
   SopCategoryBlocks,
 } from "@/components/seasons/SeasonSopBoard";
 import { RoleTabs } from "@/components/sop/RoleTabs";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 import {
   buildOverallSeasonSopRankings,
   groupSopItemsByCategory,
@@ -27,19 +29,13 @@ import { cn } from "@/lib/cn";
 type RoleFilter = "all" | SopRole;
 
 export function SopSeasonHubBoard() {
-  const [mounted, setMounted] = useState(false);
-  const [tick, setTick] = useState(0);
+  const { tick, mounted } = useMuseumBoardTick();
   const [seasons, setSeasons] = useState<SeasonIdentity[]>([]);
   const [seasonKey, setSeasonKey] = useState<string | null>(null);
   const [role, setRole] = useState<RoleFilter>("all");
   const [selectedOverall, setSelectedOverall] =
     useState<SopOverallRankEntry | null>(null);
   const detailRef = useRef<HTMLTableRowElement | null>(null);
-
-  useEffect(() => {
-    setMounted(true);
-    return subscribeImportDemoMode(() => setTick((t) => t + 1));
-  }, []);
 
   useEffect(() => {
     if (!mounted) return;
@@ -75,15 +71,7 @@ export function SopSeasonHubBoard() {
     return limitSopRankingsForDisplay(rankings, role);
   }, [rankings, role]);
 
-  const dataStatus = useMemo(() => {
-    void tick;
-    const cache = getSeasonLinesCacheState();
-    return resolveSopBoardDataStatus({
-      mounted,
-      cloudHydrated: cache.cloudHydrated,
-      hasRows: seasons.length > 0,
-    });
-  }, [mounted, seasons.length, tick]);
+  const { status: dataStatus } = useMuseumBoardStatus(seasons.length > 0);
 
   useEffect(() => {
     setSelectedOverall(null);
@@ -97,20 +85,17 @@ export function SopSeasonHubBoard() {
     });
   }, [selectedOverall]);
 
-  if (dataStatus === "loading") {
-    return (
-      <p className="text-[13px] text-museum-ivory-soft">
-        成績データを読み込み中…
-      </p>
-    );
+  if (dataStatus === "loading" || dataStatus === "error") {
+    return <MuseumBoardStatusMessage status={dataStatus} />;
   }
 
   if (dataStatus === "empty" || !identity) {
     return (
       <div className="space-y-2">
-        <p className="text-[13px] text-museum-ivory-soft">
-          シーズンSOPを計算できる個人成績がまだありません。
-        </p>
+        <MuseumBoardStatusMessage
+          status="empty"
+          emptyMessage="シーズンSOPを計算できる個人成績がまだありません。"
+        />
         <Link
           href="/import"
           className="text-[12px] text-[color:var(--museum-accent,#d4af37)] underline-offset-2 hover:underline"

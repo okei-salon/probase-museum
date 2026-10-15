@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { MuseumBoardStatusMessage } from "@/components/museum/MuseumBoardStatusMessage";
 import { listSeasonLines } from "@/data/playerSeasonLines";
 import {
   buildInterleagueSopFourKings,
@@ -13,6 +14,10 @@ import {
   type SeasonIdentity,
 } from "@/data/seasons";
 import type { SopSeasonResult } from "@/lib/sop/types";
+import {
+  useMuseumBoardStatus,
+  useMuseumBoardTick,
+} from "@/hooks/useMuseumBoardStatus";
 import { cn } from "@/lib/cn";
 import { InterleagueSopDetailPanel } from "@/components/sop/InterleagueSopDetailPanel";
 
@@ -49,13 +54,21 @@ export function InterleagueSopSeasonView({
   identity,
   ready = true,
 }: InterleagueSopSeasonViewProps) {
+  const { tick } = useMuseumBoardTick();
   const data = useMemo(() => {
+    void tick;
     if (!ready) return null;
     return {
       rankings: buildInterleagueSopRankings(identity),
       kings: buildInterleagueSopFourKings(identity),
     };
-  }, [ready, identity]);
+  }, [ready, identity, tick]);
+
+  const hasRows = Boolean(
+    data &&
+      (data.kings.length > 0 || data.rankings.rankings.length > 0),
+  );
+  const { status } = useMuseumBoardStatus(hasRows);
 
   const [selected, setSelected] = useState<SelectedSop | null>(null);
 
@@ -76,8 +89,12 @@ export function InterleagueSopSeasonView({
     });
   }
 
-  if (!ready) {
-    return <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>;
+  if (!ready || status === "loading" || status === "error") {
+    return (
+      <MuseumBoardStatusMessage
+        status={!ready || status === "loading" ? "loading" : status}
+      />
+    );
   }
 
   return (
@@ -267,44 +284,53 @@ type InterleagueSopSeasonBoardProps = {
 export function InterleagueSopSeasonBoard({
   seasonKey: fixedSeasonKey,
 }: InterleagueSopSeasonBoardProps = {}) {
-  const [ready, setReady] = useState(false);
+  const { tick, mounted } = useMuseumBoardTick();
   const fixedIdentity = useMemo(
     () => (fixedSeasonKey ? parseSeasonKey(fixedSeasonKey) : null),
     [fixedSeasonKey],
   );
 
-  const identities = useMemo(
-    () =>
-      ready && !fixedIdentity ? listInterleagueSopIdentities() : [],
-    [ready, fixedIdentity],
-  );
+  const identities = useMemo(() => {
+    void tick;
+    if (!mounted || fixedIdentity) return [];
+    return listInterleagueSopIdentities();
+  }, [mounted, fixedIdentity, tick]);
   const [seasonKey, setSeasonKey] = useState("");
 
   useEffect(() => {
-    setReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!ready || fixedIdentity || identities.length === 0) return;
+    if (!mounted || fixedIdentity || identities.length === 0) return;
     if (!seasonKey) setSeasonKey(identities[0]!.seasonKey);
-  }, [ready, identities, seasonKey, fixedIdentity]);
+  }, [mounted, identities, seasonKey, fixedIdentity]);
 
   const identity: SeasonIdentity | null = useMemo(() => {
     if (fixedIdentity) return fixedIdentity;
     return parseSeasonKey(seasonKey) ?? identities[0] ?? null;
   }, [fixedIdentity, seasonKey, identities]);
 
-  if (!ready) {
-    return <p className="text-[13px] text-museum-ivory-soft">読み込み中…</p>;
+  const { status: listStatus } = useMuseumBoardStatus(
+    Boolean(fixedIdentity) || identities.length > 0,
+  );
+
+  if (!mounted || listStatus === "loading" || listStatus === "error") {
+    return (
+      <MuseumBoardStatusMessage
+        status={
+          !mounted || listStatus === "loading" ? "loading" : listStatus
+        }
+      />
+    );
   }
 
   if (!identity) {
     return (
-      <p className="text-[13px] text-museum-ivory-soft">
-        {fixedSeasonKey
-          ? "シーズンを特定できません。"
-          : "シーズンデータがありません。"}
-      </p>
+      <MuseumBoardStatusMessage
+        status="empty"
+        emptyMessage={
+          fixedSeasonKey
+            ? "シーズンを特定できません。"
+            : "シーズンデータがありません。"
+        }
+      />
     );
   }
 
@@ -328,7 +354,7 @@ export function InterleagueSopSeasonBoard({
           </select>
         </label>
       ) : null}
-      <InterleagueSopSeasonView identity={identity} ready={ready} />
+      <InterleagueSopSeasonView identity={identity} ready={mounted} />
     </div>
   );
 }

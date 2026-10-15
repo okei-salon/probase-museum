@@ -5,7 +5,10 @@
  */
 
 import { getPlayerMaster } from "@/data/playerMaster";
-import { listPennantSeasonIdentities } from "@/data/playerSeasonLines";
+import {
+  getSeasonLinesCacheState,
+  listPennantSeasonIdentities,
+} from "@/data/playerSeasonLines";
 import { buildYearSopRankings } from "@/data/sop/buildYearSop";
 import {
   formatSeasonLineLabel,
@@ -15,6 +18,9 @@ import { aggregateCareerSop } from "@/lib/sop/computeSeasonSop";
 import type { SopRole, SopSeasonResult } from "@/lib/sop/types";
 
 export type SopRoleFilter = "all" | SopRole;
+
+/** 通算SOPランキング（総合／野手／投手）の画面表示上限。計算対象は削らない。 */
+export const SOP_CAREER_RANKING_DISPLAY_LIMIT = 100;
 
 export type SopCareerRankRow = {
   rank: number;
@@ -46,13 +52,52 @@ export function listSopSeasonYears(): number[] {
   ].sort((a, b) => b - a);
 }
 
-/** 全登録シーズン（WORLD × YEAR）のシーズンSOP結果 */
+/** ストア更新時に上げる。行数だけでは内容変更を検知できないため。 */
+let sopSeasonResultsCacheGeneration = 0;
+
+function seasonLinesFingerprint(): string {
+  const s = getSeasonLinesCacheState();
+  return `${sopSeasonResultsCacheGeneration}:${s.cloudHydrated}:${s.runtimeRows ?? "null"}:${s.diskRows}`;
+}
+
+let sopSeasonResultsCache: {
+  fingerprint: string;
+  results: SopSeasonResult[];
+} | null = null;
+
+/**
+ * season_lines / 表彰など正式ストア更新後に呼ぶ。
+ * タブ切替だけでは呼ばない（同一世代内の再集計を抑止）。
+ */
+export function clearSopSeasonResultsCache(): void {
+  sopSeasonResultsCache = null;
+  sopSeasonResultsCacheGeneration += 1;
+}
+
+/** @deprecated テスト互換エイリアス */
+export function clearSopSeasonResultsCacheForTests(): void {
+  clearSopSeasonResultsCache();
+}
+
+/**
+ * 全登録シーズン（WORLD × YEAR）のシーズンSOP結果。
+ * 同一キャッシュ世代かつ fingerprint が同じ間は再計算しない
+ * （総合／野手／投手の表示切替での不要な再集計を抑止）。
+ */
 export function collectAllSopSeasonResults(): SopSeasonResult[] {
+  const fingerprint = seasonLinesFingerprint();
+  if (
+    sopSeasonResultsCache &&
+    sopSeasonResultsCache.fingerprint === fingerprint
+  ) {
+    return sopSeasonResultsCache.results;
+  }
   const out: SopSeasonResult[] = [];
   for (const identity of listSopSeasonIdentities()) {
     const { results } = buildYearSopRankings(identity);
     out.push(...results);
   }
+  sopSeasonResultsCache = { fingerprint, results: out };
   return out;
 }
 
@@ -94,15 +139,16 @@ function rankCareers(
 }
 
 /**
- * 通算SOPランキング
+ * 通算SOPランキング（全件・0pt含む）。表示制限は
+ * {@link limitSopCareerRankingsForDisplay} で別途かける。
  * - all: 野手・投手シーズンを合算（playerId単位）
  * - batter / pitcher: 当該ロールのシーズンのみ合算
  * BLUE + RED は両方合算（同一年でも除外しない）
  */
-export function buildSopCareerRankings(
+export function buildSopCareerRankingsFromResults(
+  all: SopSeasonResult[],
   roleFilter: SopRoleFilter,
 ): SopCareerRankRow[] {
-  const all = collectAllSopSeasonResults();
   if (all.length === 0) return [];
 
   const filtered =
@@ -134,9 +180,53 @@ export function buildSopCareerRankings(
   });
 }
 
-/** 通算SOP上位4名（四天王）。role は batter | pitcher 必須 */
+export function buildSopCareerRankings(
+  roleFilter: SopRoleFilter,
+): SopCareerRankRow[] {
+  return buildSopCareerRankingsFromResults(
+    collectAllSopSeasonResults(),
+    roleFilter,
+  );
+}
+
+/**
+ * 通算ランキングの画面表示用。
+ * 0pt を除き、順位・ソート済み配列の先頭から最大 limit 件。
+ * 元の rank は付け直さない（同点ルール維持）。
+ */
+export function limitSopCareerRankingsForDisplay(
+  rows: SopCareerRankRow[],
+  limit: number = SOP_CAREER_RANKING_DISPLAY_LIMIT,
+): SopCareerRankRow[] {
+  return rows.filter((r) => r.total > 0).slice(0, Math.max(0, limit));
+}
+
+/**
+ * 通算SOP上位4名（四天王）。role は batter | pitcher 必須。
+ * 上位4名分だけ seasons を付与し、全選手の内訳組立はしない。
+ */
 export function buildSopFourKings(role: SopRole): SopCareerRankRow[] {
-  return buildSopCareerRankings(role).slice(0, 4);
+  const all = collectAllSopSeasonResults();
+  const filtered = all.filter((r) => r.role === role);
+  if (filtered.length === 0) return [];
+
+  const careers = aggregateCareerSop(filtered);
+  const top = rankCareers(careers)
+    .filter((c) => c.total > 0)
+    .slice(0, 4);
+
+  return top.map((c) => {
+    const seasons = filtered.filter((r) => r.playerId === c.playerId);
+    return {
+      rank: c.rank,
+      playerId: c.playerId,
+      playerName: fullName(c.playerId, c.playerName),
+      teamShort: primaryTeam(seasons),
+      total: c.total,
+      role,
+      seasons,
+    };
+  });
 }
 
 /**

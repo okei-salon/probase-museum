@@ -36,10 +36,15 @@ export {
   type SopFeatRecord,
 } from "./featsStore";
 export {
+  SOP_CAREER_RANKING_DISPLAY_LIMIT,
   aggregateSopBreakdown,
   buildSopCareerRankings,
+  buildSopCareerRankingsFromResults,
   buildSopFourKings,
+  clearSopSeasonResultsCache,
+  clearSopSeasonResultsCacheForTests,
   collectAllSopSeasonResults,
+  limitSopCareerRankingsForDisplay,
   listSopSeasonIdentities,
   listSopSeasonYears,
   formatSopSeasonLabel,
@@ -48,6 +53,8 @@ export {
   type SopRoleFilter,
 } from "./careerBoard";
 export {
+  SOP_BOARD_ERROR_MESSAGE,
+  SOP_BOARD_LOADING_MESSAGE,
   resolveSopBoardDataStatus,
   type SopBoardDataStatus,
 } from "./sopBoardDataStatus";
