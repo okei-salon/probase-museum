@@ -244,7 +244,7 @@ function BatterTable({
                 <td className="px-2 py-1.5 tabular-nums">{c.hr}</td>
                 <td className="px-2 py-1.5 tabular-nums">{c.rbi}</td>
                 <td className="px-2 py-1.5 tabular-nums">
-                  {d.ops != null ? d.ops.toFixed(3) : "—"}
+                  {d.ops != null ? formatAvgDisplay(d.ops) : "—"}
                 </td>
                 <td className="px-2 py-1.5 tabular-nums">{c.sb ?? "—"}</td>
                 <td className="px-2 py-1.5 tabular-nums">
@@ -455,7 +455,7 @@ function TeamBattingView({
               </td>
               <td className="px-2 py-1.5">
                 {r.batting?.derived.ops != null
-                  ? r.batting.derived.ops.toFixed(3)
+                  ? formatAvgDisplay(r.batting.derived.ops)
                   : "—"}
               </td>
             </tr>

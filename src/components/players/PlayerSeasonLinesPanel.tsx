@@ -341,8 +341,7 @@ function BatterYearTable({
     kind: "int" | "avg" | "ops" = "int",
   ) {
     if (v == null) return "—";
-    if (kind === "avg") return fmtAvg(v);
-    if (kind === "ops") return v.toFixed(3);
+    if (kind === "avg" || kind === "ops") return fmtAvg(v);
     return String(v);
   }
 

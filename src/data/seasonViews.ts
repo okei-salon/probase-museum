@@ -1,6 +1,7 @@
 /** ペナント / 交流戦 / ポストシーズン用ダミー表示データ */
 
 import { getTeamColorByShort } from "@/data/teams/colors";
+import { formatAvgDisplay } from "@/lib/manualEntry/normalizeInput";
 
 export const centralTeams = ["阪神", "広島", "DeNA", "巨人", "ヤクルト", "中日"] as const;
 export const pacificTeams = [
@@ -286,15 +287,11 @@ export function formatTeamStatValue(key: string, value: number): string {
     key === "vsLhbAvgDiff" ||
     key === "sbRateAgainst"
   ) {
-    const s = value.toFixed(3);
-    if (s.startsWith("-0.")) return `-.${s.slice(3)}`;
-    return s.replace(/^0\./, ".");
+    return formatAvgDisplay(value);
   }
   // 打者三振率は 0.xxx、投手奪三振率は 9.xx 程度
   if (key === "soRate") {
-    return value >= 1
-      ? value.toFixed(2)
-      : value.toFixed(3).replace(/^0\./, ".");
+    return value >= 1 ? value.toFixed(2) : formatAvgDisplay(value);
   }
   if (
     key === "era" ||

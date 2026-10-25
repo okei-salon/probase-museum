@@ -1,6 +1,9 @@
 import type { TeamStatColumn } from "@/data/seasonViews";
 import type { TeamId } from "@/data/teams";
-import { formatIpFromDecimalInnings } from "@/lib/manualEntry/normalizeInput";
+import {
+  formatAvgDisplay,
+  formatIpFromDecimalInnings,
+} from "@/lib/manualEntry/normalizeInput";
 
 /**
  * 個人成績（ペナント / 交流戦で共通UI、データはスコープ別に保持）。
@@ -299,34 +302,45 @@ export function getPlayerStats(
     : registry[scope].pitchers;
 }
 
+/** 打率・出塁率など「.424」表記する率系キー（先頭0を落とす） */
+const AVG_STYLE_KEYS = new Set([
+  "avg",
+  "rispAvg",
+  "risp",
+  "basesLoadedAvg",
+  "hrRate",
+  "sbRate",
+  "obp",
+  "slg",
+  "ops",
+  "winPct",
+  "qsRate",
+  "hqsRate",
+  "csRate",
+  "avgAgainst",
+  "vsRhbAvg",
+  "vsLhbAvg",
+  "sbRateAgainst",
+  "hrRateAllowed",
+  "gdpRate",
+  "rispAvgDiff",
+  "basesLoadedAvgDiff",
+  "vsRhbAvgDiff",
+  "vsLhbAvgDiff",
+]);
+
 export function formatPlayerStatValue(
   key: string,
   value: number | null | undefined,
 ): string {
   if (value == null || !Number.isFinite(value)) return "—";
 
-  if (
-    key === "avg" ||
-    key === "rispAvg" ||
-    key === "risp" ||
-    key === "basesLoadedAvg" ||
-    key === "hrRate" ||
-    key === "sbRate" ||
-    key === "obp" ||
-    key === "slg" ||
-    key === "ops" ||
-    key === "winPct" ||
-    key === "qsRate" ||
-    key === "hqsRate" ||
-    key === "csRate"
-  ) {
-    return value.toFixed(3).replace(/^0\./, ".");
+  if (AVG_STYLE_KEYS.has(key)) {
+    return formatAvgDisplay(value);
   }
   // 野手三振率は 0〜1、投手奪三振率／救援奪三振率は K/9
   if (key === "soRate" || key === "reliefSoRate") {
-    return value < 1
-      ? value.toFixed(3).replace(/^0\./, ".")
-      : value.toFixed(2);
+    return value < 1 ? formatAvgDisplay(value) : value.toFixed(2);
   }
   if (
     key === "era" ||

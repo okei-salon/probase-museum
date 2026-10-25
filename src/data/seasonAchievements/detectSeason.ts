@@ -204,7 +204,7 @@ function detectBatterSeason(
         recordType: "avg400",
         recordName: BATTER_HISTORIC.avg400.label,
         value: avg,
-        valueLabel: `打率 ${avg.toFixed(3)}`,
+        valueLabel: `打率 ${formatAvgDot(avg)}`,
         sopPoints: BATTER_HISTORIC.avg400.points,
       });
     }
@@ -216,7 +216,7 @@ function detectBatterSeason(
         recordType: "risp400",
         recordName: BATTER_HISTORIC.risp400.label,
         value: risp,
-        valueLabel: `圏打率 ${risp.toFixed(3)}`,
+        valueLabel: `圏打率 ${formatAvgDot(risp)}`,
         sopPoints: BATTER_HISTORIC.risp400.points,
       });
     }
@@ -228,6 +228,7 @@ function detectBatterSeason(
         recordType: "ops1100",
         recordName: BATTER_HISTORIC.ops1100.label,
         value: ops,
+        // OPS は 1.xxx をそのまま表示（先頭0落としの対象外）
         valueLabel: `OPS ${ops.toFixed(3)}`,
         sopPoints: BATTER_HISTORIC.ops1100.points,
       });
@@ -247,7 +248,7 @@ function detectBatterSeason(
       recordType: "cs_rate800",
       recordName: BATTER_HISTORIC.csRate800.label,
       value: csRate,
-      valueLabel: `阻止率 ${csRate.toFixed(3)}`,
+      valueLabel: `阻止率 ${formatAvgDot(csRate)}`,
       sopPoints: BATTER_HISTORIC.csRate800.points,
     });
   }
