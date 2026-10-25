@@ -303,18 +303,23 @@ function scorePitcherNpb(
     if (def.field === "winPct" && !evaluateWinPctQualified(s.w)) continue;
     if (def.field === "era" && !pitcherIpOk(s)) continue;
     if (meetsNpbRecord(fieldMap[def.field], def)) {
+      const value = fieldMap[def.field];
       items.push({
         id: `npb:${def.id}`,
         category: "npb_record",
         label:
           def.field === "sv"
             ? "NPB記録 シーズンセーブ"
-            : `NPB記録 ${def.label}`,
+            : def.field === "g"
+              ? "NPB記録 シーズン登板"
+              : `NPB記録 ${def.label}`,
         points: NPB_RECORD_BONUS_POINTS,
         detail:
-          def.field === "sv" && fieldMap.sv != null
-            ? `${fieldMap.sv}セーブ（従来記録 ${def.threshold}）`
-            : undefined,
+          def.field === "sv" && value != null
+            ? `${value}セーブ（従来記録 ${def.threshold}）`
+            : def.field === "g" && value != null
+              ? `${value}試合（従来記録 ${def.threshold}）`
+              : undefined,
       });
     }
   }

@@ -85,6 +85,32 @@ function main() {
   assert.equal(santana.npbCaption, "歴代1位タイ");
   assert.equal(santana.isNpbUpdate, false);
 
+  // 92試合登板: 大記録20 + NPBボーナス10 = カード SOP +30、NPBタブ対象
+  const katsuno = annotateNpbAchievements([
+    base({
+      id: "g1",
+      playerId: "chunichi_21525138_41",
+      playerName: "勝野昌慶",
+      teamShort: "中日",
+      role: "pitcher",
+      category: "season",
+      recordType: "g80",
+      recordName: "80試合登板",
+      value: 92,
+      unit: "試合",
+      valueLabel: "92試合登板",
+      sopPoints: 20,
+    }),
+  ])[0]!;
+  assert.equal(npbBadgeLabel(katsuno), "NPB新記録");
+  assert.equal(katsuno.isNpbRecord, true);
+  assert.equal(katsuno.npbBonusPoints, 10);
+  assert.equal(katsuno.npbCaption, "従来記録：90試合");
+  assert.equal(
+    (katsuno.sopPoints ?? 0) + (katsuno.npbBonusPoints ?? 0),
+    30,
+  );
+
   // 連続: 2026+2027
   const label = computeRepeatLabel(
     base({

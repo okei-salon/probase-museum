@@ -14,6 +14,7 @@ import type { SeasonAchievement } from "./types";
 
 const DOUBLES_DEF = NPB_BATTER_SEASON_RECORDS.find((d) => d.field === "doubles")!;
 const SAVES_DEF = NPB_PITCHER_SEASON_RECORDS.find((d) => d.field === "sv")!;
+const APPEARANCES_DEF = NPB_PITCHER_SEASON_RECORDS.find((d) => d.field === "g")!;
 const HR_STREAK_DEF = NPB_FEAT_RECORDS.find((d) => d.field === "hrStreak")!;
 const PINCH_HR_DEF = NPB_FEAT_RECORDS.find((d) => d.field === "pinchHr")!;
 
@@ -74,6 +75,18 @@ function isSeasonSavesAchievement(a: SeasonAchievement): boolean {
   return a.recordName === "シーズンセーブ" || a.recordName === "セーブ";
 }
 
+/** 80試合登板カード（NPB基準は90試合） */
+function isAppearancesAchievement(a: SeasonAchievement): boolean {
+  if (
+    a.recordType === "g80" ||
+    a.recordType === "season_appearances" ||
+    a.recordType === "npb_g"
+  ) {
+    return true;
+  }
+  return /試合登板/.test(a.recordName) || a.recordName === "シーズン登板";
+}
+
 /** 既存カードに NPB フラグを付与（データ削除なし） */
 export function annotateNpbAchievements(
   items: SeasonAchievement[],
@@ -99,6 +112,37 @@ export function annotateNpbAchievements(
         previous: DOUBLES_DEF.threshold,
         unit: item.unit ?? "二塁打",
       });
+    }
+
+    // シーズン登板（80試合登板カードが NPB 90試合基準に到達した場合）
+    if (isAppearancesAchievement(item)) {
+      const value = resolveNumericValue(item);
+      const cls = classifyNpbRecord(value, APPEARANCES_DEF);
+      if (!cls) return item;
+      return applyNpbFlags(
+        {
+          ...item,
+          value: value ?? item.value,
+          unit: item.unit ?? "試合",
+          valueLabel:
+            item.valueLabel && item.valueLabel !== "達成"
+              ? item.valueLabel
+              : value != null
+                ? `${value}試合登板`
+                : item.valueLabel,
+          // 大記録カード（g80）は season のまま残し、NPBタブには isNpbRecord で載せる
+          recordType: item.recordType === "g80" ? "g80" : "season_appearances",
+          recordName:
+            item.recordType === "g80" || /登板/.test(item.recordName)
+              ? item.recordName
+              : "シーズン登板",
+        },
+        {
+          isUpdate: cls.isUpdate,
+          previous: APPEARANCES_DEF.threshold,
+          unit: "試合",
+        },
+      );
     }
 
     // シーズンセーブ

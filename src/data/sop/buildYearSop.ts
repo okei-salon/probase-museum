@@ -149,7 +149,7 @@ function pitcherStatsFromLine(
     soRate: d.soRate,
     sho: c.sho ?? null,
     cg: c.cg ?? null,
-    ip: c.ipOuts / 3,
+    ip: c.ipOuts != null ? c.ipOuts / 3 : null,
     qsRate: d.qsRate,
     g: c.g,
     gs: c.gs ?? null,

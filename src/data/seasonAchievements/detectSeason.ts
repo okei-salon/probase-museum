@@ -38,6 +38,7 @@ import type { SeasonAchievement } from "./types";
 
 const NPB_DOUBLES = NPB_BATTER_SEASON_RECORDS.find((d) => d.field === "doubles")!;
 const NPB_SAVES = NPB_PITCHER_SEASON_RECORDS.find((d) => d.field === "sv")!;
+const NPB_APPEARANCES = NPB_PITCHER_SEASON_RECORDS.find((d) => d.field === "g")!;
 const NPB_PINCH_HR = NPB_FEAT_RECORDS.find((d) => d.field === "pinchHr")!;
 
 /** 打率.312 形式（先頭0を落とした小数） */
@@ -384,6 +385,7 @@ function detectPitcherSeason(
     });
   }
   if (c.g >= 80) {
+    const npbG = classifyNpbRecord(c.g, NPB_APPEARANCES);
     out.push({
       ...meta,
       id: makeId(line, "g80"),
@@ -393,7 +395,19 @@ function detectPitcherSeason(
       value: c.g,
       unit: "試合",
       valueLabel: `${c.g}試合登板`,
+      // カード表示: 大記録20 +（90試合以上なら）NPBボーナス10 → SOP +30
       sopPoints: PITCHER_HISTORIC.g80.points,
+      ...(npbG
+        ? {
+            npbBonusPoints: NPB_RECORD_BONUS_POINTS,
+            isNpbRecord: true,
+            isNpbUpdate: npbG.isUpdate,
+            npbPreviousValue: NPB_APPEARANCES.threshold,
+            npbCaption: npbG.isUpdate
+              ? `従来記録：${NPB_APPEARANCES.threshold}試合`
+              : "歴代1位タイ",
+          }
+        : {}),
     });
   }
   if (c.w >= 20) {

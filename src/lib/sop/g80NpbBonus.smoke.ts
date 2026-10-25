@@ -48,6 +48,8 @@ function scoreForG(g: number) {
   assert.equal(historic!.points, PITCHER_HISTORIC.g80.points);
   assert.ok(npb, "92登板でNPB登板ボーナスが付く");
   assert.equal(npb!.points, NPB_RECORD_BONUS_POINTS);
+  assert.equal(npb!.label, "NPB記録 シーズン登板");
+  assert.match(npb!.detail ?? "", /92試合/);
   assert.equal(
     historic!.points + npb!.points,
     30,
