@@ -18,10 +18,10 @@ export type RecordsEligibility =
   | "pa_qualified" // 規定打席（チーム試合数×3.1 または保存フラグ）
   | "ip_qualified" // 規定投球回（チーム試合数×1.0 または保存フラグ）
   | "wins_13" // 勝率（シーズン記録）：13勝以上 ※通算は ip_100 を使用
-  | "ip_100" // 勝率・QS率：100投球回×シーズン数（アウト数で判定）
-  | "risp_50" // 得点圏打数：シーズン50／通算は CareerQualifiers.rispAbPerSeason（100×N）
+  | "ip_100" // 勝率・QS率：100投球回×経過シーズン数（アウト数で判定）
+  | "risp_50" // 得点圏打数：シーズン50／通算は CareerQualifiers.rispAbPerSeason（100×経過シーズン数）
   | "cs_30" // 被盗企30以上
-  | "relief_30"; // 救援型＋登板30×N・投球回30×N（値は通算ERA/K9）
+  | "relief_30"; // 救援型＋登板30×経過シーズン数・投球回30×経過シーズン数（値は通算ERA/K9）
 
 export type RecordsStatDef = {
   id: string;
@@ -253,12 +253,13 @@ export function statsForRoleCareer(role: RecordsRole): RecordsStatDef[] {
 
 /**
  * 通算ランキングの指標説明。eligibility / 計算と一致させる。
- * （例文の「奪三振率＝100投球回」は実装が規定投球回のため、規定投球回で記載）
+ * 「経過シーズン数」＝選手個人の在籍数ではなく、博物館全体の登録シーズン数
+ * （BLUE/RED×YEAR の distinct 数。例: 4なら規定投球回は143×4）。
  */
 export function careerStatDescription(def: RecordsStatDef): string {
   switch (def.id) {
     case "avg":
-      return "通算安打÷通算打数。対象：規定打席（443打席×シーズン数）以上。";
+      return "通算安打÷通算打数。対象：規定打席（443打席×経過シーズン数）以上。";
     case "h":
       return "通算安打数。多い順に表示。";
     case "hr":
@@ -276,39 +277,39 @@ export function careerStatDescription(def: RecordsStatDef): string {
     case "bb":
       return "通算四球数。多い順に表示。";
     case "obp":
-      return "出塁の割合。対象：規定打席（443打席×シーズン数）以上。";
+      return "出塁の割合。対象：規定打席（443打席×経過シーズン数）以上。";
     case "slg":
-      return "長打の割合。対象：規定打席（443打席×シーズン数）以上。";
+      return "長打の割合。対象：規定打席（443打席×経過シーズン数）以上。";
     case "ops":
-      return "出塁率＋長打率。対象：規定打席（443打席×シーズン数）以上。";
+      return "出塁率＋長打率。対象：規定打席（443打席×経過シーズン数）以上。";
     case "risp":
-      return "得点圏に走者がいる場面での打率。対象：得点圏100打数×シーズン数以上。";
+      return "得点圏に走者がいる場面での打率。対象：得点圏100打数×経過シーズン数以上。";
     case "sac":
       return "通算犠打数。多い順に表示。";
     case "csRate":
-      return "盗塁を刺した割合。対象：被盗塁企図30×シーズン数以上。";
+      return "盗塁を刺した割合。対象：被盗塁企図30×経過シーズン数以上。";
     case "era":
-      return "9投球回あたりの自責点。数値が低いほど上位。対象：規定投球回（143回×シーズン数）以上。";
+      return "9投球回あたりの自責点。数値が低いほど上位。対象：規定投球回（143回×経過シーズン数）以上。";
     case "w":
       return "通算勝利数。多い順に表示。";
     case "winPct":
-      return "通算勝利数÷通算勝敗数。対象：100投球回×シーズン数以上。";
+      return "通算勝利数÷通算勝敗数。対象：100投球回×経過シーズン数以上。";
     case "ip":
       return "通算の投球回数。投球回が多い順に表示。";
     case "so":
       return "通算奪三振数。多い順に表示。";
     case "soRate":
-      return "9投球回あたりの奪三振数。対象：規定投球回（143回×シーズン数）以上。";
+      return "9投球回あたりの奪三振数。対象：規定投球回（143回×経過シーズン数）以上。";
     case "whip":
-      return "1投球回あたりに許した安打と四球の合計。数値が低いほど上位。対象：規定投球回（143回×シーズン数）以上。";
+      return "1投球回あたりに許した安打と四球の合計。数値が低いほど上位。対象：規定投球回（143回×経過シーズン数）以上。";
     case "cg":
       return "通算完投数。多い順に表示。";
     case "sho":
       return "通算完封数。多い順に表示。";
     case "qsRate":
-      return "先発登板に占めるQSの割合。対象：100投球回×シーズン数以上、かつ先発1以上。";
+      return "先発登板に占めるQSの割合。対象：100投球回×経過シーズン数以上、かつ先発1以上。";
     case "hqsRate":
-      return "先発登板に占めるHQSの割合。対象：100投球回×シーズン数以上、かつ先発1以上。";
+      return "先発登板に占めるHQSの割合。対象：100投球回×経過シーズン数以上、かつ先発1以上。";
     case "g":
       return "通算登板数（先発・救援を含む）。多い順に表示。";
     case "hp":
@@ -316,9 +317,9 @@ export function careerStatDescription(def: RecordsStatDef): string {
     case "sv":
       return "通算セーブ数。多い順に表示。";
     case "reliefEra":
-      return "救援型投手を対象とした通算防御率（先発時の成績を分離した値ではない）。対象：30登板・30投球回×シーズン数以上。";
+      return "救援型投手を対象とした通算防御率（先発時の成績を分離した値ではない）。対象：30登板・30投球回×経過シーズン数以上。";
     case "reliefSoRate":
-      return "救援型投手を対象とした9投球回あたりの奪三振数（先発時の成績を分離した値ではない）。対象：30登板・30投球回×シーズン数以上。";
+      return "救援型投手を対象とした9投球回あたりの奪三振数（先発時の成績を分離した値ではない）。対象：30登板・30投球回×経過シーズン数以上。";
     default:
       return "";
   }

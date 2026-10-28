@@ -47,6 +47,7 @@ export {
 export {
   buildCareerRecordsBoard,
   buildCareerRecordsForRole,
+  elapsedCareerSeasonCount,
   getPlayerCareerStatCards,
   type PlayerCareerStatCard,
 } from "./careerRankings";

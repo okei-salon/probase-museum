@@ -81,6 +81,18 @@ function distinctSeasonKeys(lines: PlayerSeasonLine[]): string[] {
   return [...keys].sort();
 }
 
+/**
+ * 通算ランキング規定の「経過シーズン数」。
+ * 選手個人の在籍シーズン数ではなく、当該 scope に成績が登録されている
+ * 博物館全体の distinct シーズン数（BLUE/RED×YEAR）を使う。
+ * 例: BLUE2026〜2028 + RED2026 → 4 → 規定投球回 143×4。
+ */
+export function elapsedCareerSeasonCount(
+  lines: PlayerSeasonLine[],
+): number {
+  return Math.max(1, distinctSeasonKeys(lines).length);
+}
+
 function groupBatterCareers(
   lines: BatterSeasonLine[],
 ): CareerBatterBundle[] {
@@ -284,8 +296,10 @@ function eligibleCareerBatter(
   bundle: CareerBatterBundle,
   def: RecordsStatDef,
   q: CareerQualifiers,
+  /** 博物館全体の経過シーズン数（選手個人の在籍数ではない） */
+  elapsedSeasons: number,
 ): { ok: boolean; unknown: boolean } {
-  const n = bundle.seasonCount;
+  const n = Math.max(1, elapsedSeasons);
   const c = bundle.counting;
   switch (def.eligibility) {
     case "none":
@@ -320,8 +334,10 @@ function eligibleCareerPitcher(
   bundle: CareerPitcherBundle,
   def: RecordsStatDef,
   q: CareerQualifiers,
+  /** 博物館全体の経過シーズン数（選手個人の在籍数ではない） */
+  elapsedSeasons: number,
 ): { ok: boolean; unknown: boolean } {
-  const n = bundle.seasonCount;
+  const n = Math.max(1, elapsedSeasons);
   const c = bundle.counting;
   switch (def.eligibility) {
     case "none":
@@ -338,6 +354,7 @@ function eligibleCareerPitcher(
         bundle,
         { ...def, eligibility: "ip_100" },
         q,
+        elapsedSeasons,
       );
     case "ip_100": {
       const decisions = (c.w ?? 0) + (c.l ?? 0);
@@ -354,7 +371,7 @@ function eligibleCareerPitcher(
       };
     }
     case "relief_30": {
-      // 年度成績と同じ：救援型（先発率≤20%）かつ 登板・投球回が 30×シーズン数以上。
+      // 救援型（先発率≤20%）かつ 登板・投球回が 30×経過シーズン数以上。
       // 値は通算防御率／奪三振率（救援登板時の分離成績ではない）。
       if (bundle.gsUnknown) {
         return { ok: false, unknown: true };
@@ -438,9 +455,10 @@ function buildCareerPool(
   empty: boolean;
   qsOverGsCount: number;
 } {
-  const lines = listSeasonLines().filter(
-    (l) => l.role === def.role && l.scope === scope,
-  );
+  // 規定の乗数は role に関わらず、当該 scope の全個人成績から見た経過シーズン数
+  const scopeLines = listSeasonLines().filter((l) => l.scope === scope);
+  const elapsedSeasons = elapsedCareerSeasonCount(scopeLines);
+  const lines = scopeLines.filter((l) => l.role === def.role);
   const q = careerQualifiersForScope(scope);
 
   if (lines.length === 0) {
@@ -456,7 +474,7 @@ function buildCareerPool(
       lines.filter((l): l is BatterSeasonLine => l.role === "batter"),
     );
     for (const bundle of bundles) {
-      const el = eligibleCareerBatter(bundle, def, q);
+      const el = eligibleCareerBatter(bundle, def, q, elapsedSeasons);
       if (el.unknown) {
         unknownCount += 1;
         continue;
@@ -487,7 +505,7 @@ function buildCareerPool(
       lines.filter((l): l is PitcherSeasonLine => l.role === "pitcher"),
     );
     for (const bundle of bundles) {
-      const el = eligibleCareerPitcher(bundle, def, q);
+      const el = eligibleCareerPitcher(bundle, def, q, elapsedSeasons);
       if (el.unknown) {
         unknownCount += 1;
         continue;
